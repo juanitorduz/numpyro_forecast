@@ -44,7 +44,7 @@ import matplotlib.ticker as mtick
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-import pandas as pd
+import polars as pl
 import xarray as xr
 from dynestyx import (
     DiscreteTimeSimulator,
@@ -129,7 +129,7 @@ The block owns the likelihood, so it also owns the two sites, like [`predict`](.
 Three details of the implementation matter for correctness:
 
 - **The anchor.** The prediction grid starts at the last observed step, `t_obs - 1`, and the block drops the first returned row. The simulator's first predicted state is the conditioned draw at the first prediction time without a transition, so this anchor gives exactly one transition per horizon step.
-- **Time grids.** The block passes the observation times as a jax array, because the `LatentPathBuilder` indexes them inside a `lax.scan`. It passes the prediction and control times as NumPy arrays, because the `Simulator` splits its grid into segments on the host. The drivers run the model under `jax.jit`, so the block computes the observation times at trace time, where they stay concrete for the host-side rollout of a `Filter`. A grid derived from a traced covariate column would fail.
+- **Time grids.** The block passes the observation and control times as jax arrays, because the `LatentPathBuilder` indexes them in traced code. It passes the prediction times as a NumPy array, because the `Simulator` splits its grid into segments on the host. The drivers run the model under `jax.jit`. The block therefore computes the observation and control times at trace time, where they stay concrete for the host-side code of the `Filter` rollout and the `Simulator`. A grid derived from a traced covariate column would fail.
 - **One handler instance per fitted model.** Create the handlers once, outside the model. The `LatentPathBuilder` records the pattern of missing observations from the concrete data of the fit, and the drivers later call the model with traced data, so they need the instance that fitted the model.
 
 Without a `Filter`, `Smoother` or `LatentPathBuilder` around the call, [state_space](../../reference/contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space) raises an error, so we always pass the handler and its configuration explicitly.
@@ -350,10 +350,10 @@ def summarize_fit(mcmc: MCMC, seconds: float) -> dict[str, int | float]:
     """Posterior means, diagnostics and sampler cost of ``q`` and ``r`` for one fit."""
     grouped = mcmc.get_samples(group_by_chain=True)
     tree = az.from_dict({"posterior": {name: np.asarray(grouped[name]) for name in ("q", "r")}})
-    summary = az.summary(tree, round_to="none")
+    summary = az.summary(tree, fmt="xarray", round_to="none")
     stats = {"mean": 3, "sd": 3, "ess_bulk": 0, "r_hat": 3}
     return {
-        f"{stat} {name}": round(float(summary.loc[name, stat]), digits)
+        f"{stat} {name}": round(float(summary[name].sel(summary=stat)), digits)
         for name in ("q", "r")
         for stat, digits in stats.items()
     } | {
@@ -362,18 +362,20 @@ def summarize_fit(mcmc: MCMC, seconds: float) -> dict[str, int | float]:
     }
 
 
-pd.DataFrame.from_dict(
-    {label: summarize_fit(mcmc, seconds) for label, (mcmc, seconds) in fits.items()},
-    orient="index",
+pl.DataFrame(
+    [{"fit": label} | summarize_fit(mcmc, seconds) for label, (mcmc, seconds) in fits.items()]
 )
 ```
 
 
-|  | mean q | sd q | ess_bulk q | r_hat q | mean r | sd r | ess_bulk r | r_hat r | leapfrog steps | wall time (s) |
+shape: (3, 11)
+
+| fit | mean q | sd q | ess_bulk q | r_hat q | mean r | sd r | ess_bulk r | r_hat r | leapfrog steps | wall time (s) |
 |----|----|----|----|----|----|----|----|----|----|----|
-| direct (innovations) | 0.389 | 0.061 | 726.0 | 1.009 | 0.441 | 0.051 | 763.0 | 1.008 | 1013890 | 13.0 |
-| dynestyx, explicit path | 0.389 | 0.063 | 630.0 | 1.011 | 0.440 | 0.053 | 985.0 | 1.005 | 66512 | 9.1 |
-| dynestyx, Kalman smoother | 0.387 | 0.061 | 1590.0 | 1.003 | 0.440 | 0.051 | 1694.0 | 1.004 | 17992 | 12.8 |
+| str | f64 | f64 | f64 | f64 | f64 | f64 | f64 | f64 | i64 | f64 |
+| "direct (innovations)" | 0.389 | 0.061 | 726.0 | 1.009 | 0.441 | 0.051 | 763.0 | 1.008 | 1013890 | 12.9 |
+| "dynestyx, explicit path" | 0.389 | 0.063 | 630.0 | 1.011 | 0.44 | 0.053 | 985.0 | 1.005 | 66512 | 8.4 |
+| "dynestyx, Kalman smoother" | 0.387 | 0.061 | 1590.0 | 1.003 | 0.44 | 0.051 | 1694.0 | 1.004 | 17992 | 12.5 |
 
 
 The three posterior means agree closely. The \hat{R} values are between 1.003 and 1.011: the explicit path is slightly above the usual threshold of 1.01 for q. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
@@ -435,29 +437,33 @@ def gradient_cost(
         return timed(jax.jit(jax.value_and_grad(log_joint)), params, num_evals)
 
 
-pd.DataFrame(
+evaluation_ms = {
+    "Filter": evaluation_cost(kalman_filter, "f_filtered_states_mean"),
+    "Smoother": evaluation_cost(smoother, "f_smoothed_states_mean"),
+}
+gradient_ms = {
+    "Filter": gradient_cost(local_level_ssm, kalman_filter, true_scales),
+    "Smoother": gradient_cost(local_level_ssm, smoother, true_scales),
+    "direct (innovations)": gradient_cost(local_level_direct, nullcontext(), direct_params),
+}
+pl.DataFrame(
     {
-        "evaluation (ms)": {
-            "Filter": evaluation_cost(kalman_filter, "f_filtered_states_mean"),
-            "Smoother": evaluation_cost(smoother, "f_smoothed_states_mean"),
-        },
-        "gradient (ms)": {
-            "Filter": gradient_cost(local_level_ssm, kalman_filter, true_scales),
-            "Smoother": gradient_cost(local_level_ssm, smoother, true_scales),
-            "direct (innovations)": gradient_cost(
-                local_level_direct, nullcontext(), direct_params
-            ),
-        },
+        "model": list(gradient_ms),
+        "evaluation (ms)": [evaluation_ms.get(label) for label in gradient_ms],
+        "gradient (ms)": list(gradient_ms.values()),
     }
-).round(3)
+).with_columns(pl.col(pl.Float64).round(3))
 ```
 
 
-|                      | evaluation (ms) | gradient (ms) |
-|----------------------|-----------------|---------------|
-| Filter               | 0.052           | 0.159         |
-| Smoother             | 0.079           | 0.157         |
-| direct (innovations) | NaN             | 0.008         |
+shape: (3, 3)
+
+| model                  | evaluation (ms) | gradient (ms) |
+|------------------------|-----------------|---------------|
+| str                    | f64             | f64           |
+| "Filter"               | 0.05            | 0.158         |
+| "Smoother"             | 0.086           | 0.157         |
+| "direct (innovations)" | null            | 0.009         |
 
 
 A full evaluation costs more under the `Smoother` because of its backward pass. The gradient costs the same under both handlers, because the marginal log likelihood depends on the forward pass only and JAX drops the unused backward pass from the compiled gradient. A gradient of the direct model costs much less than either. The smoother needs far fewer gradients, but each one costs more, which is why the wall times of the fits are similar.
@@ -591,22 +597,24 @@ metric_fns = {
     "coverage (50%)": partial(eval_coverage, alpha=0.5),
     "coverage (94%)": partial(eval_coverage, alpha=0.94),
 }
-pd.DataFrame(
-    {
-        label: {name: float(fn(draws, test_data)) for name, fn in metric_fns.items()}
+pl.DataFrame(
+    [
+        {"strategy": label}
+        | {name: float(fn(draws, test_data)) for name, fn in metric_fns.items()}
         for label, draws in forecasts.items()
-    }
-).round(3)
+    ]
+).with_columns(pl.col(pl.Float64).round(3))
 ```
 
 
-|  | direct (innovations) | dynestyx, explicit path | dynestyx, Kalman smoother |
-|----|----|----|----|
-| MAE | 0.445 | 0.447 | 0.448 |
-| RMSE | 0.590 | 0.586 | 0.591 |
-| CRPS | 0.439 | 0.441 | 0.439 |
-| coverage (50%) | 0.833 | 0.833 | 0.833 |
-| coverage (94%) | 1.000 | 1.000 | 1.000 |
+shape: (3, 6)
+
+| strategy                    | MAE   | RMSE  | CRPS  | coverage (50%) | coverage (94%) |
+|-----------------------------|-------|-------|-------|----------------|----------------|
+| str                         | f64   | f64   | f64   | f64            | f64            |
+| "direct (innovations)"      | 0.445 | 0.59  | 0.439 | 0.833          | 1.0            |
+| "dynestyx, explicit path"   | 0.447 | 0.586 | 0.441 | 0.833          | 1.0            |
+| "dynestyx, Kalman smoother" | 0.448 | 0.591 | 0.439 | 0.833          | 1.0            |
 
 
 The metrics on the held-out window agree as well, which is the point of this table. The table does not test calibration. All three strategies put 20 of the 24 test points (0.833) inside the central 50\\ interval and every point inside the 94\\ interval. The 24 forecast errors share the level error at the split and the random walk after it, so they are strongly correlated. One window of 24 correlated points is too small to check the coverage of the intervals.
@@ -1198,7 +1206,7 @@ Group: /
 │           q                                 (chain, draw) float32 16kB 0.3207 ... 0...
 │           r                                 (chain, draw) float32 16kB 0.4482 ... 0...
 │       Attributes:
-│           created_at:                 2026-11-05T18:14:10.289618+00:00
+│           created_at:                 2026-11-06T09:29:21.156909+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1213,7 +1221,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB -12.31 -12.32 ... -9.626
 │       Attributes:
-│           created_at:                 2026-11-05T18:14:10.863311+00:00
+│           created_at:                 2026-11-06T09:29:21.738162+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1226,7 +1234,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 480B -12.66 -12.45 -11.69 ... -9.059 -9.236
 │       Attributes:
-│           created_at:                 2026-11-05T18:14:10.863554+00:00
+│           created_at:                 2026-11-06T09:29:21.738393+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1239,7 +1247,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 480B -12.66 -12.45 ... -9.236
 │       Attributes:
-│           created_at:                 2026-11-05T18:14:10.863733+00:00
+│           created_at:                 2026-11-06T09:29:21.738575+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1254,7 +1262,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 384kB -10.23 -9.461 ... -6.908
 │       Attributes:
-│           created_at:                 2026-11-05T18:14:11.304483+00:00
+│           created_at:                 2026-11-06T09:29:22.162459+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1267,7 +1275,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 96B -9.941 -9.607 ... -8.9 -8.8
         Attributes:
-            created_at:                 2026-11-05T18:14:11.304731+00:00
+            created_at:                 2026-11-06T09:29:22.162693+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1604,7 +1612,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T18:14:10.289618+00:00
+2026-11-06T09:29:21.156909+00:00
 
 creation_library :  
 ArviZ
@@ -1740,7 +1748,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T18:14:10.863311+00:00
+2026-11-06T09:29:21.738162+00:00
 
 creation_library :  
 ArviZ
@@ -1834,7 +1842,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T18:14:10.863554+00:00
+2026-11-06T09:29:21.738393+00:00
 
 creation_library :  
 ArviZ
@@ -1928,7 +1936,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T18:14:10.863733+00:00
+2026-11-06T09:29:21.738575+00:00
 
 creation_library :  
 ArviZ
@@ -2064,7 +2072,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T18:14:11.304483+00:00
+2026-11-06T09:29:22.162459+00:00
 
 creation_library :  
 ArviZ
@@ -2158,7 +2166,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T18:14:11.304731+00:00
+2026-11-06T09:29:22.162693+00:00
 
 creation_library :  
 ArviZ
@@ -2267,13 +2275,22 @@ for name, handler in {"Filter": kalman_filter, "Smoother": smoother}.items():
         log_joint[name] = float(
             log_density(local_level_ssm, (covariates_train, train_data), {}, posterior_mean)[0]
         )
-pd.Series(log_joint, name="log joint density at the posterior mean").round(6)
+pl.DataFrame(
+    {
+        "handler": list(log_joint),
+        "log joint density at the posterior mean": list(log_joint.values()),
+    }
+).with_columns(pl.col(pl.Float64).round(6))
 ```
 
 
-    Filter     -125.142899
-    Smoother   -125.142899
-    Name: log joint density at the posterior mean, dtype: float64
+shape: (2, 2)
+
+| handler    | log joint density at the posterior mean |
+|------------|-----------------------------------------|
+| str        | f64                                     |
+| "Filter"   | -125.142899                             |
+| "Smoother" | -125.142899                             |
 
 
 The two values agree. The draws we already have are draws from the posterior of either model, and we can read them under the other handler without refitting.
@@ -2317,19 +2334,25 @@ The simulation gives us the true level, so we can score the four reconstructions
 true_level = x_true[:t_obs, None]
 level_metrics = {"RMSE": eval_rmse, "CRPS": eval_crps}
 reconstructions = {"dynestyx, Kalman filter": filtered_level, **levels}
-pd.DataFrame(
-    {
-        label: {name: float(fn(draws, true_level)) for name, fn in level_metrics.items()}
+pl.DataFrame(
+    [
+        {"reconstruction": label}
+        | {name: float(fn(draws, true_level)) for name, fn in level_metrics.items()}
         for label, draws in reconstructions.items()
-    }
-).round(3)
+    ]
+).with_columns(pl.col(pl.Float64).round(3))
 ```
 
 
-|  | dynestyx, Kalman filter | direct (innovations) | dynestyx, explicit path | dynestyx, Kalman smoother |
-|----|----|----|----|----|
-| RMSE | 0.325 | 0.278 | 0.278 | 0.278 |
-| CRPS | 0.184 | 0.156 | 0.156 | 0.156 |
+shape: (4, 3)
+
+| reconstruction              | RMSE  | CRPS  |
+|-----------------------------|-------|-------|
+| str                         | f64   | f64   |
+| "dynestyx, Kalman filter"   | 0.325 | 0.184 |
+| "direct (innovations)"      | 0.278 | 0.156 |
+| "dynestyx, explicit path"   | 0.278 | 0.156 |
+| "dynestyx, Kalman smoother" | 0.278 | 0.156 |
 
 
 We overlay the filtered and the smoothed level of the same posterior, with their 94\\ HDI bands and posterior means, on the true level.
@@ -2565,23 +2588,26 @@ The loss flattens well before the 3{,}000 steps. We compare the posterior mean o
 
 
 ``` python
-pd.DataFrame(
+pl.DataFrame(
     {
+        "coefficient": [f"beta[{i}]" for i in range(beta_true.shape[0])],
         "posterior mean": np.asarray(posterior_svi["beta"]).mean(axis=0),
         "posterior sd": np.asarray(posterior_svi["beta"]).std(axis=0),
         "truth": np.asarray(beta_true),
-    },
-    index=[f"beta[{i}]" for i in range(beta_true.shape[0])],
-).round(2)
+    }
+).with_columns(pl.col(pl.Float32, pl.Float64).round(2))
 ```
 
 
-|           | posterior mean | posterior sd | truth |
-|-----------|----------------|--------------|-------|
-| beta\[0\] | 1.68           | 0.13         | 1.5   |
-| beta\[1\] | 0.54           | 0.09         | 0.5   |
-| beta\[2\] | -0.38          | 0.13         | -0.4  |
-| beta\[3\] | 0.23           | 0.08         | 0.3   |
+shape: (4, 4)
+
+| coefficient | posterior mean | posterior sd | truth |
+|-------------|----------------|--------------|-------|
+| str         | f32            | f32          | f32   |
+| "beta\[0\]" | 1.68           | 0.13         | 1.5   |
+| "beta\[1\]" | 0.54           | 0.09         | 0.5   |
+| "beta\[2\]" | -0.38          | 0.13         | -0.4  |
+| "beta\[3\]" | 0.23           | 0.08         | 0.3   |
 
 
 The truth lies within about two posterior standard deviations of each posterior mean.
@@ -2726,18 +2752,21 @@ with DiscreteTimeSimulator(n_simulations=1), seasonal_smoother:
         eval_train=True,
         keep_predictions=True,
     )
-results_to_dataframe(results).round(3)
+pl.from_pandas(results_to_dataframe(results)).with_columns(pl.col(pl.Float32, pl.Float64).round(3))
 ```
 
 
-|  | t0 | t1 | t2 | num_samples | walltime | metric_crps | metric_coverage_50 | metric_coverage_94 | train_metric_crps | train_metric_coverage_50 | train_metric_coverage_94 |
-|----|----|----|----|----|----|----|----|----|----|----|----|
-| 0 | 0 | 72 | 84 | 1000 | 6.401 | 0.678 | 0.250 | 1.000 | 0.214 | 0.722 | 1.0 |
-| 1 | 0 | 84 | 96 | 1000 | 6.746 | 0.925 | 0.417 | 0.833 | 0.205 | 0.726 | 1.0 |
-| 2 | 0 | 96 | 108 | 1000 | 7.120 | 0.400 | 0.917 | 1.000 | 0.209 | 0.740 | 1.0 |
-| 3 | 0 | 108 | 120 | 1000 | 7.497 | 0.426 | 0.667 | 1.000 | 0.209 | 0.741 | 1.0 |
-| 4 | 0 | 120 | 132 | 1000 | 7.782 | 0.660 | 0.583 | 0.917 | 0.201 | 0.758 | 1.0 |
-| 5 | 0 | 132 | 144 | 1000 | 8.738 | 0.766 | 0.250 | 1.000 | 0.241 | 0.720 | 1.0 |
+shape: (6, 11)
+
+| t0 | t1 | t2 | num_samples | walltime | metric_crps | metric_coverage_50 | metric_coverage_94 | train_metric_crps | train_metric_coverage_50 | train_metric_coverage_94 |
+|----|----|----|----|----|----|----|----|----|----|----|
+| i64 | i64 | i64 | i64 | f64 | f64 | f64 | f64 | f64 | f64 | f64 |
+| 0 | 72 | 84 | 1000 | 6.354 | 0.678 | 0.25 | 1.0 | 0.214 | 0.722 | 1.0 |
+| 0 | 84 | 96 | 1000 | 6.486 | 0.925 | 0.417 | 0.833 | 0.205 | 0.726 | 1.0 |
+| 0 | 96 | 108 | 1000 | 6.814 | 0.4 | 0.917 | 1.0 | 0.209 | 0.74 | 1.0 |
+| 0 | 108 | 120 | 1000 | 7.494 | 0.426 | 0.667 | 1.0 | 0.209 | 0.741 | 1.0 |
+| 0 | 120 | 132 | 1000 | 7.633 | 0.66 | 0.583 | 0.917 | 0.201 | 0.758 | 1.0 |
+| 0 | 132 | 144 | 1000 | 8.492 | 0.766 | 0.25 | 1.0 | 0.241 | 0.72 | 1.0 |
 
 
 Every fold reports its window, its out-of-sample scores and, with `eval_train=True`, its in-sample scores. Overlaying the out-of-sample forecast of every fold on the series gives the rolling-origin view. Each band starts where its training window ends, and the dashed lines mark the successive splits.
