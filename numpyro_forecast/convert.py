@@ -21,7 +21,7 @@ import numpy as np
 import xarray
 from jax import random
 from jax.typing import ArrayLike
-from jaxtyping import Float, Num
+from jaxtyping import Num, Real
 
 from numpyro_forecast.exceptions import CovariateDimsError
 from numpyro_forecast.offload import resolve_device
@@ -1209,12 +1209,12 @@ def add_forecast_groups(
 
 
 def predictions_to_datatree(
-    predictions: Float[ArrayLike, " sample time series"],
+    predictions: Real[ArrayLike, " sample time series"],
     x: Num[ArrayLike, " time"],
     series: Collection[Any],
     *,
     group: str = "posterior_predictive",
-    observed: Float[ArrayLike, " time series"] | None = None,
+    observed: Real[ArrayLike, " time series"] | None = None,
 ) -> "xarray.DataTree":
     """Pack prediction draws into a DataTree laid out for per-series ``plot_lm`` faceting.
 
@@ -1236,6 +1236,8 @@ def predictions_to_datatree(
     ----------
     predictions
         Prediction draws with the sample axis first, shape ``(sample, time, series)``.
+        Integer or floating; the integer draws of a count model are stored as
+        they are, keeping their dtype (``plot_lm`` draws them unchanged).
     x
         Independent-variable values, shape ``(time,)``. Must be numeric:
         ``plot_lm`` cannot draw ``datetime64`` values (it concatenates ``x`` with
@@ -1254,6 +1256,8 @@ def predictions_to_datatree(
     observed
         Optional observations, shape ``(time, series)``, stored in
         ``observed_data``; when ``None`` a zeros placeholder is stored instead.
+        Integer or floating, stored with its own dtype, so the integer
+        observations of a count model need no cast.
 
     Returns
     -------
