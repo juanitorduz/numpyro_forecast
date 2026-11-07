@@ -104,12 +104,12 @@ These conventions apply to every example notebook under `docs/examples/`. They c
 
 #### Helpers and code layout
 
-- **Define each helper function right before its first use**, with a sentence that motivates it. No "shared helpers" section that defines everything at once; constants follow the same rule.
+- **Define every function and constant in the code cell of its first use or in the code cell right before it**, never in a block of definitions at the top of the notebook or of a section. A function called inside another function's body is used where that function is defined. When a step needs several functions, interleave them with the calls (define, use, define the next, use it) instead of defining them all before one call cell; if that changes the order of the sections, change the order. The markdown cell before a definition says why the step is needed and what each function does, as part of the storyline.
 - **Every `for` loop has a blank line before and after it**, at every indentation level (the only exception is a loop that is the first statement of a block, right after the `def`/`with`/`if` line).
 - **Every `print` has a blank line before and after it.**
 - No long squashed blocks: separate the steps of a cell with blank lines and a one-line comment per step; comment model bodies and tensor code shape by shape (`# (days, n)`), in particular every `einsum`, gather, transpose and broadcast.
 - Comment the construction of every covariate array: which column or channel is what, in which order, and the shape; print the shape.
-- One topic per cell; split a cell that defines a helper and uses it, or that fits and plots.
+- One topic per cell: a cell may define a small helper and call it, but a cell that fits a model does not also build an unrelated figure.
 - No dead code: no covariate channel that the model does not read, no variable that is never used, no unused import.
 - Pass optax optimizers to `SVI` directly; never import `numpyro.optim._NumPyroOptim` or other private names for a type hint.
 - Split long f-strings so the code stays within the 99-character line length of the hard requirements.
