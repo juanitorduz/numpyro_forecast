@@ -2330,8 +2330,9 @@ posterior
     and `~~numpyro_forecast.predictive.predict_in_sample()` ignore a key
     that matches no site and draw that site from the prior with no error.
     ``to_datatree`` traces the in-sample model call of
-    `~~numpyro_forecast.predictive.predict_in_sample()` abstractly (no
-    draw, no compile) and raises ``ValueError`` before any draw when such
+    `~~numpyro_forecast.predictive.predict_in_sample()` abstractly, with
+    the posterior substituted as the driver does (no draw, no compile),
+    and raises ``ValueError`` before any draw when such
     a key names a latent ``sample`` site that has no key of its own: the
     key equals the site name with ``"/"`` replaced by ``"_"`` (a
     half-applied rename, ``trend_drift`` with a model that still has
