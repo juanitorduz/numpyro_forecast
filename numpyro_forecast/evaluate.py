@@ -376,8 +376,10 @@ def evaluate_forecast(
     Returns
     -------
     dict[str, float]
-        Each metric name mapped to its value. A bool or integer metric result
-        is converted to ``float``, whatever the other metrics are.
+        Each metric name mapped to its value. A bool, integer, ``float8`` or
+        ``float4`` metric result is converted to ``float``, whatever the other
+        metrics are (a ``float6`` result keeps its dtype: XLA on CPU cannot
+        convert it).
 
     Raises
     ------
@@ -1145,8 +1147,9 @@ def _vmapped_metrics(
     an empty mapping returns before the cast allocates anything. The result
     of each metric is checked inside the ``vmap``, where it is the value of one
     window, so a metric that does not return a 0-d value raises a
-    ``ValueError`` that names it, and a bool or integer result is cast to
-    float inside the vmapped computation.
+    ``ValueError`` that names it, and a bool, integer, ``float8`` or
+    ``float4`` result is cast to float inside the vmapped computation (a
+    ``float6`` result keeps its dtype: XLA on CPU cannot convert it).
     """
     if not metrics:
         return {}
@@ -1183,10 +1186,13 @@ def _require_scorable_metrics(
     `~~numpyro_forecast.typing.Metric` contract (``jit``- and
     ``vmap``-compatible); compute static values with Python or ``math``. The
     forecast dtype is known only after the fit, so the draws are traced in
-    the default float dtype, which is what `_vmapped_metrics()` sees after
-    its `float_view()` cast whatever the model draws (integer counts, float
-    data under x64); the scoring after the fit checks the real forecasts
-    again through the same `_vmapped_metrics()`. The trace calls each metric
+    the default float dtype. That is the dtype `_vmapped_metrics()` sees after
+    its `float_view()` cast when the model draws integers (a count model) or
+    the default float dtype; any other floating draws keep their dtype through
+    `float_view()` (a ``float16`` forecast, or a ``float32`` one under x64),
+    so the trace can differ from the scoring after the fit in the dtype only.
+    The scoring after the fit checks the real forecasts again through the
+    same `_vmapped_metrics()`. The trace calls each metric
     once more, on tracers, before the fit: a metric with a side effect (a
     counter, a log line) sees two calls per `backtest_vectorized()` run.
 
@@ -1415,9 +1421,10 @@ def backtest_vectorized(
         conversion of a ``jnp`` value, even one computed from shapes or
         constants (``int(jnp.ceil(p.shape[0] * 0.1))``), raises
         `VectorizedMetricError`; compute static values with Python or
-        ``math`` instead. A bool or integer metric result is cast to float, so
-        every entry of ``VectorizedBacktestResult.metrics`` has a floating
-        dtype.
+        ``math`` instead. A bool, integer, ``float8`` or ``float4`` metric
+        result is cast to float (a ``float6`` one keeps its dtype: XLA on CPU
+        cannot convert it), so every entry of
+        ``VectorizedBacktestResult.metrics`` has a floating dtype.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
 

@@ -36,7 +36,7 @@ import numpy as np
 from jax import random
 from jax.tree_util import tree_map
 from jax.typing import ArrayLike
-from jaxtyping import Num
+from jaxtyping import Num, PyTree
 from numpyro.infer import Predictive
 from numpyro.infer.autoguide import AutoDelta, AutoGuide
 
@@ -130,7 +130,7 @@ def _jitted_sample_posterior(guide: AutoGuide) -> Callable[..., dict[str, Array]
 def draw_posterior(
     rng_key: Array,
     guide: AutoGuide,
-    params: dict[str, Array],
+    params: dict[str, PyTree[Array]],
     num_samples: int,
     *,
     batch_size: int | None = None,
@@ -157,7 +157,11 @@ def draw_posterior(
         ``SVI``.
     params
         The learned variational parameters, e.g. the trained parameters from
-        ``svi.run``'s result.
+        ``svi.run``'s result. A value may be any pytree of arrays, not only
+        an array: the flow weights of ``AutoIAFNormal`` and ``AutoBNAFNormal``
+        are lists of per-layer tuples of arrays, with an empty tuple for each
+        parameter-free layer. ``params`` only reaches the guide's
+        ``sample_posterior``; ``device`` and ``batch_size`` act on the draws.
     num_samples
         Number of posterior draws.
     batch_size

@@ -51,7 +51,6 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
         dist.Normal(0.0, drift_scale),
         reparam=LocScaleReparam(centered=centered),
     )
-    # Cumulative sum over time is the random-walk level (= the tutorials' scan).
     level = jnp.cumsum(drift, axis=-2)
     regression = (weight * covariates).sum(axis=-1, keepdims=True)
     prediction = level + bias + regression
@@ -165,7 +164,7 @@ def _level_channel(h: Horizon, name: str, values: Array, gate: Array) -> tuple[S
         return level
 
     def update(level: Array, y_t: Array, _: Array, gate_t: Array | None) -> Array:
-        assert gate_t is not None  # xs is always passed here
+        assert gate_t is not None
         return jnp.where(gate_t, smoothing * y_t + (1.0 - smoothing) * level, level)
 
     result = ssoe(

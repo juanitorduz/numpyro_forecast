@@ -70,7 +70,7 @@ def test_shift_loc_independent_shifts_base() -> None:
 
 
 def test_slice_time_prefix_and_suffix() -> None:
-    loc = jnp.arange(6.0)[:, None]  # (6, 1)
+    loc = jnp.arange(6.0)[:, None]
     d = dist.Normal(loc=loc, scale=1.0)
     prefix = slice_time(d, slice(None, 4))
     suffix = slice_time(d, slice(4, None))
@@ -83,7 +83,7 @@ def test_slice_time_prefix_and_suffix() -> None:
 
 
 def test_slice_time_independent_slices_base() -> None:
-    loc = jnp.arange(6.0)[:, None]  # (6, 1)
+    loc = jnp.arange(6.0)[:, None]
     noise = dist.Independent(dist.Normal(loc=loc, scale=1.0), reinterpreted_batch_ndims=1)
     sliced = slice_time(noise, slice(None, 4))
     assert isinstance(sliced, dist.Independent)
@@ -110,7 +110,7 @@ def test_slice_time_mvn_batched_layout_supported() -> None:
 def test_prefix_condition_iid_returns_future_slice() -> None:
     loc = jnp.arange(6.0)[:, None]
     d = dist.Normal(loc=loc, scale=1.0)
-    data = jnp.zeros((4, 1))  # t = 4
+    data = jnp.zeros((4, 1))
     future = prefix_condition(d, data)
     assert isinstance(future, dist.Normal)
     assert future.batch_shape == (2, 1)
@@ -122,13 +122,11 @@ def test_prefix_condition_independent_elementwise_is_future_slice(event_ndims: i
     """An ``Independent`` over an elementwise base still reduces to the horizon slice."""
     loc = jnp.arange(12.0).reshape(6, 2)
     noise = dist.Normal(loc=loc, scale=1.0).to_event(event_ndims)
-    future = prefix_condition(noise, jnp.zeros((4, 2)))  # t = 4
+    future = prefix_condition(noise, jnp.zeros((4, 2)))
     assert isinstance(future, dist.Independent)
     assert future.reinterpreted_batch_ndims == event_ndims
     assert jnp.allclose(future.mean, loc[4:])
 
-
-# --- P6: elementwise registry ------------------------------------------------
 
 _SHIFT_LOC_FAMILIES = [
     (dist.Normal, {"loc": jnp.zeros((5, 1)), "scale": jnp.ones((5, 1))}),
@@ -196,7 +194,6 @@ def test_poisson_prefix_condition_is_future_marginal() -> None:
 
 
 def test_slice_time_dirichlet_actionable_error() -> None:
-    # Dirichlet has a non-empty event_shape and is not elementwise.
     d = dist.Dirichlet(concentration=jnp.ones((5, 3)))
     with pytest.raises(NotImplementedError, match="register_elementwise"):
         slice_time(d, slice(None, 3))
@@ -215,7 +212,6 @@ def test_register_elementwise_decorator_and_slice(restore_elementwise_registry) 
 
 
 def test_elementwise_membership_is_not_inherited() -> None:
-    # A subclass of a registered family is not itself registered (exact type).
     class _SubNormal(dist.Normal):
         pass
 
@@ -239,7 +235,7 @@ def test_register_structural_fake_fails_check(restore_elementwise_registry) -> N
             self.loc = loc
             super().__init__(batch_shape=jnp.shape(loc)[:-1], event_shape=jnp.shape(loc)[-1:])
 
-    d = _VectorFamily(jnp.zeros((5, 2)))  # event_shape == (2,)
+    d = _VectorFamily(jnp.zeros((5, 2)))
     with pytest.raises(NotImplementedError, match="event_shape"):
         slice_time(d, slice(None, 3))
 
@@ -256,15 +252,13 @@ def test_mvn_subclass_dispatches_to_mvn_handler() -> None:
         pass
 
     d = _MyMVN(
-        loc=jnp.zeros((5, 3)),  # batch=5, time(event)=3, obs=1
+        loc=jnp.zeros((5, 3)),
         covariance_matrix=jnp.broadcast_to(jnp.eye(3), (5, 3, 3)),
     )
     sliced = slice_time(d, slice(None, 2))
     assert isinstance(sliced, dist.MultivariateNormal)
     assert sliced.loc.shape == (5, 2)
 
-
-# --- What the shifted location is for each shift_loc family (#180) ----------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
