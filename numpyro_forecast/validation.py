@@ -296,7 +296,9 @@ def scalar_metric_value(name: str, value: object) -> Array:
     arr = value if isinstance(value, Array | np.ndarray | np.generic) else np.asarray(value)
     shape, dtype = arr.shape, arr.dtype
     is_float = jnp.issubdtype(dtype, jnp.floating)
-    is_real = is_float or jnp.issubdtype(dtype, jnp.integer) or jnp.issubdtype(dtype, jnp.bool_)
+    # np.timedelta64 subclasses np.signedinteger, so it would pass as an integer.
+    is_int = jnp.issubdtype(dtype, jnp.integer) and not np.issubdtype(dtype, np.timedelta64)
+    is_real = is_float or is_int or jnp.issubdtype(dtype, jnp.bool_)
     if shape != () or not is_real:
         msg = (
             f"metric {name!r} returned shape {shape} and dtype {dtype}; a Metric must return "

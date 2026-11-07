@@ -21,6 +21,7 @@ import numpyro.distributions as dist
 import pytest
 from conftest import poisson_counts, poisson_model, rw_model, svi_forecast_fn
 from jax import Array, random
+from jax.core import Tracer
 from numpyro import handlers
 from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import (
@@ -802,6 +803,17 @@ def _two_statistics(pred: Array, truth: Array) -> tuple[Array, Array]:
     return jnp.abs(pred - truth).mean(), jnp.abs(pred - truth).max()
 
 
+def _trimmed_mae(pred: Array, truth: Array) -> Array:
+    """A metric that is vmap-compatible but not jit-compatible: ``int()`` of a ``jnp`` value.
+
+    The trim count depends only on the static sample count, so an eager ``vmap``
+    accepts it, but the ``jit``-style pre-fit trace makes every ``jnp`` value a
+    tracer; the ``Metric`` contract asks for ``jit`` compatibility.
+    """
+    k = int(jnp.ceil(pred.shape[0] * 0.1))
+    return jnp.abs(jnp.sort(pred, axis=0)[k:-k].mean(0) - truth).mean()
+
+
 @pytest.mark.parametrize(
     ("metrics", "num_samples", "error", "match"),
     [
@@ -820,6 +832,7 @@ def _two_statistics(pred: Array, truth: Array) -> tuple[Array, Array]:
         ({"bad": _complex_mae}, 10, ValueError, r"metric 'bad' returned shape \(\) and dtype "),
         ({"two": _two_statistics}, 10, ValueError, r"metric 'two' returned a tuple of 2 values"),
         ({"host_mae": _host_float_mae}, 10, VectorizedMetricError, "pure JAX functions"),
+        ({"trim": _trimmed_mae}, 10, VectorizedMetricError, "pure JAX functions"),
         (
             {"crps": jax.jit(lambda p, t: eval_crps(p, t))},
             1,
@@ -833,6 +846,7 @@ def _two_statistics(pred: Array, truth: Array) -> tuple[Array, Array]:
         "complex",
         "tuple",
         "host_float",
+        "jit_incompatible_constant",
         "jit_wrapped_crps",
     ],
 )
@@ -871,14 +885,16 @@ def test_metric_trace_before_the_fit_compiles_nothing(
     """``_require_scorable_metrics`` runs ``jax.eval_shape``: tracers in, no compile.
 
     The compile count alone cannot tell an abstract trace from eager scoring on
-    warm shapes (a cached compile counts zero), so the metric also records what
-    it received: a tracer in the default float dtype, the dtype the scoring
-    after the fit sees through ``float_view``.
+    warm shapes (a cached compile counts zero), and under an eager ``vmap`` the
+    operands are tracers too, so the metric records whether a constant it builds
+    itself is a tracer (true only in a ``jit``-style trace) and the dtype of the
+    draws: the default float dtype, which the scoring after the fit sees
+    through ``float_view``.
     """
     seen: list[tuple[bool, jnp.dtype]] = []
 
     def recording_mae(pred: Array, truth: Array) -> Array:
-        seen.append((isinstance(pred, jax.core.Tracer), pred.dtype))
+        seen.append((isinstance(jnp.zeros(()), Tracer), pred.dtype))
         return jnp.abs(pred - truth).mean()
 
     truth = jnp.zeros((4, TEST, 1), jnp.float16)

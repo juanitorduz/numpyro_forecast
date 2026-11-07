@@ -676,13 +676,8 @@ def _slice_window(
     return train_data, train_covariates, full_covariates, truth
 
 
-_TWO_SAMPLE_METRICS: tuple[Callable[..., Array], ...] = (eval_crps,)
-"""Metric kernels that need at least 2 forecast samples (the empirical CRPS).
-
-`~~numpyro_forecast.metrics.crps_empirical()` is not listed: every driver rejects
-its per-cell result (see `scalar_metric_value()`), so that error, not the
-``num_samples`` one, is the right first message for it.
-"""
+_TWO_SAMPLE_METRICS: tuple[Callable[..., Array], ...] = (eval_crps, crps_empirical)
+"""Metric kernels that need at least 2 forecast samples (the empirical CRPS)."""
 
 
 def _require_num_samples_for_metrics(num_samples: int, metrics: Mapping[str, Metric]) -> None:
@@ -1179,14 +1174,21 @@ def _require_scorable_metrics(
     does no computation and no backend compile, so a metric that would fail
     the scoring after the fit (a result that is not 0-d or not real, a host
     conversion, a CRPS wrapped in a ``lambda`` with ``num_samples=1``) fails
-    here first, with the same error. The forecast dtype is known only after
-    the fit, so the draws are traced in the default float dtype, which is what
-    `_vmapped_metrics()` sees after its `float_view()` cast whatever the model
-    draws (integer counts, float data under x64); the scoring after the fit
-    checks the real forecasts again through the same `_vmapped_metrics()`. The
-    trace calls each metric once more, on tracers, before the fit: a metric
-    with a side effect (a counter, a log line) sees two calls per
-    `backtest_vectorized()` run.
+    here first, with the same error. The trace is a ``jit``-style trace, so
+    it is stricter than the eager ``vmap`` of the scoring after the fit:
+    every value the metric builds is a tracer, constants included, and a
+    host conversion of a ``jnp`` value computed from shapes or constants
+    (``int(jnp.ceil(p.shape[0] * 0.1))``) raises `VectorizedMetricError`
+    here although an eager ``vmap`` would accept it. That is the
+    `~~numpyro_forecast.typing.Metric` contract (``jit``- and
+    ``vmap``-compatible); compute static values with Python or ``math``. The
+    forecast dtype is known only after the fit, so the draws are traced in
+    the default float dtype, which is what `_vmapped_metrics()` sees after
+    its `float_view()` cast whatever the model draws (integer counts, float
+    data under x64); the scoring after the fit checks the real forecasts
+    again through the same `_vmapped_metrics()`. The trace calls each metric
+    once more, on tracers, before the fit: a metric with a side effect (a
+    counter, a log line) sees two calls per `backtest_vectorized()` run.
 
     Parameters
     ----------
@@ -1203,7 +1205,9 @@ def _require_scorable_metrics(
         If a metric result is not 0-d or does not have a real dtype (see
         `scalar_metric_value()`), or a metric raises it for these shapes.
     VectorizedMetricError
-        If a metric is not a pure JAX function under ``vmap``.
+        If a metric is not a pure JAX function under a ``jit``-style trace
+        (a host conversion, including one of a ``jnp`` value computed from
+        shapes or constants).
     """
     pred_spec = jax.ShapeDtypeStruct(
         (truth.shape[0], num_samples, *truth.shape[1:]), jnp.result_type(float)
@@ -1406,7 +1410,12 @@ def backtest_vectorized(
         ``jax.eval_shape`` on the shapes of the windows (no computation), so a
         metric that breaks the `~~numpyro_forecast.typing.Metric` contract
         fails before any window is fitted; that trace calls each metric once
-        more, on tracers. A bool or integer metric result is cast to float, so
+        more, on tracers. It is a ``jit``-style trace, so a metric must be
+        ``jit``-compatible as `~~numpyro_forecast.typing.Metric` says: a host
+        conversion of a ``jnp`` value, even one computed from shapes or
+        constants (``int(jnp.ceil(p.shape[0] * 0.1))``), raises
+        `VectorizedMetricError`; compute static values with Python or
+        ``math`` instead. A bool or integer metric result is cast to float, so
         every entry of ``VectorizedBacktestResult.metrics`` has a floating
         dtype.
     keep_predictions
@@ -1439,11 +1448,12 @@ def backtest_vectorized(
         example no valid initial parameters), that error is raised instead;
         an eager init of window 0 before the fit raises it for window 0.
     VectorizedMetricError
-        If a metric is not a pure JAX function under ``vmap``: it forces a host
-        conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
-        indexing or a NumPy call on a traced value) or builds a value-dependent
-        shape (a boolean mask index such as ``x[x > 0]``). Raised before the
-        fit, from the trace of the scoring (see ``metrics``).
+        If a metric is not a pure JAX function under a ``jit``-style trace: it
+        forces a host conversion (``float(...)``, ``int(...)``, ``range(...)``,
+        Python list indexing or a NumPy call on a traced value, including a
+        ``jnp`` value computed only from shapes or constants) or builds a
+        value-dependent shape (a boolean mask index such as ``x[x > 0]``).
+        Raised before the fit, from the trace of the scoring (see ``metrics``).
     """
     require_time_axis("data", data)
     require_time_axis("covariates", covariates)

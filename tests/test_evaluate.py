@@ -462,8 +462,9 @@ def test_scalar_metric_value_casts_bool_and_integer_to_default_float(
         (random.key(0), r"\(\)", r"key<\w+>"),
         (None, r"\(\)", "object"),
         ("0.5", r"\(\)", "<U3"),
+        (np.timedelta64(1, "D"), r"\(\)", r"timedelta64\[D\]"),
     ],
-    ids=["per_cell", "length_one", "complex", "prng_key", "none", "string"],
+    ids=["per_cell", "length_one", "complex", "prng_key", "none", "string", "timedelta"],
 )
 def test_scalar_metric_value_rejects_non_scalar_or_non_real(
     value: object, shape: str, dtype: str
