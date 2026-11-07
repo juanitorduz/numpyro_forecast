@@ -47,10 +47,8 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
   changes only the names: a fit drawn under `/` exports once the model uses
   `divider="_"` and the posterior keys are renamed the same way. Both must
   change, because the drivers ignore a posterior key that matches no site and
-  draw that site from the prior with no error; `to_datatree` traces the model
-  once and raises `ValueError` for a posterior key that is not a `sample` or
-  `deterministic` site of it (the `posterior` parameter of `to_datatree` has
-  the details).
+  draw that site from the prior with no error (the `posterior` parameter of
+  `to_datatree` has the details).
 - **Functional style:** pure model functions, explicit `PRNGKey` threading,
   vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step
   drift), no global parameter store.

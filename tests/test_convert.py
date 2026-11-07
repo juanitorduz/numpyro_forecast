@@ -29,7 +29,6 @@ from numpyro.infer import Predictive
 
 from numpyro_forecast.convert import (
     _require_no_slash_in_site_names,
-    _require_posterior_keys_are_sites,
     _reshape_chains,
     add_forecast_groups,
     predictions_to_datatree,
@@ -562,7 +561,7 @@ def _dims_named_by(argument: str, names: Any) -> tuple[Hashable, ...]:
         tree = to_datatree(
             random.PRNGKey(0),
             _model(),
-            {"sigma": jnp.zeros(4), "drift": jnp.zeros((4, 6, 1))},
+            {"level": jnp.zeros(4), "drift": jnp.zeros((4, 6, 1))},
             jnp.zeros((6, 1)),
             empty_covariates(6),
             posterior_dims={"drift": names},
@@ -856,110 +855,6 @@ def test_to_datatree_scoped_time_reparam_exports_with_the_underscore_divider() -
     )
     assert set(tree["posterior"].data_vars) == set(names)
     assert {"predictions", "predictions_constant_data"} <= set(tree.children)
-
-
-def _drift_model(covariates: Array, data: Array | None = None) -> None:
-    """A random walk whose only latent is the ``drift`` site, for the site guard tests."""
-    h = Horizon.from_data(covariates, data)
-    drift = innovations(h, "drift", dist.Normal(0.0, 1.0))
-    predict(h, dist.Normal(0.0, 0.1), jnp.cumsum(drift, axis=-2))
-
-
-@pytest.mark.parametrize(
-    ("model", "posterior", "offending"),
-    [
-        pytest.param(
-            _scoped_trend_model("/"),
-            {"trend_drift": jnp.zeros((4, 6, 1))},
-            ["trend_drift"],
-            id="renamed-posterior-with-the-slash-model",
-        ),
-        pytest.param(
-            _drift_model,
-            {"drift": jnp.zeros((4, 6, 1)), "drift_haar": jnp.zeros((4, 6, 1))},
-            ["drift_haar"],
-            id="time-reparam-posterior-with-the-original-model",
-        ),
-        pytest.param(
-            _drift_model,
-            {"drft": jnp.zeros((4, 6, 1)), "sigma": jnp.ones(4)},
-            ["drft", "sigma"],
-            id="keys-of-another-model",
-        ),
-    ],
-)
-def test_to_datatree_rejects_a_posterior_key_that_is_not_a_model_site(
-    monkeypatch: pytest.MonkeyPatch,
-    model: ForecastModel,
-    posterior: dict[str, Array],
-    offending: list[str],
-) -> None:
-    """A posterior key that is neither a sample nor a deterministic site raises by name.
-
-    The drivers substitute by name and ignore an unknown key, so the export
-    would silently draw that site from the prior: the half-applied divider
-    advice (renamed keys, model still on ``/``) and a posterior drawn from
-    the `time_reparam` model handed in with the original model both read as
-    a successful export. The check runs before the host transfer and the
-    draws, like the ``/`` check.
-    """
-    import numpyro_forecast.convert as convert_mod
-
-    def fail(*args: object, **kwargs: object) -> object:
-        msg = "to_datatree touched the posterior arrays before it checked the site names"
-        raise AssertionError(msg)
-
-    for name in ("_reshape_chains", "predict_in_sample", "forecast"):
-        monkeypatch.setattr(convert_mod, name, fail)
-    data, covariates = jnp.zeros((6, 1)), empty_covariates(6)
-    with pytest.raises(
-        ValueError, match=re.escape(f"posterior keys {offending} are not sites of the model")
-    ) as excinfo:
-        to_datatree(random.PRNGKey(0), model, posterior, data, covariates)
-    message = str(excinfo.value)
-    assert "prior" in message
-    assert "site" in message
-
-
-def test_require_posterior_keys_are_sites_names_the_divider_for_a_scoped_key() -> None:
-    """The model-only half of the divider advice (``_`` model, ``/`` posterior) gets the divider sentence.
-
-    `to_datatree()` rejects the ``/`` key earlier; the helper still carries
-    the advice for the ``_`` key with the ``/`` model and for the reverse
-    pairing, and leaves it out for a key without a divider.
-    """
-    data, covariates = jnp.zeros((6, 1)), empty_covariates(6)
-    for model, posterior in (
-        (_scoped_trend_model("_"), {"trend/drift": jnp.zeros((4, 6, 1))}),
-        (_scoped_trend_model("/"), {"trend_drift": jnp.zeros((4, 6, 1))}),
-    ):
-        with pytest.raises(ValueError, match="same divider") as excinfo:
-            _require_posterior_keys_are_sites(
-                random.PRNGKey(0), model, posterior, covariates, data
-            )
-        assert "divider='_'" in str(excinfo.value)
-    with pytest.raises(ValueError, match=r"posterior keys \['drft'\] are not sites") as excinfo:
-        _require_posterior_keys_are_sites(
-            random.PRNGKey(0), _drift_model, {"drft": jnp.zeros((4, 6, 1))}, covariates, data
-        )
-    assert "divider" not in str(excinfo.value)
-
-
-def test_to_datatree_accepts_deterministic_sites_in_the_posterior() -> None:
-    """An MCMC posterior of the `time_reparam` model holds ``drift`` (deterministic) and ``drift_haar``.
-
-    ``mcmc.get_samples()`` returns deterministic sites next to the sample
-    sites, so the site guard must accept both kinds; the original model
-    registers no ``drift_haar`` site, so the same posterior raises with it.
-    """
-    wrapped = time_reparam(_drift_model, "haar")
-    data, covariates = jnp.zeros((6, 1)), empty_covariates(8)
-    posterior = _prior_draws(wrapped, ["drift", "drift_haar"], data)
-    tree = to_datatree(random.PRNGKey(0), wrapped, posterior, data, covariates)
-    assert set(tree["posterior"].data_vars) == {"drift", "drift_haar"}
-    assert {"predictions", "predictions_constant_data"} <= set(tree.children)
-    with pytest.raises(ValueError, match=r"posterior keys \['drift_haar'\] are not sites"):
-        to_datatree(random.PRNGKey(0), _drift_model, posterior, data, covariates)
 
 
 def test_to_datatree_rejects_data_without_observations() -> None:
@@ -1263,32 +1158,19 @@ def test_to_datatree_rejects_malformed_obs_dims(obs_dims: list[str], match: str)
         )
 
 
-def _panel_obs_without_predict(covariates: Array, data: Array | None = None) -> None:
-    """The `_panel_body` likelihood as a hand-written ``obs`` site, without `predict`.
-
-    `predict` rejects an observation distribution wider than ``data``, so only
-    a hand-written site can register ``(batch, time, obs)`` draws against 2-D
-    data (NumPyro broadcasts the observed value over the extra axis).
-    """
-    h = Horizon.from_data(covariates, data)
-    sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 0.5))
-    drift = innovations(h, "drift", dist.Normal(0.0, 0.1))
-    numpyro.sample("obs", dist.Normal(covariates + jnp.cumsum(drift, axis=-2), sigma), obs=data)
-
-
 def test_to_datatree_rejects_obs_draws_with_more_axes_than_data() -> None:
     """A model whose ``obs`` site has more axes than ``data`` raises instead of mislabeling.
 
     With a batch size equal to the time length, the auto-named extra axis used
     to export without an error, with ``time`` on the batch axis.
     """
-    _, posterior, _, covariates = _panel(5, 5, 0)
+    model, posterior, _, covariates = _panel(5, 5, 0)
     with pytest.raises(
         ValueError, match=r"the in-sample predictive draws have shape \(5, 5, 2\) per draw"
     ):
         to_datatree(
             random.PRNGKey(1),
-            _panel_obs_without_predict,
+            model,
             posterior,
             jnp.zeros((5, 2)),
             covariates,
@@ -1589,7 +1471,7 @@ def test_to_datatree_rejects_non_divisible_num_chains() -> None:
 @pytest.mark.parametrize("num_chains", [0, -1, -2])
 def test_to_datatree_rejects_non_positive_num_chains(num_chains: int) -> None:
     """``num_chains < 1`` raises by name instead of a bare ZeroDivisionError or reshape error."""
-    posterior = {"sigma": jnp.zeros(6), "drift": jnp.zeros((6, 18, 1))}
+    posterior = {"level": jnp.zeros(6), "drift": jnp.zeros((6, 18, 1))}
     with pytest.raises(
         ValueError, match=rf"num_chains must be a positive integer, got {num_chains}"
     ):
