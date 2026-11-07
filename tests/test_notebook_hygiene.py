@@ -8,11 +8,12 @@ site always lands on the stable root, whose reference is pruned to the last rele
 prose rules (percentages in LaTeX, no claim that ``SVI`` needs ``optax_to_numpyro``) were
 broken in more than one notebook, so they are checked here for all of them.
 
-The preliz checks make sure that a prior elicited with ``maxent`` is the prior the model uses.
+The preliz checks guard the pattern that lets a prior elicited with ``maxent`` reach the model.
 The default ``mass`` of ``maxent`` is ``rcParams["stats.ci_prob"]``, which went from 0.94
 (preliz 0.22) to 0.89 (preliz 0.23), and two notebooks plotted the default-mass fit while
 their models hard-coded the 0.94 fit (issue #198). So every call passes ``mass``, and the
-fitted distribution is read after the call instead of copied by hand.
+fit is bound to a name that is read after the call (a name-binding heuristic: the checks do
+not see whether the model uses the fit) instead of copied by hand.
 """
 
 import ast
@@ -20,7 +21,6 @@ import re
 from pathlib import Path
 from typing import TypeGuard
 
-import nbformat
 import pytest
 import yaml
 from notebook_cells import NOTEBOOKS, Cell, read_cells, source, stderr
@@ -52,24 +52,31 @@ def _reference_entries() -> set[str]:
 
 
 def _code_trees(name: str, cells: list[Cell]) -> list[tuple[int, ast.Module]]:
-    """Parse every code cell of notebook ``name`` as Python.
+    """Parse the code cells of notebook ``name`` as Python.
 
     A magic line becomes ``pass`` at the same indentation, so line numbers and block bodies
-    survive. A cell that is still not Python (``pz.maxent?``) fails the test by name.
+    survive. A cell that is still not Python (a ``%%bash`` body, ``x = !cmd``) is skipped,
+    unless its source mentions ``maxent``: the maxent checks read the fit from that cell, so
+    it fails the test by name (``pz.maxent?``).
     """
     trees = []
     for index, cell in enumerate(cells):
         if cell["cell_type"] != "code":
             continue
+        text = source(cell)
         lines = [
             f"{match['indent']}pass" if (match := MAGIC_LINE.match(line)) else line
-            for line in source(cell).splitlines()
+            for line in text.splitlines()
         ]
         try:
             tree = ast.parse("\n".join(lines))
         except SyntaxError as exc:
+            if "maxent" not in text:
+                continue
             pytest.fail(
-                f"{name} cell {index} is not Python once IPython magics are blanked: {exc}"
+                f"{name} cell {index} is not Python once IPython magics are blanked: {exc}. "
+                "The maxent checks (mass passed, fit read after the call) need every cell "
+                "that mentions maxent to parse as Python."
             )
         trees.append((index, tree))
     return trees
@@ -90,8 +97,8 @@ def _maxent_calls(name: str, cells: list[Cell]) -> list[tuple[int, ast.Call, set
 
     ``maxent`` fits its distribution argument in place and returns it (as ``(distribution,
     axes)`` when it plots, the default), so the fit is in the argument when it is a name and
-    in the first assignment target. A comprehension whose element is the call binds its fits
-    to the assignment target as well.
+    in the first assignment target. A list, set or generator comprehension whose element is
+    the call binds its fits to the assignment target as well.
     """
     calls = []
     for index, tree in _code_trees(name, cells):
@@ -121,18 +128,19 @@ def _maxent_calls(name: str, cells: list[Cell]) -> list[tuple[int, ast.Call, set
     return calls
 
 
+def _is_none(node: ast.expr) -> bool:
+    """Whether ``node`` is the literal ``None``."""
+    return isinstance(node, ast.Constant) and node.value is None
+
+
 def _passes_mass(call: ast.Call) -> bool:
     """Whether a ``maxent`` call passes ``mass``, other than an explicit ``None``.
 
     ``mass`` is the fourth positional parameter; ``**kwargs`` (``arg is None``) may hold it.
-    ``mass=None`` still resolves to ``rcParams["stats.ci_prob"]``.
+    A ``None`` mass, positional or keyword, still resolves to ``rcParams["stats.ci_prob"]``.
     """
-    return len(call.args) >= 4 or any(
-        keyword.arg is None
-        or (
-            keyword.arg == "mass"
-            and not (isinstance(keyword.value, ast.Constant) and keyword.value.value is None)
-        )
+    return (len(call.args) >= 4 and not _is_none(call.args[3])) or any(
+        keyword.arg is None or (keyword.arg == "mass" and not _is_none(keyword.value))
         for keyword in call.keywords
     )
 
@@ -175,7 +183,7 @@ def _check_maxent_fits_are_used(name: str, cells: list[Cell]) -> None:
     ]
     assert not found, (
         f"{name} discards a maxent fit: every fit must be bound to a name that is read after "
-        "the call (not bound to _), and the model's prior built from it (for example "
+        "the call (not bound to _), so the model's prior can be built from it (for example "
         "dist.InverseGamma(concentration=fit.alpha, rate=fit.beta)) instead of copying its "
         "parameters:\n" + "\n".join(found)
     )
@@ -195,7 +203,7 @@ def test_maxent_fits_are_used(path: Path) -> None:
 
 def _cells(*sources: str) -> list[Cell]:
     """Build the code cells of an in-memory notebook, one per source string."""
-    return [nbformat.v4.new_code_cell(text) for text in sources]
+    return [{"cell_type": "code", "source": text} for text in sources]
 
 
 def test_maxent_check_rejects_a_discarded_fit() -> None:
@@ -235,10 +243,35 @@ def test_maxent_check_rejects_mass_none() -> None:
     _check_maxent_calls_pass_mass("synthetic.ipynb", _cells("fit = pz.maxent(d, mass=0.9)"))
 
 
-def test_code_trees_fail_on_a_cell_that_is_not_python() -> None:
-    """An IPython help query is not a magic, so the cell fails the test by name."""
-    with pytest.raises(pytest.fail.Exception, match=r"synthetic\.ipynb cell 1 is not Python"):
+def test_code_trees_skip_a_cell_that_is_not_python_without_maxent() -> None:
+    """A ``%%bash`` cell does not parse once its first line is blanked, so it is skipped."""
+    cells = _cells("x = 1", "%%bash\necho hello world", "y = x")
+    assert [index for index, _ in _code_trees("synthetic.ipynb", cells)] == [0, 2]
+    _check_maxent_calls_pass_mass("synthetic.ipynb", cells)
+    _check_maxent_fits_are_used("synthetic.ipynb", cells)
+
+
+def test_code_trees_fail_on_a_maxent_cell_that_is_not_python() -> None:
+    """A cell that mentions ``maxent`` and does not parse fails, naming the maxent rule."""
+    with pytest.raises(
+        pytest.fail.Exception,
+        match=r"synthetic\.ipynb cell 1(.|\n)*invalid syntax(.|\n)*maxent",
+    ):
         _code_trees("synthetic.ipynb", _cells("x = 1", "pz.maxent?"))
+
+
+def test_maxent_check_rejects_a_positional_none_mass() -> None:
+    """A positional ``None`` mass takes the preliz default like the keyword form."""
+    cells = _cells("fit, ax = pz.maxent(pz.Gamma(), 0, 10, None)\nprint(fit)")
+    with pytest.raises(AssertionError, match="calls maxent without mass"):
+        _check_maxent_calls_pass_mass("synthetic.ipynb", cells)
+    _check_maxent_calls_pass_mass("synthetic.ipynb", _cells("pz.maxent(pz.Gamma(), 0, 10, 0.9)"))
+
+
+def test_maxent_check_counts_a_fitted_argument_bound_to_underscore() -> None:
+    """``maxent`` fits its argument in place, so ``_ = pz.maxent(d, ...)`` with ``d`` read passes."""
+    cells = _cells("d = pz.Gamma()", "_ = pz.maxent(d, 0, 10, mass=0.9)", "print(d.alpha)")
+    _check_maxent_fits_are_used("synthetic.ipynb", cells)
 
 
 def test_code_trees_keep_the_body_of_an_indented_magic() -> None:
