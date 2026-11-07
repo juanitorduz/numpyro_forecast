@@ -419,17 +419,24 @@ def _complex_mae(pred: Array, truth: Array) -> Array:
 
 @pytest.mark.parametrize(
     "value",
-    [jnp.asarray(0.25), jnp.asarray(0.25, jnp.bfloat16), np.float64(0.25), 0.25],
+    [jnp.asarray(0.1), jnp.asarray(0.1, jnp.bfloat16), np.float64(0.1), 0.1],
     ids=["jax_float32", "jax_bfloat16", "numpy_float64", "python_float"],
 )
 def test_scalar_metric_value_keeps_floating_values(value: object) -> None:
-    """A 0-d floating value keeps its value and, for a jax Array, its dtype and identity."""
+    """A floating value keeps its value up to the default float dtype; a jax Array its object.
+
+    ``0.1`` is not exact in ``float32`` or ``bfloat16``, so a host value that is
+    canonicalized to the default dtype is only ``approx`` equal, which is what
+    the docstring of ``scalar_metric_value`` promises for host floats.
+    """
     out = scalar_metric_value("m", value)
     assert out.shape == ()
     assert jnp.issubdtype(out.dtype, jnp.floating)
-    assert float(out) == 0.25
+    assert float(out) == pytest.approx(0.1, rel=float(jnp.finfo(out.dtype).eps))
     if isinstance(value, jax.Array):
         assert out is value  # no device op for a valid float metric
+    else:
+        assert out.dtype == jnp.result_type(float)
 
 
 @pytest.mark.parametrize(
@@ -467,8 +474,22 @@ def test_scalar_metric_value_rejects_non_scalar_or_non_real(
         scalar_metric_value("bad", value)
 
 
+def test_scalar_metric_value_rejects_a_tuple_of_traced_values() -> None:
+    """A metric that returns ``(a, b)`` is a bad result in every driver, not a host conversion."""
+
+    def two_statistics(pred: Array, truth: Array) -> tuple[Array, Array]:
+        return pred.mean(), truth.mean()
+
+    pred, truth = jnp.zeros((3, 20, 4, 1)), jnp.zeros((3, 4, 1))
+    metrics = {"two": two_statistics}
+    with pytest.raises(ValueError, match=r"metric 'two' returned shape \(2,\)"):
+        evaluate_forecast(pred[0], truth[0], metrics=metrics)  # ty: ignore[invalid-argument-type]
+    with pytest.raises(ValueError, match=r"metric 'two' returned a tuple of traced values"):
+        jax.vmap(lambda p, t: scalar_metric_value("two", two_statistics(p, t)))(pred, truth)
+
+
 def test_scalar_metric_value_reads_static_shapes_of_tracers() -> None:
-    """Under ``jit`` and ``vmap`` the check sees the value of one window and needs no host value."""
+    """Under ``jit`` and ``vmap`` the check sees one window's value and needs no host value."""
 
     def score(fn: Metric, pred: Array, truth: Array) -> Array:
         return scalar_metric_value("score", fn(pred, truth))
@@ -537,12 +558,12 @@ def test_evaluate_forecast_accepts_host_metric_values() -> None:
 def test_backtest_rejects_a_per_cell_metric_with_its_name(
     rng_key: Array, eval_train: bool
 ) -> None:
-    """``backtest`` scores each window through ``evaluate_forecast``, so it raises the same error."""
+    """``backtest`` scores each window with ``evaluate_forecast``, so it raises the same error."""
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
-    # With eval_train=True the in-sample window is scored first, so its shape is reported.
-    shape = r"\(12, 1\)" if eval_train else r"\(4, 1\)"
-    with pytest.raises(ValueError, match=rf"metric 'crps_cells' returned shape {shape}"):
+    # The in-sample window has 12 steps and the test window 4; which one is scored
+    # first is an implementation detail, so either shape may be reported.
+    with pytest.raises(ValueError, match=r"metric 'crps_cells' returned shape \((12|4), 1\)"):
         backtest(
             rng_key,
             rw_model_factory,

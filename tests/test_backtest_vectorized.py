@@ -797,6 +797,11 @@ def _complex_mae(pred: Array, truth: Array) -> Array:
     return jnp.abs(pred - truth).mean() + 0j
 
 
+def _two_statistics(pred: Array, truth: Array) -> tuple[Array, Array]:
+    """A metric that returns two values instead of one 0-d array."""
+    return jnp.abs(pred - truth).mean(), jnp.abs(pred - truth).max()
+
+
 @pytest.mark.parametrize(
     ("metrics", "num_samples", "error", "match"),
     [
@@ -813,6 +818,7 @@ def _complex_mae(pred: Array, truth: Array) -> Array:
             r"metric 'bad' returned shape \(5, 1\) and dtype float32",
         ),
         ({"bad": _complex_mae}, 10, ValueError, r"metric 'bad' returned shape \(\) and dtype "),
+        ({"two": _two_statistics}, 10, ValueError, r"metric 'two' returned a tuple of traced"),
         ({"host_mae": _host_float_mae}, 10, VectorizedMetricError, "pure JAX functions"),
         (
             {"crps": jax.jit(lambda p, t: eval_crps(p, t))},
@@ -821,7 +827,14 @@ def _complex_mae(pred: Array, truth: Array) -> Array:
             "crps_empirical needs at least 2 samples, got 1",
         ),
     ],
-    ids=["per_cell", "per_cell_with_defaults", "complex", "host_float", "jit_wrapped_crps"],
+    ids=[
+        "per_cell",
+        "per_cell_with_defaults",
+        "complex",
+        "tuple",
+        "host_float",
+        "jit_wrapped_crps",
+    ],
 )
 def test_metric_errors_raise_before_the_fit(
     metrics: dict[str, Callable[..., Array]],

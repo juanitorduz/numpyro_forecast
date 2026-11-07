@@ -1172,9 +1172,11 @@ def _require_scorable_metrics(
     the scoring after the fit (a result that is not 0-d or not real, a host
     conversion, a CRPS wrapped in a ``lambda`` with ``num_samples=1``) fails
     here first, with the same error. The forecast dtype is known only after
-    the fit, so the draws are traced with the floating dtype of ``truth`` (the
-    dtype the built-in metrics require); the scoring after the fit checks the
-    real forecasts again through the same `_vmapped_metrics()`.
+    the fit, so the draws are traced with the floating dtype of ``truth``; the
+    scoring after the fit checks the real forecasts again through the same
+    `_vmapped_metrics()`. The trace calls each metric once more, on tracers,
+    before the fit: a metric with a side effect (a counter, a log line) sees
+    two calls per `backtest_vectorized()` run.
 
     Parameters
     ----------
@@ -1393,9 +1395,10 @@ def backtest_vectorized(
         back inside the metric. Before the fit, the scoring is traced with
         ``jax.eval_shape`` on the shapes of the windows (no computation), so a
         metric that breaks the `~~numpyro_forecast.typing.Metric` contract
-        fails before any window is fitted. A bool or integer metric result is
-        cast to float, so every entry of ``VectorizedBacktestResult.metrics``
-        has a floating dtype.
+        fails before any window is fitted; that trace calls each metric once
+        more, on tracers. A bool or integer metric result is cast to float, so
+        every entry of ``VectorizedBacktestResult.metrics`` has a floating
+        dtype.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
 

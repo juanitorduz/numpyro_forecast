@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jax.typing import ArrayLike
@@ -251,10 +252,13 @@ def scalar_metric_value(name: str, value: object) -> Array:
     The drivers call this on every metric result, so the
     `~~numpyro_forecast.typing.Metric` contract (a 0-d result) holds whatever the
     other metrics are. A bool or integer result is cast to the default float
-    dtype; a floating result is returned as is, so its value and dtype do not
-    change. The check reads the static shape and dtype only, so it costs nothing
-    and also works on tracers under ``jit``, ``vmap`` and ``jax.eval_shape``,
-    where it sees the value of one window.
+    dtype. A floating jax ``Array`` is returned as is (the same object), so its
+    value and dtype do not change; a NumPy or Python float (a host-side metric
+    in `backtest()`) is converted with ``jnp.asarray``, so it takes the default
+    float dtype (``float32`` unless x64 is enabled), as every host value in
+    `evaluate_forecast()` did before. The check reads the static shape and dtype
+    only, so it costs nothing and also works on tracers under ``jit``, ``vmap``
+    and ``jax.eval_shape``, where it sees the value of one window.
 
     Parameters
     ----------
@@ -272,13 +276,27 @@ def scalar_metric_value(name: str, value: object) -> Array:
     ------
     ValueError
         If ``value`` is not 0-d, or its dtype is not bool, integer or floating
-        (for example complex, a PRNG key, or the object dtype of ``None``).
+        (for example complex, a PRNG key, or the object dtype of ``None``), or
+        it is a tuple or list of arrays (the ``(pred, truth)`` pair of a
+        transform, or two statistics) instead of one array.
     """
     # A jax Array (also a tracer) or a NumPy value is read as is, without a device
     # sync. Anything else (a Python scalar or None from a host-side metric in
     # backtest()) has no dtype of its own: NumPy gives it one, the object dtype for
-    # None. jnp.result_type is not used because it maps None to float32.
-    arr = value if isinstance(value, Array | np.ndarray | np.generic) else np.asarray(value)
+    # None. jnp.result_type is not used because it maps None to float32. A tuple or
+    # list of tracers (under vmap or eval_shape) cannot be converted by NumPy; the
+    # error is reported here as a bad result, not as a host conversion by the metric.
+    if isinstance(value, Array | np.ndarray | np.generic):
+        arr = value
+    else:
+        try:
+            arr = np.asarray(value)
+        except jax.errors.TracerArrayConversionError:
+            msg = (
+                f"metric {name!r} returned a {type(value).__name__} of traced values; a "
+                "Metric must return one 0-d array (see numpyro_forecast.typing.Metric)"
+            )
+            raise ValueError(msg) from None
     shape, dtype = arr.shape, arr.dtype
     is_float = jnp.issubdtype(dtype, jnp.floating)
     is_real = is_float or jnp.issubdtype(dtype, jnp.integer) or jnp.issubdtype(dtype, jnp.bool_)
