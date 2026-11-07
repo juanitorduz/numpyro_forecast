@@ -31,6 +31,7 @@ from numpyro_forecast.predictive import forecast, predict_in_sample
 from numpyro_forecast.reparam import TimeTransform
 from numpyro_forecast.typing import Array, ForecastModel
 from numpyro_forecast.validation import (
+    drop_empty_horizon_sites,
     drop_obs_site,
     require_covariates_cover_data,
     require_no_horizon_sites,
@@ -210,12 +211,12 @@ def _require_posterior_names_match_sites(
 
     The model is traced the way
     `~~numpyro_forecast.predictive.predict_in_sample()` calls it: on the
-    in-sample covariates only (so ``data=None``), with one draw of the
-    posterior substituted for every site that is not deterministic, as
-    ``numpyro.infer.Predictive`` does, so a site the posterior provides is
-    never sampled from its prior (a prior with no ``sample``, such as
-    ``ImproperUniform``, exports as before). The trace runs under
-    `jax.eval_shape` on abstract values: the site names, types and
+    in-sample covariates only (so ``data=None``), with the empty horizon keys
+    dropped and one draw of the posterior substituted for every site that is
+    not deterministic, as ``numpyro.infer.Predictive`` does, so a site the
+    posterior provides is never sampled from its prior (a prior with no
+    ``sample``, such as ``ImproperUniform``, exports as before). The trace
+    runs under `jax.eval_shape` on abstract values: the site names, types and
     ``is_observed`` flags are recorded without computing or compiling
     anything, and no draw changes. The drivers run the same substituted model
     under `jax.jit`, so a model they accept traces abstractly.
@@ -255,11 +256,12 @@ def _require_posterior_names_match_sites(
             (name, (site["type"], bool(site.get("is_observed")))) for name, site in trace.items()
         )
 
-    # One abstract draw per key: the shape without the sample axis, in the dtype the
-    # drivers would see (jnp.result_type canonicalizes float64 when x64 is off).
+    # One abstract draw per key that predict_in_sample substitutes (it drops the empty
+    # horizon keys): the shape without the sample axis, in the dtype the drivers would
+    # see (jnp.result_type canonicalizes float64 when x64 is off).
     draw = {
         name: jax.ShapeDtypeStruct(np.shape(value)[1:], jnp.result_type(value))
-        for name, value in posterior.items()
+        for name, value in drop_empty_horizon_sites(posterior).items()
     }
     jax.eval_shape(record_sites, rng_key, covariates, draw)
     missing = sorted(

@@ -1022,22 +1022,55 @@ def test_to_datatree_site_check_keeps_the_draws_of_the_drivers() -> None:
 def test_site_check_compiles_nothing(
     count_compilations: Callable[[], AbstractContextManager[types.SimpleNamespace]],
 ) -> None:
-    """Issue #277: the site check traces the model abstractly, with no backend compile."""
-    posterior = {"trend_drift": jnp.zeros((4, 6, 1))}
+    """Issue #277: the site check traces the model abstractly, with no backend compile.
+
+    Every argument is built before the counting window, so only the check's own
+    work is counted (a key or a ``jnp.zeros`` built inside it compiles when the
+    test runs alone).
+    """
+    key = random.PRNGKey(0)
+    renamed = {"trend_drift": jnp.zeros((4, 6, 1))}
+    matching = {"trend/drift": jnp.zeros((4, 6, 1))}
+    covariates = empty_covariates(6)
 
     def fresh_model(covariates: Array, data: Array | None = None) -> None:
         _scoped_trend_model("/")(covariates, data)
 
     with count_compilations() as tally, pytest.raises(ValueError, match="'trend/drift'"):
-        _require_posterior_names_match_sites(
-            random.PRNGKey(0), fresh_model, posterior, empty_covariates(6)
-        )
+        _require_posterior_names_match_sites(key, fresh_model, renamed, covariates)
     assert tally.count == 0
     with count_compilations() as tally:
-        _require_posterior_names_match_sites(
-            random.PRNGKey(0), fresh_model, {"trend/drift": jnp.zeros((4, 6, 1))}, jnp.ones((6, 0))
-        )
+        _require_posterior_names_match_sites(key, fresh_model, matching, covariates)
     assert tally.count == 0
+
+
+def _always_future_model(covariates: Array, data: Array | None = None) -> None:
+    """A random walk that registers its ``eps_future`` sample site on every call.
+
+    At horizon 0 the site has shape ``(0, 1)``; a training run records an empty
+    leaf for it, which ``predict_in_sample`` drops before ``Predictive``.
+    """
+    h = Horizon.from_data(covariates, data)
+    eps = numpyro.sample("eps", dist.Normal(0.0, 0.1).expand([h.t_obs, 1]).to_event(2))
+    future = dist.Normal(0.0, 0.1).expand([h.future, 1]).to_event(2)
+    eps_future = numpyro.sample("eps_future", future)
+    level = jnp.cumsum(jnp.concatenate([eps, eps_future], axis=-2), axis=-2)
+    predict(h, dist.Normal(0.0, 0.1), level)
+
+
+def test_site_check_drops_the_empty_horizon_keys_like_the_drivers() -> None:
+    """Issue #277: an empty horizon key is dropped, as ``predict_in_sample`` drops it.
+
+    The leaf has no obs axis, so substituting it would break the concatenation
+    that the driver never sees.
+    """
+    data, covariates = _series(), empty_covariates(18)
+    posterior = {"eps": jnp.zeros((4, 18, 1)), "eps_future": jnp.zeros((4, 0))}
+    tree = to_datatree(random.PRNGKey(0), _always_future_model, posterior, data, covariates)
+    np.testing.assert_array_equal(
+        tree["posterior_predictive"]["obs"].to_numpy()[0],
+        predict_in_sample(random.PRNGKey(0), _always_future_model, posterior, covariates),
+    )
 
 
 def test_to_datatree_rejects_data_without_observations() -> None:
