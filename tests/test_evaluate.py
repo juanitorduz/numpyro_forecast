@@ -7,7 +7,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from conftest import commit_host, rw_model_factory, svi_forecast_fn, svi_in_sample_fn
+from conftest import (
+    commit_host,
+    poisson_counts,
+    poisson_model,
+    rw_model_factory,
+    svi_forecast_fn,
+    svi_in_sample_fn,
+)
 from jax import Array, random
 
 from numpyro_forecast.evaluate import (
@@ -28,6 +35,8 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.exceptions import BacktestWindowError, DeviceMemoryError
+from numpyro_forecast.metrics import make_mase
+from numpyro_forecast.predictive import forecast, predict_in_sample
 from numpyro_forecast.typing import ForecastFn, ForecastModel
 
 
@@ -612,8 +621,6 @@ def test_backtest_defaults_leave_train_metrics_and_prediction_empty(rng_key: Arr
 
 
 def test_backtest_per_window_metrics_hook(rng_key: Array) -> None:
-    from numpyro_forecast.metrics import make_mase
-
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
 
@@ -1298,3 +1305,156 @@ def test_backtest_reuse_model_controls_model_fn_calls(
     shared = reuse_model and window_type == "rolling"
     assert len(calls) == (1 if shared else len(results))
     assert len(results) == (duration - train - test) // stride + 1
+
+
+# --- Integer (count) forecasts (#163) ---------------------------------------------
+
+_COUNT_POSTERIOR = {"log_rate": jnp.full((50,), jnp.log(3.0))}
+"""A fixed posterior for `poisson_model`: the closures below forecast without a fit."""
+
+
+def _count_forecast_fn(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    full_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array | np.ndarray:
+    del train_covariates, num_samples
+    return forecast(
+        rng_key, model, _COUNT_POSTERIOR, train_data, full_covariates, batch_size=batch_size
+    )
+
+
+def _count_in_sample_fn(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array | np.ndarray:
+    del train_data, num_samples
+    return predict_in_sample(
+        rng_key, model, _COUNT_POSTERIOR, train_covariates, batch_size=batch_size
+    )
+
+
+def _to_float(pred: Array, truth: Array) -> tuple[Array, Array]:
+    """The manual workaround before #163: cast the count draws and truth to float."""
+    return pred.astype(jnp.float32), truth.astype(jnp.float32)
+
+
+def test_evaluate_forecast_scores_count_model_draws() -> None:
+    """The reproduction of #163: the int32 draws of ``predict()`` score like their float cast."""
+    data, covariates = poisson_counts(24)
+    pred = forecast(random.PRNGKey(1), poisson_model, _COUNT_POSTERIOR, data[:20], covariates)
+    truth = data[20:]
+    assert jnp.issubdtype(pred.dtype, jnp.integer)
+    got = evaluate_forecast(pred, truth)
+    expected = evaluate_forecast(*_to_float(jnp.asarray(pred), truth))
+    assert got.keys() == expected.keys()
+    for name in expected:
+        np.testing.assert_allclose(got[name], expected[name], rtol=1e-6)
+
+
+def test_evaluate_forecast_hands_custom_metrics_floating_arrays() -> None:
+    """A custom metric never sees the integer dtype, so it cannot wrap (``|pred - truth|``)."""
+    seen: list[tuple[jnp.dtype, jnp.dtype]] = []
+
+    def max_abs_error(pred: Array, truth: Array) -> Array:
+        seen.append((pred.dtype, truth.dtype))
+        return jnp.abs(pred - truth).max()
+
+    pred = jnp.zeros((5, 3, 1), dtype=jnp.uint8)
+    truth = jnp.full((3, 1), 200, dtype=jnp.uint8)
+    report = evaluate_forecast(pred, truth, metrics={"max_abs_error": max_abs_error})
+    assert seen == [(jnp.result_type(float), jnp.result_type(float))]
+    assert report["max_abs_error"] == 200.0  # uint8 arithmetic would give 56
+
+
+@pytest.mark.parametrize("batch_size", [None, 2], ids=["single_pass", "chunked"])
+def test_backtest_scores_count_model_like_its_float_cast(batch_size: int | None) -> None:
+    """``backtest()`` over a Poisson model: metrics, train metrics and MASE (#163).
+
+    Before the fix every window raised ``TypeCheckError`` after the first fit.
+    The oracle is the same run with a ``transform`` that casts to float, the
+    manual workaround; ``keep_predictions`` keeps the draws after
+    ``transform``: the integer draws without one, the float cast with it.
+    """
+    data, covariates = poisson_counts(28)
+    metrics = {
+        **DEFAULT_METRICS,
+        "crps": partial(eval_crps, batch_size=batch_size),
+        "coverage": partial(eval_coverage, batch_size=batch_size),
+    }
+
+    def per_window(t0: int, t1: int, t2: int) -> dict[str, object]:
+        del t2
+        return {"mase": make_mase(data[..., t0:t1, :], seasonality=1)}  # integer train slice
+
+    def run(transform: Any) -> list[BacktestResult]:
+        return backtest(
+            random.PRNGKey(2),
+            lambda: poisson_model,
+            data,
+            covariates,
+            forecast_fn=_count_forecast_fn,
+            in_sample_fn=_count_in_sample_fn,
+            metrics=metrics,
+            per_window_metrics=cast("Any", per_window),
+            transform=transform,
+            eval_train=True,
+            keep_predictions=True,
+            min_train_window=16,
+            test_window=4,
+            stride=4,
+            num_samples=50,
+            batch_size=batch_size,
+        )
+
+    got, expected = run(None), run(_to_float)
+    assert len(got) == len(expected) == 3
+    for window, oracle in zip(got, expected, strict=True):
+        assert window.prediction is not None
+        assert oracle.prediction is not None
+        assert jnp.issubdtype(window.prediction.dtype, jnp.integer)
+        assert oracle.prediction.dtype == jnp.float32
+        np.testing.assert_array_equal(oracle.prediction, window.prediction.astype(jnp.float32))
+        assert window.metrics.keys() == {*DEFAULT_METRICS, "mase"}
+        for name, value in oracle.metrics.items():
+            np.testing.assert_allclose(window.metrics[name], value, rtol=1e-6)
+        assert window.train_metrics.keys() == oracle.train_metrics.keys()
+        for name, value in oracle.train_metrics.items():
+            np.testing.assert_allclose(window.train_metrics[name], value, rtol=1e-6)
+
+
+def test_backtest_scores_host_offloaded_count_draws() -> None:
+    """Count draws returned in host memory (``device="host"``) score like device ones."""
+    data, covariates = poisson_counts(24)
+
+    def host_forecast_fn(*args: Any, **kwargs: Any) -> Array | np.ndarray:
+        return commit_host(jnp.asarray(_count_forecast_fn(*args, **kwargs)), "pinned")
+
+    def run(forecast_fn: ForecastFn) -> list[BacktestResult]:
+        return backtest(
+            random.PRNGKey(3),
+            lambda: poisson_model,
+            data,
+            covariates,
+            forecast_fn=forecast_fn,
+            min_train_window=16,
+            test_window=4,
+            stride=4,
+            num_samples=50,
+        )
+
+    host, device = run(host_forecast_fn), run(_count_forecast_fn)
+    assert len(host) == len(device) == 2
+    for h, d in zip(host, device, strict=True):
+        for name in d.metrics:
+            np.testing.assert_allclose(h.metrics[name], d.metrics[name], rtol=1e-6)

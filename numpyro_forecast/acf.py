@@ -22,9 +22,10 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from jax.typing import ArrayLike
-from jaxtyping import Float
+from jaxtyping import Float, Real
 from numpyro.diagnostics import _fft_next_fast_len
 
+from numpyro_forecast.offload import float_cast_in_place
 from numpyro_forecast.typing import Array
 
 
@@ -87,7 +88,7 @@ def _validate_max_lag(name: str, time: int, max_lag: int) -> None:
 
 
 def acf(
-    y: Float[ArrayLike, " *batch time"],
+    y: Real[ArrayLike, " *batch time"],
     max_lag: int,
 ) -> Float[Array, " *batch lags"]:
     r"""Compute the empirical autocorrelation function up to ``max_lag``.
@@ -110,7 +111,12 @@ def acf(
     ----------
     y
         Time series with time on the last axis, shape ``(*batch, time)``.
-        NumPy arrays are accepted directly.
+        NumPy arrays are accepted directly. Integer counts are cast to the
+        default float dtype where the series lives
+        (`~~numpyro_forecast.offload.float_cast_in_place()`): host-committed
+        draws (``device="host"``) stay on the CPU and are not moved to the
+        accelerator; a pinned series (``device="pinned_host"``) is copied
+        back onto its own device first.
     max_lag
         Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -141,13 +147,13 @@ def acf(
     Adapted from `numpyro.diagnostics.autocorrelation()`, itself adapted
     from the Stan implementation.
     """
-    y = jnp.asarray(y)
+    y = float_cast_in_place(y)
     _validate_max_lag("acf", y.shape[-1], max_lag)
     return _acf(y, max_lag=max_lag)
 
 
 def pacf(
-    y: Float[ArrayLike, " *batch time"],
+    y: Real[ArrayLike, " *batch time"],
     max_lag: int,
 ) -> Float[Array, " *batch lags"]:
     r"""Compute the empirical partial autocorrelation function up to ``max_lag``.
@@ -172,7 +178,12 @@ def pacf(
     ----------
     y
         Time series with time on the last axis, shape ``(*batch, time)``.
-        NumPy arrays are accepted directly.
+        NumPy arrays are accepted directly. Integer counts are cast to the
+        default float dtype where the series lives
+        (`~~numpyro_forecast.offload.float_cast_in_place()`): host-committed
+        draws (``device="host"``) stay on the CPU and are not moved to the
+        accelerator; a pinned series (``device="pinned_host"``) is copied
+        back onto its own device first.
     max_lag
         Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -199,6 +210,6 @@ def pacf(
     James Durbin (1960). "The Fitting of Time-Series Models". *Revue de
     l'Institut International de Statistique*.
     """
-    y = jnp.asarray(y)
+    y = float_cast_in_place(y)
     _validate_max_lag("pacf", y.shape[-1], max_lag)
     return _pacf(y, max_lag=max_lag)

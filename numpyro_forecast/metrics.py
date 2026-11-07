@@ -9,9 +9,9 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from jax.typing import ArrayLike
-from jaxtyping import Float
+from jaxtyping import Float, Real
 
-from numpyro_forecast.offload import device_view
+from numpyro_forecast.offload import float_view
 from numpyro_forecast.typing import Array, Metric
 from numpyro_forecast.validation import require_pred_truth_shapes
 
@@ -41,8 +41,8 @@ def _crps_empirical(
 
 
 def crps_empirical(
-    pred: Float[ArrayLike, " sample *batch"],
-    truth: Float[ArrayLike, " *batch"],
+    pred: Real[ArrayLike, " sample *batch"],
+    truth: Real[ArrayLike, " *batch"],
 ) -> Float[Array, " *batch"]:
     r"""Compute the empirical Continuous Ranked Probability Score (CRPS).
 
@@ -63,9 +63,12 @@ def crps_empirical(
         Forecast samples with the sample axis first, shape ``(sample, *batch)``.
         May be host-committed (e.g. draws sampled with ``device="host"``),
         regardless of whether ``truth`` is: either operand is moved to device
-        memory first (`~~numpyro_forecast.offload.device_view()`).
+        memory first (`~~numpyro_forecast.offload.float_view()`). Integer
+        draws (a count model) are cast to the default float dtype there; a
+        floating ``pred`` keeps its dtype.
     truth
         Ground-truth values with shape ``(*batch)`` (matching ``pred`` without the sample axis).
+        Integer values are cast like ``pred``.
 
     Returns
     -------
@@ -85,12 +88,12 @@ def crps_empirical(
     Association*.
     """
     require_pred_truth_shapes(pred, truth)
-    pred_arr = device_view(pred)
+    pred_arr = float_view(pred)
     num_samples = pred_arr.shape[0]
     if num_samples < 2:
         msg = f"crps_empirical needs at least 2 samples, got {num_samples}"
         raise ValueError(msg)
-    return _crps_empirical(pred_arr, device_view(truth))
+    return _crps_empirical(pred_arr, float_view(truth))
 
 
 @partial(jax.jit, static_argnames=("quantile",))
@@ -100,15 +103,15 @@ def _eval_pinball(
     *,
     quantile: float,
 ) -> Array:
-    """Jitted pinball-loss core; host-committed handling lives in `eval_pinball()`."""
+    """Jitted pinball-loss core; `eval_pinball()` places and casts the operands."""
     estimate = jnp.quantile(pred, quantile, axis=0)
     diff = truth - estimate
     return jnp.maximum(quantile * diff, (quantile - 1.0) * diff).mean()
 
 
 def eval_pinball(
-    pred: Float[ArrayLike, " sample *batch"],
-    truth: Float[ArrayLike, " *batch"],
+    pred: Real[ArrayLike, " sample *batch"],
+    truth: Real[ArrayLike, " *batch"],
     *,
     quantile: float = 0.5,
 ) -> Array:
@@ -120,8 +123,10 @@ def eval_pinball(
     pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`);
     ``quantile`` is static so each level specializes its own branch. ``pred``
     and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast.offload.device_view()`), so either (or
+    (`~~numpyro_forecast.offload.float_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
+    An integer operand (the draws of a count model) is cast to the default
+    float dtype in the same step.
 
     Parameters
     ----------
@@ -147,7 +152,7 @@ def eval_pinball(
     if not 0.0 < quantile < 1.0:
         msg = f"quantile must be in (0, 1), got {quantile}"
         raise ValueError(msg)
-    return _eval_pinball(device_view(pred), device_view(truth), quantile=quantile)
+    return _eval_pinball(float_view(pred), float_view(truth), quantile=quantile)
 
 
 @partial(jax.jit, static_argnames=("alpha",))
@@ -157,7 +162,7 @@ def _eval_interval_score(
     *,
     alpha: float,
 ) -> Array:
-    """Jitted interval-score core; host-committed handling lives in `eval_interval_score()`."""
+    """Jitted interval-score core; `eval_interval_score()` places and casts the operands."""
     tail = (1.0 - alpha) / 2.0
     lo = jnp.quantile(pred, tail, axis=0)
     hi = jnp.quantile(pred, 1.0 - tail, axis=0)
@@ -168,8 +173,8 @@ def _eval_interval_score(
 
 
 def eval_interval_score(
-    pred: Float[ArrayLike, " sample *batch"],
-    truth: Float[ArrayLike, " *batch"],
+    pred: Real[ArrayLike, " sample *batch"],
+    truth: Real[ArrayLike, " *batch"],
     *,
     alpha: float = 0.9,
 ) -> Array:
@@ -182,8 +187,10 @@ def eval_interval_score(
     ground truth falling outside them; lower is better.
     A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast.offload.device_view()`), so either (or
+    (`~~numpyro_forecast.offload.float_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
+    An integer operand (the draws of a count model) is cast to the default
+    float dtype in the same step.
 
     Parameters
     ----------
@@ -209,7 +216,7 @@ def eval_interval_score(
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
-    return _eval_interval_score(device_view(pred), device_view(truth), alpha=alpha)
+    return _eval_interval_score(float_view(pred), float_view(truth), alpha=alpha)
 
 
 @partial(jax.jit, static_argnames=("scale",))
@@ -219,13 +226,13 @@ def _mase(
     *,
     scale: float,
 ) -> Array:
-    """Jitted MASE core; host-committed handling lives in the `make_mase()` closure."""
+    """Jitted MASE core; the `make_mase()` closure places and casts the operands."""
     mae = jnp.abs(jnp.median(pred, axis=0) - truth).mean()
     return mae / scale
 
 
 def make_mase(
-    train_data: Float[ArrayLike, " *batch time obs_dim"], *, seasonality: int = 1
+    train_data: Real[ArrayLike, " *batch time obs_dim"], *, seasonality: int = 1
 ) -> Metric:
     """Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 
@@ -235,14 +242,19 @@ def make_mase(
     time; the returned metric has the standard scalar-array signature (see
     `~~numpyro_forecast.typing.Metric`). ``train_data`` and the returned
     metric's ``pred``/``truth`` are all moved to device memory first
-    (`~~numpyro_forecast.offload.device_view()`), so any of
+    (`~~numpyro_forecast.offload.float_view()`), so any of
     them may be host-committed, e.g. draws sampled with ``device="host"``.
+    Integer counts are cast to the default float dtype in the same step, so
+    the seasonal-naive differences of ``train_data`` are computed in floating
+    point: in the integer dtype a ``uint8`` difference wraps and the ``abs`` of
+    the ``int16`` minimum stays negative.
 
     Parameters
     ----------
     train_data
         Training data with time at axis ``-2``; leading batch axes are allowed
-        and the seasonal-naive scale is averaged over all axes.
+        and the seasonal-naive scale is averaged over all axes. Integer counts
+        are accepted.
     seasonality
         Seasonal period (``>= 1``); ``1`` is the random-walk naive baseline.
 
@@ -262,7 +274,8 @@ def make_mase(
     if seasonality < 1:
         msg = f"seasonality must be >= 1, got {seasonality}"
         raise ValueError(msg)
-    train_arr = device_view(train_data)
+    # Cast before the lag difference: integer differences wrap (pymc-forecast#72).
+    train_arr = float_view(train_data)
     if train_arr.shape[-2] <= seasonality:
         msg = (
             f"train_data must be longer than seasonality along the time axis "
@@ -279,11 +292,9 @@ def make_mase(
         )
         raise ValueError(msg)
 
-    def mase(
-        pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
-    ) -> Array:
+    def mase(pred: Real[ArrayLike, " sample *batch"], truth: Real[ArrayLike, " *batch"]) -> Array:
         """MASE for one ``(pred, truth)`` pair, scaled by the enclosing ``train_data``."""
         require_pred_truth_shapes(pred, truth)
-        return _mase(device_view(pred), device_view(truth), scale=scale)
+        return _mase(float_view(pred), float_view(truth), scale=scale)
 
     return mase

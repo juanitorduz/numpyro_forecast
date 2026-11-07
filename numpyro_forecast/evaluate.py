@@ -20,14 +20,14 @@ import jax.numpy as jnp
 import numpy as np
 from jax import lax, random
 from jax.typing import ArrayLike
-from jaxtyping import Float
+from jaxtyping import Float, Real
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
-from numpyro_forecast.offload import chunk_indices, device_view, leaf_view, oom_advice
+from numpyro_forecast.offload import chunk_indices, float_view, leaf_view, oom_advice
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import (
     Array,
@@ -55,19 +55,19 @@ _DEFAULT_COVERAGE_ALPHA = 0.9
 
 @jax.jit
 def _eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
-    """Jitted MAE core; the host-committed-input handling lives in `eval_mae()`."""
+    """Jitted MAE core; `eval_mae()` places and casts the operands."""
     return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
 
 
-def eval_mae(
-    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
-) -> Array:
+def eval_mae(pred: Real[ArrayLike, " sample *batch"], truth: Real[ArrayLike, " *batch"]) -> Array:
     """Mean absolute error using the forecast sample median as point estimate.
 
     A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast.offload.device_view()`), so either (or
+    (`~~numpyro_forecast.offload.float_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
+    An integer operand (the draws of a count model) is cast to the default
+    float dtype in the same step.
 
     Parameters
     ----------
@@ -87,24 +87,24 @@ def eval_mae(
         If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
     require_pred_truth_shapes(pred, truth)
-    return _eval_mae(device_view(pred), device_view(truth))
+    return _eval_mae(float_view(pred), float_view(truth))
 
 
 @jax.jit
 def _eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
-    """Jitted RMSE core; the host-committed-input handling lives in `eval_rmse()`."""
+    """Jitted RMSE core; `eval_rmse()` places and casts the operands."""
     return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
 
 
-def eval_rmse(
-    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
-) -> Array:
+def eval_rmse(pred: Real[ArrayLike, " sample *batch"], truth: Real[ArrayLike, " *batch"]) -> Array:
     """Root mean squared error using the forecast sample mean as point estimate.
 
     A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast.offload.device_view()`), so either (or
+    (`~~numpyro_forecast.offload.float_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
+    An integer operand (the draws of a count model) is cast to the default
+    float dtype in the same step.
 
     Parameters
     ----------
@@ -124,7 +124,7 @@ def eval_rmse(
         If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
     require_pred_truth_shapes(pred, truth)
-    return _eval_rmse(device_view(pred), device_view(truth))
+    return _eval_rmse(float_view(pred), float_view(truth))
 
 
 _crps_cells = jax.jit(crps_empirical)
@@ -141,8 +141,8 @@ def _eval_crps_single_pass(
 
 def _chunked_cell_metric(
     kernel: Callable[..., Array],
-    pred: "Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch']",
-    truth: "Float[Array, ' *batch'] | Float[np.ndarray, ' *batch']",
+    pred: "Real[Array, ' sample *batch'] | Real[np.ndarray, ' sample *batch']",
+    truth: "Real[Array, ' *batch'] | Real[np.ndarray, ' *batch']",
     batch_size: int,
 ) -> Array:
     """Average a per-cell metric kernel over fixed-size cell chunks.
@@ -156,7 +156,11 @@ def _chunked_cell_metric(
     is never chunked. Inputs are normalized with
     `~~numpyro_forecast.offload.leaf_view()` so a host-committed
     panel is sliced on the host instead of raising when a device-resident
-    index array gathers against it.
+    index array gathers against it. When called directly, each block goes
+    through `~~numpyro_forecast.offload.float_view()` on its way to the
+    kernel, so an integer panel is cast one block at a time; inside
+    `evaluate_forecast()` (and with it `backtest()`) the whole panel is cast
+    once up front, before any metric runs.
 
     Parameters
     ----------
@@ -183,20 +187,26 @@ def _chunked_cell_metric(
     n_cells = truth_flat.shape[0]
     indices = chunk_indices(n_cells, batch_size)
     with oom_advice("metric evaluation", batch_size):
-        chunks = [np.asarray(kernel(pred_flat[:, idx], truth_flat[idx])) for idx in indices]
+        chunks = [
+            np.asarray(kernel(float_view(pred_flat[:, idx]), float_view(truth_flat[idx])))
+            for idx in indices
+        ]
     values = np.concatenate(chunks, axis=0)[:n_cells]
     return jnp.asarray(values.mean())
 
 
 def eval_crps(
-    pred: Float[ArrayLike, " sample *batch"],
-    truth: Float[ArrayLike, " *batch"],
+    pred: Real[ArrayLike, " sample *batch"],
+    truth: Real[ArrayLike, " *batch"],
     *,
     batch_size: int | None = None,
 ) -> Array:
     """Empirical CRPS averaged over all data elements.
 
-    A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
+    A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`). An
+    integer ``pred`` or ``truth`` (the draws of a count model) is cast to the
+    default float dtype (`~~numpyro_forecast.offload.float_view()`), one
+    ``batch_size`` block at a time on the chunked path.
 
     Parameters
     ----------
@@ -216,7 +226,7 @@ def eval_crps(
         to float tolerance, not bitwise); at or above the cell count the
         single-pass path runs instead, which moves any host-committed operand
         back to device memory first
-        (`~~numpyro_forecast.offload.device_view()`) so either
+        (`~~numpyro_forecast.offload.float_view()`) so either
         ``pred`` or ``truth`` (or both) may be host-committed regardless of
         ``batch_size``. ``None`` (default) evaluates in one pass.
 
@@ -232,7 +242,7 @@ def eval_crps(
     """
     require_pred_truth_shapes(pred, truth)
     if batch_size is None or batch_size >= np.size(truth):
-        return _eval_crps_single_pass(device_view(pred), device_view(truth))
+        return _eval_crps_single_pass(float_view(pred), float_view(truth))
     return _chunked_cell_metric(
         _crps_cells,
         cast("Array | np.ndarray", pred),
@@ -251,8 +261,8 @@ def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
 
 
 def eval_coverage(
-    pred: Float[ArrayLike, " sample *batch"],
-    truth: Float[ArrayLike, " *batch"],
+    pred: Real[ArrayLike, " sample *batch"],
+    truth: Real[ArrayLike, " *batch"],
     *,
     alpha: float = _DEFAULT_COVERAGE_ALPHA,
     batch_size: int | None = None,
@@ -264,7 +274,10 @@ def eval_coverage(
     fraction of ground-truth values that fall inside it. A well-calibrated
     forecast has coverage close to ``alpha``. A pure JAX scalar kernel (see
     `~~numpyro_forecast.typing.Metric`); bind a non-default level with
-    ``functools.partial(eval_coverage, alpha=...)``.
+    ``functools.partial(eval_coverage, alpha=...)``. An integer ``pred`` or
+    ``truth`` (the draws of a count model) is cast to the default float dtype
+    (`~~numpyro_forecast.offload.float_view()`), one ``batch_size`` block at a
+    time on the chunked path.
 
     Parameters
     ----------
@@ -281,7 +294,7 @@ def eval_coverage(
         the identical count; only the precision of the final division differs
         from the single pass. Either path accepts a host-committed ``pred``
         or ``truth`` (or both); the single pass moves them to device memory
-        first (`~~numpyro_forecast.offload.device_view()`).
+        first (`~~numpyro_forecast.offload.float_view()`).
         ``None`` (default) evaluates in one pass.
 
     Returns
@@ -301,7 +314,7 @@ def eval_coverage(
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
     if batch_size is None or batch_size >= np.size(truth):
-        return _coverage_indicator(device_view(pred), device_view(truth), alpha=alpha).mean()
+        return _coverage_indicator(float_view(pred), float_view(truth), alpha=alpha).mean()
     kernel = partial(_coverage_indicator, alpha=alpha)
     return _chunked_cell_metric(
         kernel, cast("Array | np.ndarray", pred), cast("Array | np.ndarray", truth), batch_size
@@ -318,8 +331,8 @@ DEFAULT_METRICS: dict[str, Metric] = {
 
 
 def evaluate_forecast(
-    pred: Float[ArrayLike, " sample *batch"],
-    truth: Float[ArrayLike, " *batch"],
+    pred: Real[ArrayLike, " sample *batch"],
+    truth: Real[ArrayLike, " *batch"],
     *,
     metrics: Mapping[str, Metric] | None = None,
 ) -> dict[str, float]:
@@ -345,14 +358,17 @@ def evaluate_forecast(
     ----------
     pred
         Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+        Integer draws (a count model) are accepted.
     truth
-        Ground-truth values with shape ``(*batch)``.
+        Ground-truth values with shape ``(*batch)``. Integer values are accepted.
     metrics
         Mapping of metric name to function; when ``None`` defaults to
         `DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
         Each function takes ``(pred, truth)`` and returns a scalar array (see
         `~~numpyro_forecast.typing.Metric`); bind any extra parameters
-        with `functools.partial()` (see above).
+        with `functools.partial()` (see above). Each function receives
+        floating arrays: an integer ``pred`` or ``truth`` is cast to the
+        default float dtype once, before the first metric runs.
 
     Returns
     -------
@@ -373,8 +389,10 @@ def evaluate_forecast(
     # host-committed jax.Array input (e.g. draws sampled with device="host")
     # is moved to device memory so the jitted metric kernels below never see a
     # host/device memory-kind mismatch, whichever of pred/truth (or both) was
-    # host-committed.
-    pred_arr, truth_arr = device_view(pred), device_view(truth)
+    # host-committed. Integer counts are cast to float here once, so every
+    # metric (custom ones included) gets floating arrays and the built-in
+    # metrics' own float_view() is a no-op.
+    pred_arr, truth_arr = float_view(pred), float_view(truth)
     # Evaluate every metric kernel, then pull the whole batch across the device
     # boundary in a single host transfer instead of one sync per metric.
     stacked = jnp.stack([fn(pred_arr, truth_arr) for fn in metrics.values()])
@@ -904,6 +922,10 @@ def backtest(
         `~~numpyro_forecast.typing.Metric`); bind any metric-specific
         parameters with `functools.partial()`, e.g.
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
+        Each window is scored through `evaluate_forecast()`, so the integer
+        draws of a count model need no cast and every metric receives
+        floating arrays. ``transform`` receives the draws as ``forecast_fn``
+        returned them; ``keep_predictions`` stores them after ``transform``.
     per_window_metrics
         Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
         extra metrics merged over ``metrics`` for each window. Use it for
@@ -1096,8 +1118,14 @@ def _vmapped_metrics(
     Metrics are pure JAX scalar kernels (see
     `~~numpyro_forecast.typing.Metric`), so any mapping, default or
     custom, is scored by one ``vmap`` per metric over the leading window axis;
-    the single device-to-host transfer is deferred to the caller.
+    the single device-to-host transfer is deferred to the caller. Integer
+    forecasts and truth (a count model) are cast to the default float dtype
+    once for all windows and metrics, so every metric sees floating arrays;
+    an empty mapping returns before the cast allocates anything.
     """
+    if not metrics:
+        return {}
+    predictions, truth = float_view(predictions), float_view(truth)
     try:
         return {name: jax.vmap(fn)(predictions, truth) for name, fn in metrics.items()}
     except (
@@ -1293,7 +1321,13 @@ def backtest_vectorized(
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}``,
         is scored inside the single fused computation. Host-side metrics are
         unsupported here; use `backtest()`, or ``keep_predictions=True``
-        and score on the host.
+        and score on the host. The integer draws of a count model need no
+        cast: the forecasts and the truth windows are cast to the default
+        float dtype once before scoring, so every metric (a custom one
+        included) receives floating arrays, while ``predictions`` keeps the
+        dtype of the draws. A custom metric that needs the integer draws must
+        read them from ``predictions`` (``keep_predictions=True``) or cast
+        back inside the metric.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
 
