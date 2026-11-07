@@ -724,6 +724,18 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/typing.IntScalar.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.IntScalar</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.RealScalar.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.RealScalar</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
@@ -965,7 +977,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L109-L150" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L112-L155" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">metrics</span><span class="op">.</span><span class="sig-name">eval_pinball</span>(
@@ -976,17 +988,17 @@ window.Quarto = {
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The pinball loss for the forecast <span class="math inline">\hat q</span> of quantile <span class="math inline">\tau</span> is <span class="math inline">\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))</span>, averaged over all data elements. At <code>quantile=0.5</code> it is half the mean absolute error. A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); <code>quantile</code> is static so each level specializes its own branch. <code>pred</code> and <code>truth</code> are moved to device memory first (<code>device_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
+<p>The pinball loss for the forecast <span class="math inline">\hat q</span> of quantile <span class="math inline">\tau</span> is <span class="math inline">\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))</span>, averaged over all data elements. At <code>quantile=0.5</code> it is half the mean absolute error. A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); <code>quantile</code> is static so each level specializes its own branch. <code>pred</code> and <code>truth</code> are moved to device memory first (<code>float_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>. An integer operand (the draws of a count model) is cast to the default float dtype in the same step.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" sample *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" sample *batch"</span>]</span></code></dt>
 <dd>
 <p>Forecast samples with the sample axis first.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" *batch"</span>]</span></code></dt>
 <dd>
 <p>Ground-truth values (matching <code>pred</code> without the sample axis).</p>
 </dd>

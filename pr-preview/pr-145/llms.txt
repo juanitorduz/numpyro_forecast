@@ -107,6 +107,8 @@
 - [typing.Metric](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Metric.html)
 - [typing.ModelFactory](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ModelFactory.html)
 - [typing.Array](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Array.html)
+- [typing.IntScalar](https://juanitorduz.github.io/numpyro_forecast/reference/typing.IntScalar.html)
+- [typing.RealScalar](https://juanitorduz.github.io/numpyro_forecast/reference/typing.RealScalar.html)
 - [typing.BlackjaxBuildFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.BlackjaxBuildFn.html)
 - [typing.BlackjaxStepFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.BlackjaxStepFn.html)
 

@@ -3,20 +3,24 @@
 
 M5 forecasting II: a hierarchical count state space model with `numpyro_forecast`
 
-This notebook continues the [M5 baselines notebook](m5_forecasting.md), the port of the three [Pyro M5 Starter Kit](https://github.com/pyro-ppl/Pyro-M5-Starter-Kit) models to `numpyro_forecast`, and asks what a partially pooled hierarchical model adds on the same task: the 30,490 daily unit-sales series of the M5 competition (3,049 items in 10 Walmart stores of 3 states), a 28-day horizon, and the weighted scaled CRPS over the 42,840 series of the 12-level hierarchy. On the evaluation window the kit's top-down model scored a WS-CRPS of 0.569, the middle-out model 0.634 and the bottom-up model 0.728, so the top-down model is the one to beat.
+The M5 competition asks for probabilistic forecasts of the daily unit sales of 3,049 Walmart items in 10 stores of three states, 28 days ahead. That is 30,490 item-store series, and the score adds them up to 42,840 series over a 12-level hierarchy: the total, the states, the stores, the categories, the departments, the items and their crossings. Many item series are small counts with long runs of zero days, while the aggregates are smooth, so a model has to get both the level of each item and the common movements of the stores right.
 
-The candidate is a single **hierarchical count state space model** of every item in every store, fitted with minibatch SVI. The candidate model has the following components:
+The [M5 baselines notebook](m5_forecasting.md) ports the three models of the [Pyro M5 Starter Kit](https://github.com/pyro-ppl/Pyro-M5-Starter-Kit) to `numpyro_forecast` and scores them with the **weighted scaled CRPS** (WS-CRPS) over the whole hierarchy. On the evaluation window the top-down model is the best of the three:
+
+- top-down: 0.569;
+- middle-out: 0.634;
+- bottom-up: 0.728.
+
+This notebook asks whether a single **hierarchical count state space model** of every item in every store, fitted with minibatch SVI, beats the top-down model. The model has the following components, all partially pooled across the hierarchy:
 
 - a negative binomial likelihood with item-level dispersion;
-- an item intercept centered on the series' level at the forecast origin;
-- an end-anchored random walk of the item level over 28-day blocks;
+- an item intercept centered on the level of the series at the forecast origin;
+- a random walk of the item level over 28-day blocks, anchored at the origin;
 - daily store shocks that sum to zero within every week;
-- zero-sum weekday effects per store-department with zero-sum item deviations;
-- SNAP and calendar-event effects and yearly seasonality;
+- zero-sum weekday and day-of-month effects per store-department, with zero-sum item weekday deviations;
+- SNAP, calendar events and yearly seasonality.
 
-all partially pooled across the hierarchy. It is compared with the top-down baseline in the same harness on the three backtest windows of the baselines notebook and on the evaluation window, at every level, with the calibration of the bands alongside the score.
-
-This is the second of the two M5 notebooks; the data loader, the hierarchy, the scoring functions and the baseline are described in the first one and only summarized here.
+We compare the two models in the same harness on the three backtest windows of the baselines notebook and on the evaluation window, at every level of the hierarchy, and we check the calibration of the forecast bands next to the score. The baselines notebook describes the data loader, the hierarchy, the scoring functions and the baseline in detail; here we only summarize them.
 
 
 # Prepare notebook
@@ -44,6 +48,7 @@ import polars as pl
 import preliz as pz
 import scipy.sparse as sp
 import xarray as xr
+from IPython.display import display
 from jax import random
 from numpyro.infer import SVI, Predictive, Trace_ELBO, init_to_median
 from numpyro.infer.autoguide import AutoNormal
@@ -90,7 +95,13 @@ warnings.filterwarnings("ignore", message="When multiple credible intervals are 
 
 # Read data
 
-[load_m5()](../../reference/datasets.load_m5.md#numpyro_forecast.datasets.load_m5) downloads the [Nixtla mirror](https://github.com/Nixtla/m5-forecasts) of the competition files once and reads them: the daily sales over the training period (`d_1` to `d_1941`) followed by the 28 evaluation days (`d_1942` to `d_1969`), the weekly shelf price of every series repeated over its days (`NaN` when the item was not on the shelf), the series identifiers, the calendar and the official evaluation weights. The [baselines notebook](m5_forecasting.md) describes the files, the hierarchy and the exploratory plots in detail; here the data cells are kept to what the model needs. The calendar carries two event columns; the second one is rare, but one of its five days (Father's Day 2016) falls inside the evaluation window, so both are indexed.
+[load_m5()](../../reference/datasets.load_m5.md#numpyro_forecast.datasets.load_m5) downloads the [Nixtla mirror](https://github.com/Nixtla/m5-forecasts) of the competition files once and returns:
+
+- the daily sales of every series over the training period (`d_1` to `d_1941`), followed by the 28 evaluation days (`d_1942` to `d_1969`);
+- the weekly shelf price of every series, repeated over its days (`NaN` when the item is not on the shelf);
+- the series identifiers, the calendar and the official evaluation weights.
+
+The [baselines notebook](m5_forecasting.md) explores these files in detail, so here we keep only what the model needs. The calendar has two event columns. The second one holds only five events, but one of them (Father's Day 2016) falls inside the evaluation window, so we index both.
 
 
 ``` python
@@ -130,10 +141,22 @@ calendar_df = (
     .with_columns(
         christmas=is_christmas().cast(pl.Float32),
         dow=day_of_week_index(),
+        dom=pl.col("date").dt.day().sub(pl.lit(1)),
         event_1=event_index("event_name_1", event_names),
         event_2=event_index("event_name_2", event_names),
     )
-    .select("t", "date", "dow", "christmas", "event_1", "event_2", "snap_CA", "snap_TX", "snap_WI")
+    .select(
+        "t",
+        "date",
+        "dow",
+        "dom",
+        "christmas",
+        "event_1",
+        "event_2",
+        "snap_CA",
+        "snap_TX",
+        "snap_WI",
+    )
     .collect(engine="streaming")
 )
 
@@ -162,7 +185,7 @@ shape: (5, 3)
 
 ## The hierarchy
 
-The competition scores 42,840 series: the 30,490 items in stores (level 12) and their sums over the 11 coarser groupings. A label and a dense group id per level turn into a sparse `(30,490, 42,840)` summation matrix, so any array of bottom-level values (data or forecast draws) is aggregated to every level with one sparse product. The store, department and store-department ids of every series index the pooled parameters of the model.
+The competition scores 42,840 series: the 30,490 item-store series (level 12) and their sums over the 11 coarser groupings. We give every series a label and a dense group id per level, and we turn them into a sparse **summation matrix** of shape `(30,490, 42,840)`. One product with this matrix aggregates any array of bottom-level values, data or forecast draws, to every level. The store, department and store-department ids of every series also index the pooled parameters of the model.
 
 
 ``` python
@@ -264,11 +287,24 @@ print(
 
 # Scoring at every level
 
-The score is the one of the baselines notebook. For a series s at level \ell, c_s is the mean CRPS of its 28-day forecast, w_s its share of the dollar sales of the level over the 28 days before the forecast origin and \sigma_s its scale, the mean absolute lag-one difference of the training series after its first nonzero value:
+We use the score of the baselines notebook. For a series s at level \ell of the hierarchy, let
+
+- c_s be the mean CRPS of its 28-day forecast;
+- w_s be its **weight**: its share of the dollar sales of level \ell over the 28 days before the forecast origin;
+- \sigma_s be its **scale**: the mean absolute day-to-day change of its training series after its first nonzero value.
+
+The weighted scaled CRPS averages the weighted and scaled CRPS of the 12 levels:
 
  \text{WS-CRPS} = \frac{1}{12} \sum\_{\ell=1}^{12} \sum\_{s \in \ell} w_s \frac{c_s}{\sigma_s}. 
 
-The functions plug into [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest): a `transform` sums the bottom-level draws and the truth to the 42,840 series and `per_window_metrics` returns one weighted scaled CRPS per level for the window's origin. Four coverage metrics come along, the share of series-days inside the central 94\\ interval of the draws at levels 1, 3, 9 and 12, because a CRPS alone does not say whether a model is sharp or just narrow. The weights need the dollar sales, so the price enters here; it also gives the `saled` flag ("price listed and not Christmas") that the model uses to gate its mean, as the kit's bottom-up model does.
+The scale makes the CRPS of a large series comparable with the CRPS of a small one. The weights of every level add up to one, so the total, a single series, counts as much as the 30,490 items together.
+
+The scoring functions plug into [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest):
+
+- a `transform` sums the bottom-level draws and the truth to the 42,840 series;
+- `per_window_metrics` returns one WS-CRPS per level for the forecast origin of the window.
+
+A CRPS alone does not tell whether a forecast is sharp or only narrow, so we also report four **coverage** metrics: the share of series-days inside the central 94\\ interval of the draws at levels 1, 3, 9 and 12. The weights need the dollar sales, so the price enters here. The price also gives the `saled` flag ("price listed and not Christmas"), which the model uses to gate its mean, as the kit's bottom-up model does.
 
 
 ``` python
@@ -357,9 +393,14 @@ def m5_metrics(t0: int, t1: int, t2: int) -> dict:
 
 # Features
 
-The model reads two kinds of inputs. The per-series covariate tensor has two channels stacked with time at axis -2: the day index, through which the calendar tables are looked up inside the model, and the `saled` flag, which gates the mean as in the kit. The calendar tables (weekday, SNAP by state, the two event indices and four yearly Fourier harmonics) live outside the tensor, one row per day, so that a subsampled minibatch does not have to carry them. The shelf price is not a feature: a department price elasticity was tried during development and changed nothing (see the model selection below), and a per-item elasticity is unidentified for the many items whose price never moves.
+The model reads two kinds of inputs:
 
-Three constants fix the time bookkeeping: the first backtest origin (day 1,843, the reference day of the windows), the block length of the item random walk (28 days, the competition horizon) and the number of blocks the walk spans (13, one year).
+- a per-series **covariate tensor** with two channels and time at axis -2: the day index, through which the model looks up the calendar tables, and the `saled` flag, which gates the mean as in the kit;
+- the **calendar tables**, one row per day: the weekday, the day of the month, the SNAP flag of each state, the two event indices and four yearly Fourier harmonics. They stay outside the tensor so that a minibatch of series does not have to carry them.
+
+The shelf price is not a feature. A department price elasticity was tried during development and did not change the score (see *Why these components*), and a per-item elasticity cannot be estimated for the many items whose price never moves.
+
+Three constants fix the time bookkeeping: the first backtest origin (day 1,843, the reference day of the windows), the length of a block of the item random walk (28 days, the competition horizon) and the number of blocks that the walk spans (13, one year).
 
 
 ``` python
@@ -369,7 +410,7 @@ N_BLOCKS = 13  # one year of 28-day blocks before the origin
 ```
 
 
-The covariate tensor is `(channel, day, series)`: channel 0 the day index (the same for every series), channel 1 the `saled` flag of every series-day.
+The covariate tensor has shape `(channel, day, series)`: channel 0 is the day index (the same for every series) and channel 1 is the `saled` flag of every series-day.
 
 
 ``` python
@@ -386,11 +427,12 @@ print(f"covariates {covariates.shape} (channel, day, series), {covariates.nbytes
     covariates (2, 1969, 30490) (channel, day, series), 0.48 GB
 
 
-The calendar tables are one row per day and are indexed by the day channel inside the model: the weekday, the SNAP flag of each of the three states, the two event indices (0 for "no event", then the position of the event name) and the yearly Fourier terms. `state_of_store` maps every store to its state, so that the model can pick the SNAP flag of a series' store.
+The model indexes the calendar tables with the day channel. The day of the month runs from 0 to 30, and an event index is 0 for "no event" and otherwise the position of the event name. `state_of_store` maps every store to its state, so that the model can pick the SNAP flag of the store of a series.
 
 
 ``` python
 dow_table = jnp.asarray(calendar_df["dow"].to_numpy()[:N_DAYS], dtype=jnp.int32)  # (days,)
+dom_table = jnp.asarray(calendar_df["dom"].to_numpy()[:N_DAYS], dtype=jnp.int32)  # (days,) 0..30
 snap_table = jnp.asarray(  # (days, state)
     calendar_df.select("snap_CA", "snap_TX", "snap_WI").to_numpy()[:N_DAYS], dtype=jnp.float32
 )
@@ -412,7 +454,7 @@ state_of_store = jnp.asarray(  # (store,): the state of every store, for the SNA
 ```
 
 
-The training counts are the sales times the `saled` flag: the model puts its mean at the floor on the days without a listed price and on Christmas, so the few nonzero sales recorded on such days are set to zero rather than left for the likelihood to explain.
+The training counts are the sales times the `saled` flag. The model puts its mean at a floor on the days without a listed price and on Christmas, so we set the few nonzero sales recorded on such days to zero instead of leaving them for the likelihood to explain.
 
 
 ``` python
@@ -427,25 +469,45 @@ print(f"{n_zeroed} nonzero sales on unlisted or closed days are set to 0 in the 
 
 # The model
 
-For item i in store r(i), department d(i) and store-department j(i) (70 groups), on day t with weekday w(t), 28-day block b(t) (counted so that the horizon is one whole block), calendar events e_1(t) and e_2(t) and yearly Fourier terms \mathbf{f}\_t:
+Let i index the item-store series, with store r(i), department d(i) and store-department j(i) (70 groups). For day t, let w(t) be the weekday, m(t) the day of the month, b(t) the 28-day block (counted so that the horizon is one whole block), e_1(t) and e_2(t) the two event indices and \mathbf{f}\_t the yearly Fourier terms. The model is
 
- \begin{align\*} y\_{i,t} &\sim \text{NegativeBinomial2}\big(\text{saled}\_{i,t}\\ e^{\eta\_{i,t}},\\ \phi_i\big), \qquad \log \phi_i \sim \text{Normal}(\log \phi\_{j(i)}, \tau\_{d(i)}), \\ \eta\_{i,t} &= \log m_i + a\_{j(i)} + \alpha_i + u\_{i,b(t)} + \epsilon\_{r(i),t} + s\_{j(i),w(t)} + \tilde s\_{i,w(t)} + \beta\_{j(i)}\\\text{snap}\_{r(i),t} + \mathbf{w}\_{d(i)}^\top \mathbf{f}\_t + \gamma\_{d(i),e_1(t)} + \gamma\_{d(i),e_2(t)}. \end{align\*} 
+ \begin{align\*} y\_{i,t} &\sim \text{NegativeBinomial2}\big(\text{saled}\_{i,t}\\ e^{\eta\_{i,t}},\\ \phi_i\big), \qquad \log \phi_i \sim \text{Normal}(\log \phi\_{j(i)}, \tau\_{d(i)}), \\ \eta\_{i,t} &= \log \bar y_i + a\_{j(i)} + \alpha_i + u\_{i,b(t)} + \epsilon\_{r(i),t} + s\_{j(i),w(t)} + \tilde s\_{i,w(t)} + \delta\_{j(i),m(t)} + \beta\_{j(i)}\\\text{snap}\_{r(i),t} + \boldsymbol{\theta}\_{d(i)}^\top \mathbf{f}\_t + \gamma\_{d(i),e_1(t)} + \gamma\_{d(i),e_2(t)}. \end{align\*} 
 
-- **Level at the origin**: m_i is the item's mean sales over its listed days of the last 28 training days (falling back to the last year, then to a floor) and \alpha_i \sim \text{Normal}(0, \sigma^{\alpha}\_{d(i)}) a partially pooled deviation from it, with a store-department intercept a_j \sim \text{Normal}(0, 0.3) that shifts a whole group at once when the origin level is biased for all its items (for example by the value of the yearly curve at the origin, which the item intercepts would otherwise each have to undo). With the walk anchored at zero on the last training block, \log m_i + a\_{j(i)} + \alpha_i is the log level at the forecast origin: the share heuristic of the kit becomes the prior center of a Bayesian item level.
-- **Item block walk** u\_{i,b}: a random walk over the last 13 blocks of 28 days, end-anchored (zero on the last block, earlier blocks minus the innovations that follow them) with a department-level innovation scale \sigma^{u}\_{d}; the horizon block adds one fresh innovation. This is the local level of a state space model, at the resolution a single item series can support.
-- **Weekly store shocks** \epsilon\_{r,t}: daily shocks shared by every item of a store that sum to zero within each week (`ZeroSumNormal` over the seven days, weeks counted back from the origin), scaled by a store-level \sigma^{\epsilon}\_r. A zero-sum week cannot absorb a level change, so the shocks carry only the common day-to-day variation of a store; their fresh future weeks give correlated uncertainty to the aggregates.
+The terms of the log mean \eta\_{i,t} are:
+
+- **Level at the origin.** \bar y_i is the mean sales of the series over its listed days of the last 28 training days (with a fallback to the last year, then to a floor). The item deviation \alpha_i \sim \text{Normal}(0, \sigma^{\alpha}\_{d(i)}) is partially pooled by department. The store-department intercept a_j shifts a whole group at once when the origin level is off for all its items, for example by the value of the yearly curve at the origin. The walk below is zero on the last training block, so \log \bar y_i + a\_{j(i)} + \alpha_i is the log level at the forecast origin: the share heuristic of the kit becomes the prior center of a Bayesian item level.
+- **Item block walk** u\_{i,b}: a random walk over the last 13 blocks of 28 days, with a department-level innovation scale \sigma^{u}\_{d}. The walk is **end-anchored**: it is zero on the last training block, and each earlier block is minus the sum of the innovations that follow it. The horizon block adds one fresh innovation. This is the local level of a state space model, at the time resolution that a single item series can support.
+- **Weekly store shocks** \epsilon\_{r,t}: daily shocks shared by all items of a store, which sum to zero within each week (`ZeroSumNormal` over the seven days, with the weeks counted back from the origin), with a store-level scale \sigma^{\epsilon}\_r. A week that sums to zero cannot absorb a change of level, so the shocks carry only the common day-to-day variation of a store. Over the horizon, fresh weeks give the aggregates correlated uncertainty.
 - **Weekday**: `ZeroSumNormal` effects s\_{j,\cdot} per store-department and zero-sum item deviations \tilde s\_{i,\cdot} = \sigma^{s}\_{d(i)} z_i with z_i \sim \text{ZeroSumNormal}(1) (the distribution does not take a per-item scale).
-- **Calendar**: SNAP per store-department, one effect per department and event name (zero for "no event", so \gamma\_{d,e} is the lift of event e over an ordinary day) with a shrinkage scale \sigma^{\gamma}\_d per department, four yearly harmonics with department-level weights.
-- **Likelihood**: negative binomial with an item-level dispersion pooled to the store-department. The log mean is clipped at \log 2{,}000; no series sells more than 763 units on a day.
+- **Day of the month**: `ZeroSumNormal` effects \delta\_{j,\cdot} per store-department over the 31 days of the month. This is the pay-cycle pattern that the kit's top-down model carries as 31 dummies.
+- **SNAP, events and yearly seasonality**: a SNAP effect \beta_j per store-department; one effect \gamma\_{d,e} per department and event name, with a shrinkage scale \sigma^{\gamma}\_d and zero for "no event", so that \gamma\_{d,e} is the lift of event e over an ordinary day; four yearly harmonics with department-level weights \boldsymbol{\theta}\_d.
+- **Likelihood**: negative binomial with an item-level dispersion \phi_i pooled to the store-department. The log mean is clipped at \log 2{,}000; no series sells more than 763 units on a day.
+
+The SNAP days are fixed days of the month in every state: days 1 to 10 in California, and ten days among the first 15 in Texas and Wisconsin. Within a store-department, the data therefore cannot separate the SNAP effect from the day-of-month pattern on those days. Only the priors separate them: a single effect of scale 0.3 against 31 zero-sum effects of scale 0.2. For that reason the SNAP figure of *Posterior of the shared parameters* shows the sum of the two.
 
 
 ## Priors
 
-The item-level parameters are partially pooled, so the priors that matter are the population scales and the shared effects:
+The item-level parameters are partially pooled, so the priors that matter are those of the population scales and of the shared effects:
 
- \begin{align\*} \sigma^{\alpha}\_d &\sim \text{HalfNormal}(0.5), & \tau_d &\sim \text{HalfNormal}(1), & \sigma^{u}\_d &\sim \text{HalfNormal}(0.3), \\ \sigma^{s}\_d &\sim \text{HalfNormal}(0.2), & \sigma^{\gamma}\_d &\sim \text{HalfNormal}(0.3), & \sigma^{\epsilon}\_r &\sim \text{HalfNormal}(0.2), \\ \log \phi_j &\sim \text{Normal}(0, 1), & s\_{j,\cdot} &\sim \text{ZeroSumNormal}(0.3), & \beta_j &\sim \text{Normal}(0, 0.3), \\ a_j &\sim \text{Normal}(0, 0.3), & w\_{d,k} &\sim \text{Normal}(0, 0.3), & \gamma\_{d,e} &\sim \text{Normal}(0, \sigma^{\gamma}\_d). \end{align\*} 
+ \begin{align\*} \sigma^{\alpha}\_d &\sim \text{HalfNormal}(0.5), & \tau_d &\sim \text{HalfNormal}(1), & \sigma^{u}\_d &\sim \text{HalfNormal}(0.3), \\ \sigma^{s}\_d &\sim \text{HalfNormal}(0.2), & \sigma^{\gamma}\_d &\sim \text{HalfNormal}(0.3), & \sigma^{\epsilon}\_r &\sim \text{HalfNormal}(0.2), \\ \log \phi_j &\sim \text{Normal}(0, 1), & s\_{j,\cdot} &\sim \text{ZeroSumNormal}(0.3), & \delta\_{j,\cdot} &\sim \text{ZeroSumNormal}(0.2), \\ \beta_j &\sim \text{Normal}(0, 0.3), & a_j &\sim \text{Normal}(0, 0.3), & \theta\_{d,k} &\sim \text{Normal}(0, 0.3), \\ \gamma\_{d,e} &\sim \text{Normal}(0, \sigma^{\gamma}\_d). \end{align\*} 
 
-Everything lives on the log scale of the sales, where 0.3 is a factor of e^{0.3} \approx 1.35. The half-normal scales are weakly informative in that unit: the intercept deviations \sigma^{\alpha} get a prior standard deviation of 0.5 (the last-28-day level can be off by a factor of two for an item, but not routinely by ten), the dispersion spread \tau a standard deviation of 1 (item dispersions within a store-department can differ by a factor of e), the block-walk innovations 0.3 per 28 days, the item weekday deviations 0.2 (small next to the store-department pattern they refine), the event effects 0.3 (a holiday can halve or double a department) and the store shocks 0.2 (a common daily shock of \pm 20\\ is large for a store total). The shared effects have fixed scales because the hierarchy already pools them: a store-department intercept shift of 0.3, a weekday effect of 0.3, a SNAP lift of 0.3, Fourier weights of 0.3 per harmonic and a group log dispersion of 1 around zero (a dispersion of 1 is a geometric Poisson-Gamma mixture with variance m + m^2). The prior predictive check of the focus items below shows what these priors allow before the data speak. The figure shows the half-normal scales, with the fixed Normal(0, 0.3) of the shared effects for comparison.
+All terms live on the log scale of the sales, where an effect of 0.3 is a factor of e^{0.3} \approx 1.35. In that unit the half-normal population scales are weakly informative:
+
+- intercept deviations \sigma^{\alpha}, 0.5: the last-28-day level can be off by a factor of two for an item, but not routinely by ten;
+- dispersion spread \tau, 1: item dispersions within a store-department can differ by a factor of e;
+- block-walk innovations \sigma^{u}, 0.3 per 28 days;
+- item weekday deviations \sigma^{s}, 0.2: small next to the store-department pattern they refine;
+- event effects \sigma^{\gamma}, 0.3: a holiday can halve or double the sales of a department;
+- store shocks \sigma^{\epsilon}, 0.2: a common daily shock of \pm 20\\ is large for a store total.
+
+The shared effects have fixed scales, because the hierarchy already pools them:
+
+- store-department intercept, weekday effects, SNAP effect and Fourier weights, 0.3;
+- day-of-month effects, 0.2: a payday can lift a store-department by about 20\\ (scales of 0.1 and 0.3 were tried during development and give the same score within 0.003);
+- group log dispersion, 1 around zero, where a dispersion of 1 is a geometric Poisson-Gamma mixture with variance \mu + \mu^2 for a mean \mu.
+
+The figure shows these priors; the prior predictive check below shows what they allow before the data.
 
 
 ``` python
@@ -467,6 +529,8 @@ axes[0].legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncols=2)
 # Bottom: the fixed priors of the shared effects.
 pz.Normal(0, 0.3).plot_pdf(ax=axes[1], color="C4", legend=None)
 axes[1].lines[-1].set_label("Normal(0, 0.3): group intercept, weekday, SNAP, Fourier weights")
+pz.Normal(0, 0.2).plot_pdf(ax=axes[1], color="C6", legend=None)
+axes[1].lines[-1].set_label("Normal(0, 0.2): day-of-month (zero-sum)")
 pz.Normal(0, 1).plot_pdf(ax=axes[1], color="C5", legend=None)
 axes[1].lines[-1].set_label("Normal(0, 1): group log dispersion")
 axes[1].set(title="Shared effects (log scale)", xlim=(-3, 3))
@@ -484,7 +548,12 @@ fig.suptitle(
 
 ## Why these components
 
-The model was built up one component at a time during development, with the same code, on a selection window whose forecast origin is day 1,878 (250 draws; a second SVI seed of one variant moved the score by 0.002). The figure is the model selection ladder that chose the components, drawn from the scores recorded in those runs; it is not re-run in this notebook. The last rung is the model of this notebook, except for two details that do not move its score. In the selection runs the event effects included a free "no event" effect per department, which acted as a department intercept; in this notebook the event effects are the lift over an ordinary day, and the explicit store-department intercept a_j takes that role (the score on this window is 0.514 either way). The selection runs also gave the store-shock scale a half-normal prior of scale 0.05 instead of 0.2 (the posterior scales do not move, 0.06 to 0.11 under both).
+We built the model one component at a time during development, and we scored every step on a **selection window**: the backtest window with forecast origin day 1,878 (250 draws). The figure shows the scores recorded in those runs; the notebook does not re-run them. The first block of bars is the cumulative **ladder**, where every row adds one component to the row above. The second block holds the alternatives that we tried and dropped, each named after the row it extends.
+
+Two details limit the comparison between rows:
+
+- The rows up to the weekly shocks, the price row and the shared-walk row used two parametrization details that differ from this notebook: a free "no event" effect per department instead of the store-department intercept a_j, and a store-shock scale prior of 0.05 instead of 0.2. They do not move the score: the shock row scores 0.514 either way.
+- The two day-of-month rows were run later, with the model of this notebook and another random key stream, under which the shock row scores 0.517 instead of 0.514. The same model therefore scores between 0.514 and 0.517 on this window, and we do not read a difference below 0.005 as a gain.
 
 
 ``` python
@@ -496,48 +565,72 @@ ladder = pl.DataFrame(
             "+ item dispersion (negative binomial)",
             "+ item block walk",
             "+ yearly seasonality, events, item weekday deviations",
-            "+ department price elasticity",
-            "+ weekly store shocks, no price (this notebook)",
-            "+ store and store-department block walks instead of the shocks",
+            "+ weekly store shocks",
+            "+ day-of-month per store-department (this notebook)",
+            "seasonality rung + department price elasticity",
+            "seasonality rung + shared block walks instead of the weekly shocks",
+            "shocks rung + day-of-month per department",
         ],
-        "all levels": [0.553, 0.893, 0.846, 0.537, 0.513, 0.513, 0.514, 0.521],
-        "levels 1 to 9": [0.481, 0.865, 0.812, 0.457, 0.427, 0.426, 0.427, 0.435],
-        "levels 10 to 12": [0.767, 0.975, 0.950, 0.778, 0.773, 0.773, 0.774, 0.777],
+        "all levels": [
+            *[0.553, 0.893, 0.846, 0.537, 0.513, 0.514, 0.490],
+            *[0.513, 0.521, 0.497],
+        ],
+        "levels 1 to 9": [
+            *[0.481, 0.865, 0.812, 0.457, 0.427, 0.427, 0.395],
+            *[0.426, 0.435, 0.405],
+        ],
+        "levels 10 to 12": [
+            *[0.767, 0.975, 0.950, 0.778, 0.773, 0.774, 0.772],
+            *[0.773, 0.777, 0.772],
+        ],
     }
 )
+N_LADDER = 7  # the cumulative rungs; the rows after them are the alternatives
 
-fig, ax = plt.subplots(figsize=(14, 6), layout="constrained")
-y = np.arange(ladder.height)
+fig, ax = plt.subplots(figsize=(14, 7), layout="constrained")
+y = np.arange(ladder.height) + (np.arange(ladder.height) >= N_LADDER)  # a gap after the ladder
 height = 0.27
 
 for k, column in enumerate(["all levels", "levels 1 to 9", "levels 10 to 12"]):
-    ax.barh(y + (k - 1) * height, ladder[column].to_numpy(), height, label=column)
+    bars = ax.barh(y + (k - 1) * height, ladder[column].to_numpy(), height, label=column)
+
+    if column == "all levels":
+        ax.bar_label(bars, fmt="%.3f", fontsize=10, padding=2)
 
 ax.set_yticks(y, ladder["model"].to_list())
 ax.invert_yaxis()
 ax.axvline(0.553, color="gray", ls="--", lw=1)
+ax.axhline(N_LADDER, color="gray", lw=1)
 ax.set(title="WS-CRPS of the model selection ladder (origin day 1,878)", xlim=(0, 1.0))
 ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0));
 ```
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-11-output-1.png" class="figure-img" width="1411" height="611" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-11-output-1.png" class="figure-img" width="1411" height="711" /></p>
 </figure>
 
 
-Here are three observations:
+The figure shows four things:
 
-- **The block walk is the component that makes the item model work.** Without a level process, a two-year intercept is the wrong level for most items and the model loses to the baseline (the dashed line) by a wide margin. Yearly seasonality, events and item weekday deviations buy the next 0.024, almost all at the aggregate levels.
-- **Shared level processes and the price add nothing.** The price elasticity changes nothing, and shared block walks at the store and store-department level cost 0.007: what a store's level does over 13 blocks is already in its items.
-- **The weekly shocks are for calibration.** They do not move the CRPS, but on the selection window the 94\\ coverage at level 1 went from 0.54 to 0.68, at level 3 from 0.70 to 0.95 and at level 9 from 0.81 to 0.90, with the items unchanged. They are kept because the store-level bands need the right width as well as the right center, and the backtest below reports the coverage so the reader can judge.
+- **The block walk makes the item model work.** Without a level process, a two-year intercept is the wrong level for most items, and the model loses to the baseline (the dashed line) by a wide margin. Yearly seasonality, events and item weekday deviations then improve the score by another 0.024, almost all of it at the aggregate levels.
+- **Shared level processes and the price add nothing.** The price elasticity does not change the score, and shared block walks at the store and store-department level make it worse by 0.007: the level of a store over 13 blocks is already in the levels of its items.
+- **The weekly shocks are for calibration.** They do not move the CRPS, but on the selection window they raise the 94\\ coverage from 0.54 to 0.68 at level 1, from 0.70 to 0.95 at level 3 and from 0.81 to 0.90 at level 9, with the items unchanged. We keep them because the store-level bands need the right width as well as the right center; the backtest below reports the coverage on every window.
+- **The day of the month was the missing calendar term.** It improves the selection window from 0.517 to 0.490, all of it at the aggregate levels (from 0.432 to 0.395 over levels 1 to 9). On the two backtest windows that were not used to select it, it improves the score from 0.511 to 0.498 (origin 1,843) and from 0.504 to 0.498 (origin 1,913). A pattern per department instead of per store-department keeps less of the gain (0.497), because the SNAP days differ by state.
 
 
 ## The model function
 
-The model is one function of `(covariates, data)` on [Horizon.from_data](../../reference/models.Horizon.md#numpyro_forecast.models.Horizon.from_data) and [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict). The item-level sites sit inside the `series` plate, which the guide subsamples with `create_plates` (1,500 series per step); `numpyro.subsample` picks the matching columns of the data, the covariates, the index arrays and the origin levels, and the observed log density is scaled by 30{,}490 / 1{,}500. The block and week sites use explicit plates at `dim=-2` instead of [innovations()](../../reference/models.innovations.md#numpyro_forecast.models.innovations), because `AutoNormal` keeps one size per plate name and the daily `time` plate is already taken by [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict). With `forecast_only=True` the same function evaluates the item terms over the horizon rows only and exposes the horizon mean and dispersion as deterministic sites: that is how the notebook draws the 30,490-series forecast, because the `NegativeBinomial2` sampler behind [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) (a Gamma and a Poisson draw in JAX) costs minutes per window on this CPU where NumPy needs seconds. [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) itself is used on the seven focus items for the plots.
+The model is one function of `(covariates, data)` built on [Horizon.from_data](../../reference/models.Horizon.md#numpyro_forecast.models.Horizon.from_data) and [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict). Three implementation choices let it scale to 30,490 series:
 
-Two helpers hold the state space components. `block_walk` samples the 12 innovations of the training blocks under a `blocks` plate, accumulates them backwards so that the last training block is zero, and adds one fresh innovation for the horizon block when the horizon is open. `weekly_shocks` samples one `ZeroSumNormal` week per row under a `weeks` plate, with the weeks counted back from the origin so that the last training week ends there, and fresh weeks for the horizon.
+- **Minibatches.** The item-level sites sit inside the `series` plate, which the guide subsamples with `create_plates` (1,500 series per step). `numpyro.subsample` picks the matching columns of the data, the covariates, the index arrays and the origin levels, and the plate scales the log density of the minibatch by 30{,}490 / 1{,}500.
+- **Explicit block and week plates.** The block and week sites have their own plates at `dim=-2` instead of [innovations()](../../reference/models.innovations.md#numpyro_forecast.models.innovations), because `AutoNormal` keeps one size per plate name and [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict) already uses the daily `time` plate.
+- **A forecast-only mode.** With `forecast_only=True`, the same function evaluates the item terms over the horizon rows only and returns the horizon mean and dispersion as deterministic sites. We draw the 30,490-series forecast from these with NumPy, because the `NegativeBinomial2` sampler behind [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) (a Gamma and a Poisson draw in JAX) takes minutes per window on this CPU, where NumPy takes seconds. [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) itself draws the forecasts of the seven focus items in the plots.
+
+Two helpers hold the state space components:
+
+- `block_walk` samples the 12 innovations of the training blocks under a `blocks` plate, sums them backwards so that the last training block is zero, and adds one fresh innovation for the horizon block.
+- `weekly_shocks` samples one `ZeroSumNormal` week per row under a `weeks` plate. The weeks are counted back from the origin, so that the last training week ends there, and the horizon gets fresh weeks.
 
 
 ``` python
@@ -631,6 +724,7 @@ def make_model(
         t_index = covariates[0, :, 0].astype(jnp.int32)  # (days,): the calendar row of each day
         rows = slice(h.t_obs, None) if forecast_only else slice(None)
         dow = dow_table[t_index][rows]  # (rows,)
+        dom = dom_table[t_index][rows]  # (rows,)
 
         # Department-level population scales and shared effects: (dept,) each, the Fourier
         # weights (dept, 2 * harmonics) and the event effects (dept, events).
@@ -656,13 +750,15 @@ def make_model(
             store_shock_scale = numpyro.sample("store_shock_scale", dist.HalfNormal(0.2))
             store_shock = weekly_shocks("store_shock", store_shock_scale, h, N_STORES)
 
-        # Store-department effects, (group,) each except the weekday pattern (group, 7): log
-        # dispersion, weekday, SNAP and the intercept shift of the group.
+        # Store-department effects, (group,) each except the weekday pattern (group, 7) and the
+        # day-of-month pattern (group, 31): log dispersion, weekday, day of the month, SNAP and
+        # the intercept shift of the group.
         with numpyro.plate("group", N_GROUPS):
             log_phi_group = numpyro.sample("log_phi_group", dist.Normal(0.0, 1.0))
             seasonal_group = numpyro.sample(
                 "seasonal_group", dist.ZeroSumNormal(0.3, event_shape=(7,))
             )
+            dom_group = numpyro.sample("dom_group", dist.ZeroSumNormal(0.2, event_shape=(31,)))
             snap_group = numpyro.sample("snap_group", dist.Normal(0.0, 0.3))
             alpha_group = numpyro.sample("alpha_group", dist.Normal(0.0, 0.3))
 
@@ -688,10 +784,11 @@ def make_model(
             )
 
             # The log mean, (rows, n), one term at a time: level, group shift and walk, store shocks,
-            # weekday, SNAP, yearly harmonics and events.
+            # weekday, day of the month, SNAP, yearly harmonics and events.
             eta = alpha + alpha_group[group] + block_walk("item_walk", sigma_walk[dept], h)[block]
             eta = eta + store_shock[rows][:, store]
             eta = eta + seasonal_group[group][:, dow].T + item_dow[:, dow].T
+            eta = eta + dom_group[group][:, dom].T
             eta = eta + snap_group[group] * snap_table[t_index][rows][:, state_of_store[store]]
             eta = eta + fourier_table[t_index][rows] @ w_fourier[dept].T
 
@@ -723,7 +820,7 @@ def create_series_plates(covariates: Array, data: Array | None = None) -> numpyr
 
 # Prior predictive check
 
-Before any fit, we check what the priors allow. The check needs the one input the model takes besides the data, the origin levels \log m_i: `recent_level` computes them as the mean sales of every series over its listed days of the last 28 training days, with the fallbacks described above.
+Before we fit the model, we check what the priors allow. Besides the data, the model takes one input, the origin levels \log \bar y_i. `recent_level` computes them as the mean sales of every series over its listed days of the last 28 training days, with the fallbacks of *The model*.
 
 
 ``` python
@@ -743,7 +840,7 @@ def recent_level(train_counts: Array, train_saled: Array, days: int = BLOCK) -> 
 ```
 
 
-The arrays of the evaluation window are built here, because the prior predictive check and, later, the final fit and the backtest all use them: the last two years of training data, their counts, the origin levels of the last 28 training days and the model instance centered on them.
+The prior predictive check, the final fit and the backtest use the same arrays of the evaluation window, so we build them here: the last two years of training data, the training counts, the origin levels and the model instance centered on them.
 
 
 ``` python
@@ -757,7 +854,7 @@ final_model = make_model(level_final)
 ```
 
 
-The check is run on seven focus items, the best seller of each department in store CA_1 over the last training year: the same seven as in the baselines notebook, where the kit's bottom-up model missed their level. A seven-series instance of the model (the model is built from the group ids and origin levels of the series it covers, so any subset is an instance) gives the prior predictive through `Predictive`.
+We run the check on seven **focus items**: the best seller of each department in store CA_1 over the last training year. They are the seven items of the baselines notebook, where the kit's bottom-up model missed their level. The model is built from the group ids and origin levels of the series it covers, so a seven-series instance of the model gives their prior predictive through `Predictive`.
 
 
 ``` python
@@ -789,7 +886,7 @@ covariates_focus = covariates_final[:, :, focus_index]
 ```
 
 
-`plot_series_panel` is the faceted band plot of the baselines notebook: one panel per series, the in-sample bands in blue, the forecast bands in orange and the observed series in black, with the 94\\ and 50\\ HDIs.
+`plot_series_panel` is the faceted band plot of the baselines notebook: one panel per series, with the 94\\ and 50\\ HDI bands of the in-sample predictive in blue, those of the forecast in orange, and the observed series in black.
 
 
 ``` python
@@ -951,12 +1048,21 @@ del prior_focus
 </figure>
 
 
-The 94\\ prior bands reach 2 to 7 times the mean observed level of the window, and the 50\\ bands run from zero to about half of it. Wide, but not absurd for a count model whose intercept is centered on the recent level: the prior knows where each item is and does not know how much it moves. HOUSEHOLD_1_334 is the exception: its level dropped in May, its prior is centered on the low level of the last 28 days, and 10\\ of its earlier days sit above the 94\\ band.
+The prior is wide but plausible for a count model whose intercept is centered on the recent level:
+
+- for six of the seven items, the upper edge of the 94\\ band is 4.5 to 7 times the mean observed level of the window, and the 50\\ band runs from zero to about half of it (0.4 to 0.7 times);
+- the prior knows where each item is, through the origin level, and does not know how much it moves.
+
+HOUSEHOLD_1_334 is the exception. Its level dropped in May, so its prior is centered on the low level of the last 28 days, and 8\\ of the days of the window, in the weeks before the drop, sit above its 94\\ band.
 
 
 # Fitting and forecasting
 
-`fit_model` runs `AutoNormal` with the median initialization (the uniform default overflows the exponential of a sum of ten log-scale terms) and a one-cycle Adam schedule peaking at 0.03 with clipped gradients, 3,000 steps over the last two years of training data. Two years, rather than the five of the baselines, halve the cost of a step and let every series be visited about 150 times; a walk anchored at the origin has no use for older history, and the yearly terms see two cycles.
+`fit_model` fits the guide with SVI. Three settings matter:
+
+- `AutoNormal` starts at the prior median, because the default uniform initialization overflows the exponential of a sum of eleven log-scale terms;
+- a one-cycle Adam schedule peaking at a learning rate of 0.03, with clipped gradients, runs for 3,000 steps;
+- the training data are the last two years before the origin. Two years instead of the five of the baselines halve the cost of a step and let the minibatches visit every series about 150 times. A walk anchored at the origin has no use for older history, and the yearly terms still see two cycles.
 
 
 ``` python
@@ -993,7 +1099,13 @@ def fit_model(
 ```
 
 
-`forecast_bottom_level` draws the bottom-level forecast of all 30,490 series: 50 posterior draws at a time from the guide, run through the forecast-only instance of the model for the horizon mean and dispersion of every series, sampled with NumPy's negative binomial (parametrized by the number of successes \phi and the probability \phi / (\phi + m), which is the `NegativeBinomial2` of the model), then discarded. The draws are what the scoring `transform` sums up the hierarchy.
+`forecast_bottom_level` draws the forecast of all 30,490 series in chunks of 50 posterior draws. For each chunk it
+
+- draws the posterior from the guide;
+- runs the forecast-only instance of the model for the horizon mean \mu and the dispersion \phi of every series;
+- samples the counts with NumPy's negative binomial, whose parameters are the number of successes \phi and the probability \phi / (\phi + \mu): this is the `NegativeBinomial2` of the model.
+
+The scoring `transform` then sums these draws up the hierarchy.
 
 
 ``` python
@@ -1038,17 +1150,17 @@ def forecast_bottom_level(
 
 # The baseline in the same harness
 
-The kit's top-down model (a StudentT regression on the log of the total with a trend, weekday and day-of-month effects, split to the items with their last-28-day shares and Poisson noise) is re-run in this notebook with the same windows and the same number of draws, so the comparison is exact; the other two baselines are quoted from the baselines notebook. Its covariates are the ones of the baselines notebook: the time in years, the weekday index and the 31 day-of-month dummies, one row per day.
+We re-run the kit's top-down model in this notebook, with the same windows and the same number of draws, so that the comparison is exact. It is a StudentT regression on the log of the total sales with a trend, weekday and day-of-month effects, and it splits the forecast of the total to the items with their last-28-day shares and Poisson noise. The other two baselines are quoted from the baselines notebook. The covariates are those of the baselines notebook: the time in years, the weekday index and the 31 day-of-month dummies, one row per day.
 
 
 ``` python
-day_of_month = calendar_df["date"].dt.day().to_numpy()[:N_DAYS]
+day_of_month = np.asarray(dom_table)  # (days,): 0 to 30, the column the state space model reads
 covariates_top = jnp.asarray(  # (days, 33)
     np.column_stack(
         [
             np.arange(N_DAYS, dtype=np.float32) / 365.0,  # column 0: time in years
             calendar_df["dow"].to_numpy()[:N_DAYS].astype(np.float32),  # column 1: weekday
-            np.stack([(day_of_month == day).astype(np.float32) for day in range(1, 32)], axis=-1),
+            np.stack([(day_of_month == day).astype(np.float32) for day in range(31)], axis=-1),
         ]
     )
 )
@@ -1114,9 +1226,14 @@ def forecast_fn_top_down(
 
 # Backtest against the baseline
 
-Both models are backtested on the three windows of the baselines notebook (forecast origins on days 1,843, 1,878 and 1,913, 28 days each, 250 draws) with [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest): it slices the windows, times the closures, sums the draws up the hierarchy and scores every level. The closure of the state space model, `forecast_fn_item`, receives the raw bottom-level sales of the window, keeps the last two years, builds the training counts and the origin levels, fits and forecasts; the `model` argument that [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) passes is not used, because the intercept centers depend on the window, so each window rebuilds its own model instance ([backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) still needs a model factory, which returns the evaluation window's instance).
+We backtest both models with [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) on the three windows of the baselines notebook: forecast origins on days 1,843, 1,878 and 1,913, 28 days each, 250 draws. [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) slices the windows, times the forecast functions, sums the draws up the hierarchy and scores every level.
 
-Besides the mean over the 12 levels, `summarize_backtest` reports the means over levels 1 to 9 (the aggregates) and 10 to 12 (the items), because the two halves reward different things: calibrated common uncertainty at the top, a sharp level per item at the bottom.
+The forecast function of the state space model, `forecast_fn_item`, receives the bottom-level sales of the window, keeps the last two years, builds the training counts and the origin levels, and then fits and forecasts. The intercept centers depend on the window, so it rebuilds the model instance on every window and ignores the `model` argument of [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) ([backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) still needs a model factory, which returns the instance of the evaluation window).
+
+`summarize_backtest` reports the mean over the 12 levels and the means over two halves of the hierarchy, because the halves reward different things:
+
+- levels 1 to 9, the aggregates, reward calibrated common uncertainty;
+- levels 10 to 12, the items, reward a sharp level for each item.
 
 
 ``` python
@@ -1219,10 +1336,39 @@ backtest_df = pl.concat(
         run_backtest(key_item, "state space (NB)", final_model, covariates, forecast_fn_item),
     ]
 ).sort("t1", "model")
+
+# The scores behind the figure: WS-CRPS over all levels and the two halves, and the coverage.
+backtest_table = backtest_df.select(
+    "model",
+    "t1",
+    pl.col("ws_crps").round(3).alias("all"),
+    pl.col("ws_crps_1_9").round(3).alias("1 to 9"),
+    pl.col("ws_crps_10_12").round(3).alias("10 to 12"),
+    *[
+        pl.col(column).round(2).alias(column.replace("metric_coverage_Level", "cov L"))
+        for column in COVERAGE_COLUMNS
+    ],
+)
+
+with pl.Config(tbl_cols=backtest_table.width):
+    display(backtest_table)
 ```
 
 
-The figure shows the backtest: the WS-CRPS per window, the means over the three windows for all levels and the two halves of the hierarchy, the per-level scores averaged over the windows, and the 94\\ coverage at the four levels, window by window, against the nominal 0.94.
+shape: (6, 9)
+
+| model              | t1   | all   | 1 to 9 | 10 to 12 | cov L1 | cov L3 | cov L9 | cov L12 |
+|--------------------|------|-------|--------|----------|--------|--------|--------|---------|
+| str                | i64  | f64   | f64    | f64      | f64    | f64    | f64    | f64     |
+| "state space (NB)" | 1843 | 0.488 | 0.379  | 0.815    | 0.61   | 0.95   | 0.89   | 0.98    |
+| "top-down (kit)"   | 1843 | 0.546 | 0.459  | 0.808    | 1.0    | 0.97   | 0.81   | 0.94    |
+| "state space (NB)" | 1878 | 0.489 | 0.395  | 0.771    | 0.79   | 0.94   | 0.89   | 0.98    |
+| "top-down (kit)"   | 1878 | 0.556 | 0.486  | 0.769    | 1.0    | 0.94   | 0.8    | 0.94    |
+| "state space (NB)" | 1913 | 0.496 | 0.407  | 0.762    | 0.75   | 0.95   | 0.87   | 0.98    |
+| "top-down (kit)"   | 1913 | 0.575 | 0.515  | 0.756    | 1.0    | 0.95   | 0.77   | 0.93    |
+
+
+The table lists the scores of each model and window. The figure shows the same scores in four panels: the WS-CRPS per window, the means over the three windows, the per-level scores averaged over the windows, and the 94\\ coverage at four levels against the nominal 0.94.
 
 
 ``` python
@@ -1306,12 +1452,25 @@ fig.suptitle(
 </figure>
 
 
-The state space model is ahead on every window (0.504, 0.513 and 0.502 against 0.553, 0.553 and 0.570), and the gain is at the aggregate levels: 0.414 against 0.486 on average over levels 1 to 9, with the item levels a draw (0.784 against 0.776). The coverage panel shows the calibration. At the store level both models are at 0.95 to 0.96, close to the nominal 0.94; at the store-department level the state space model is at 0.87 to 0.90 where the baseline is at 0.79 to 0.81; at the item level the negative binomial is a little wide at 0.98 where the baseline is at 0.93 to 0.94; and at the total level the baseline covers every day of every window (a band that wide pays in the CRPS) while the state space model covers 68 to 82 percent of the days, too narrow. The evaluation window below has the same coverage pattern.
+The state space model is ahead on every window, and the gain is at the aggregate levels:
+
+- WS-CRPS per window: 0.488, 0.489 and 0.496, against 0.546, 0.556 and 0.575 for the top-down model;
+- levels 1 to 9: 0.394 against 0.486, on average over the windows;
+- levels 10 to 12: a draw, 0.783 against 0.778.
+
+The coverage panel shows the calibration, level by level:
+
+- total (level 1): the top-down band covers every day of every window, and a band that wide pays in the CRPS; the state space band covers 61\\ to 79\\ of the days, which is too narrow;
+- stores (level 3): both models are at 0.94 to 0.97, close to the nominal 0.94;
+- store-departments (level 9): the state space model is at 0.87 to 0.89, the top-down model at 0.77 to 0.81;
+- items (level 12): the negative binomial is a little wide at 0.98, the top-down model is at 0.93 to 0.94.
+
+The evaluation window below has the same pattern at levels 3, 9 and 12, and a better one at level 1.
 
 
 # The final fit
 
-The model is now fitted once on the last two years before the evaluation window.
+We now fit the model once on the last two years before the evaluation window.
 
 
 ``` python
@@ -1322,6 +1481,11 @@ guide_final, svi_final, time_final = fit_model(
 
 fig, ax = plt.subplots(figsize=(10, 4))
 ax.plot(np.arange(100, NUM_STEPS), np.asarray(svi_final.losses[100:]), color="C0")
+
+loss_tail = np.asarray(svi_final.losses[-600:]).reshape(2, 300).mean(axis=1)
+
+print(f"mean loss of the last two 300-step windows: {loss_tail[0]:,.0f} and {loss_tail[1]:,.0f}")
+
 ax.set(
     title=f"ELBO loss of the final fit from step 100 ({NUM_STEPS:,} steps, {time_final:.0f} s)",
     xlabel="SVI step",
@@ -1330,22 +1494,45 @@ ax.set(
 ```
 
 
+    mean loss of the last two 300-step windows: 25,084,236 and 25,080,920
+
+
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-24-output-1.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-24-output-2.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
-The loss rises during the warm-up of the one-cycle schedule (the peak learning rate is reached at step 600) and then falls; over the last 600 steps it is almost flat (the mean losses of steps 2,400 to 2,700 and of steps 2,700 to 3,000 differ by less than 0.1\\), so a longer run would buy little. The curve is noisy for the same reason as the bottom-up model of the baselines notebook: every step scores a different random set of 1,500 series.
+The loss rises during the warm-up of the one-cycle schedule, which reaches its peak learning rate at step 600, and then falls. Over the last 600 steps it is almost flat: the mean losses of steps 2,400 to 2,700 and of steps 2,700 to 3,000 differ by 0.01\\, so a longer run would buy little. The curve is noisy because every step scores a different random set of 1,500 series, as for the bottom-up model of the baselines notebook.
 
 
 ## Posterior of the shared parameters
 
-The item-level sites are too many to look at one by one, so we export the shared sites (the population scales and the pooled effects) to ArviZ with named coordinates. The first forest plot shows the five population scales by department (or by store for the shock scale): how much each component moves on the log scale.
+There are too many item-level sites to inspect one by one, so we export the shared sites, the population scales and the pooled effects, to ArviZ with named coordinates. The first forest plot shows the five population scales by department (by store for the shock scale): how much each component moves on the log scale.
 
 
 ``` python
 rng_key, key_post = random.split(rng_key)
 posterior_final = draw_posterior(key_post, guide_final, svi_final.params, 500)
+
+# The SNAP days are fixed days of the month per state, so the identified quantity is the SNAP-day
+# lift of a store-department: its SNAP effect plus its day-of-month pattern averaged over the
+# SNAP days of its state, minus the pattern averaged over the other days. (state, 31) mask first.
+snap_by_dom = np.stack(
+    [
+        np.bincount(np.asarray(dom_table), weights=column, minlength=31) > 0
+        for column in np.asarray(snap_table).T
+    ]
+)
+group_store = np.asarray(store_index)[
+    [int(np.argmax(np.asarray(group_index) == g)) for g in range(N_GROUPS)]
+]
+snap_mask = snap_by_dom[np.asarray(state_of_store)[group_store]]  # (group, 31)
+dom_draws = np.asarray(posterior_final["dom_group"])  # (draw, group, 31)
+snap_lift = (
+    np.asarray(posterior_final["snap_group"])
+    + (dom_draws * snap_mask).sum(-1) / snap_mask.sum(-1)
+    - (dom_draws * ~snap_mask).sum(-1) / (~snap_mask).sum(-1)
+)  # (draw, group)
 
 DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 SHARED_DIMS = {
@@ -1359,16 +1546,26 @@ SHARED_DIMS = {
     "store_shock_scale": ["store"],
     "log_phi_group": ["group"],
     "seasonal_group": ["group", "day_of_week"],
+    "dom_group": ["group", "day_of_month"],
     "snap_group": ["group"],
+    "snap_lift": ["group"],
     "alpha_group": ["group"],
 }
 tree_final = az.from_dict(
-    {"posterior": {name: np.asarray(posterior_final[name])[None] for name in SHARED_DIMS}},
+    {
+        "posterior": {
+            name: np.asarray(posterior_final[name])[None]
+            for name in SHARED_DIMS
+            if name != "snap_lift"
+        }
+        | {"snap_lift": snap_lift[None]}
+    },
     coords={
         "dept": dept_ids,
         "group": group_ids,
         "store": store_ids,
         "day_of_week": DOW_LABELS,
+        "day_of_month": list(range(1, 32)),
         "event": event_names,
         "harmonic": [f"{f}{k}" for f in ("sin", "cos") for k in range(1, N_HARMONICS + 1)],
     },
@@ -1384,16 +1581,34 @@ pc = az.plot_forest(
     combined=True,
     figure_kwargs={"figsize": (11, 12)},
 )
-pc.viz["figure"].item().suptitle("Population scales (log scale)", fontsize=18, fontweight="bold");
+pc.viz["figure"].item().suptitle("Population scales (log scale)", fontsize=18, fontweight="bold")
+
+for name in ["sigma_alpha", "tau_phi", "sigma_walk", "sigma_item_dow", "store_shock_scale"]:
+    means = tree_final["posterior"][name].mean(("chain", "draw"))
+
+    print(f"{name}: posterior means from {float(means.min()):.2f} to {float(means.max()):.2f}")
 ```
 
 
+    sigma_alpha: posterior means from 0.09 to 0.22
+    tau_phi: posterior means from 0.58 to 0.85
+    sigma_walk: posterior means from 0.13 to 0.22
+    sigma_item_dow: posterior means from 0.03 to 0.08
+    store_shock_scale: posterior means from 0.06 to 0.11
+
+
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-26-output-1.png" class="figure-img" width="1111" height="1211" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-26-output-2.png" class="figure-img" width="1111" height="1211" /></p>
 </figure>
 
 
-The intercept deviations \sigma^{\alpha} are 0.09 to 0.22 on the log scale by department: the prior center, the last-28-day level, is close for most items. The item dispersion spreads \tau are 0.58 to 0.85, large: item-level dispersion matters, two items of the same store-department can differ by a factor of two in dispersion. The block-walk innovation scales \sigma^{u} are 0.13 to 0.22 per 28-day block, largest for FOODS_2 and FOODS_3 (0.20 and 0.22) and smallest for HOBBIES_1, HOUSEHOLD_2 and HOBBIES_2 (0.13 to 0.14), so a food item's level moves by 15\\ to 20\\ from one block to the next. The item weekday deviations are 0.03 to 0.08, small next to the store-department pattern they refine, and the store shock scales are 0.06 to 0.11, highest for the Wisconsin stores and TX_2. The intervals are tiny: with 30,490 series behind each population parameter and a mean-field guide, these are effectively point estimates.
+With 30,490 series behind each population scale and a mean-field guide, the intervals are tiny, so these are in effect point estimates. On the log scale:
+
+- the intercept deviations \sigma^{\alpha} are 0.09 to 0.22 by department, so the prior center, the last-28-day level, is close for most items;
+- the dispersion spreads \tau are 0.58 to 0.85, so two items of the same store-department can differ in dispersion by a factor of two: the item-level dispersion matters;
+- the block-walk innovation scales \sigma^{u} are 0.13 to 0.22 per 28-day block, largest for FOODS_2 and FOODS_3 (0.20 and 0.22) and smallest for HOBBIES_1, HOUSEHOLD_2 and HOBBIES_2 (0.13 to 0.14), so the level of a food item moves by 15\\ to 20\\ from one block to the next;
+- the item weekday deviations \sigma^{s} are 0.03 to 0.08, small next to the store-department pattern they refine;
+- the store shock scales \sigma^{\epsilon} are 0.06 to 0.11, highest for TX_2 and WI_1.
 
 
 ``` python
@@ -1417,29 +1632,80 @@ pc.viz["figure"].item().suptitle(
 </figure>
 
 
-The weekday effects of the departments of store CA_1 show the weekend peak of every department (Saturday and Sunday +0.1 to +0.3 on the log scale, Tuesday to Thursday -0.05 to -0.2), with the shape varying by department: FOODS_2, FOODS_3, HOBBIES_2 and HOUSEHOLD_1 peak on Sunday, FOODS_1, HOBBIES_1 and HOUSEHOLD_2 on Saturday, and FOODS_1 is the flattest. These are the store-department patterns; the item deviations around them have scales of 0.03 to 0.08.
+In store CA_1 every department sells most on the weekend: Saturday and Sunday are +0.1 to +0.33 on the log scale, Tuesday to Thursday -0.06 to -0.21. The shape varies by department:
+
+- FOODS_2, FOODS_3, HOBBIES_2 and HOUSEHOLD_1 peak on Sunday;
+- FOODS_1, HOBBIES_1 and HOUSEHOLD_2 peak on Saturday, and FOODS_1 has the flattest week.
+
+These are the store-department patterns; the item deviations around them have scales of 0.03 to 0.08.
+
+The day-of-month effects are the newest component of the model, so the next figure shows them for the same seven store-departments, with the SNAP days of California shaded. The intervals are as narrow as above, so the figure shows only the posterior means.
+
+
+``` python
+dom_mean = tree_final["posterior"]["dom_group"].mean(("chain", "draw"))
+days_of_month = np.arange(1, 32)
+
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.axvspan(0.5, 10.5, color="C7", alpha=0.15, label="SNAP days (California)")
+
+for label in ca1_groups:
+    ax.plot(days_of_month, dom_mean.sel(group=label), marker="o", ms=4, label=label)
+
+ax.axhline(0.0, color="gray", lw=1)
+ax.set(
+    title="Posterior mean day-of-month effects in store CA_1 (log scale)",
+    xlabel="day of the month",
+    ylabel="effect",
+    xticks=days_of_month[::2],
+)
+ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0));
+```
+
+
+<figure class="figure">
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-28-output-1.png" class="figure-img" width="1211" height="611" /></p>
+</figure>
+
+
+The first ten days of the month, the SNAP days of California and the first-of-month paydays, lift every FOODS and HOUSEHOLD department of the store (peaks of +0.09 to +0.17 on the log scale), and the last week of the month is the trough of every department (-0.06 to -0.13 on days 26 to 28). The two HOBBIES departments are noisier: HOBBIES_1 peaks on the first three days only and HOBBIES_2 in the middle of the month (days 15 to 18). This is the pay cycle that the kit's top-down model reads from its 31 dummies, here at the store-department resolution.
 
 
 ``` python
 pc = az.plot_forest(
     tree_final,
-    var_names=["snap_group"],
+    var_names=["snap_lift"],
     combined=True,
     labels=["group"],
     figure_kwargs={"figsize": (8, 14)},
 )
 pc.viz["figure"].item().suptitle(
-    "SNAP effect by store-department (log scale)", fontsize=18, fontweight="bold"
-);
+    "SNAP-day lift by store-department (SNAP effect plus day-of-month pattern, log scale)",
+    fontsize=18,
+    fontweight="bold",
+)
+
+# The SNAP coefficient alone, for comparison with the lift.
+snap_alone = tree_final["posterior"]["snap_group"].mean(("chain", "draw"))
+
+print(f"largest posterior mean of the SNAP coefficient alone: {float(snap_alone.max()):.2f}")
 ```
 
 
+    largest posterior mean of the SNAP coefficient alone: 0.22
+
+
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-28-output-1.png" class="figure-img" width="811" height="1411" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-29-output-2.png" class="figure-img" width="1230" height="1411" /></p>
 </figure>
 
 
-The SNAP effect is strongest for the FOODS departments of the Wisconsin and Texas stores (up to +0.6 for WI_2/FOODS_2, that is \times 1.8 on SNAP days) and small for HOBBIES and HOUSEHOLD (at most +0.14), as expected of a food-stamp program; the pattern is the one the kit's bottom-up model found in the baselines notebook, now with a store-department resolution and intervals narrow enough to rank the stores.
+The **SNAP-day lift** of a store-department is its SNAP effect plus its day-of-month pattern averaged over the SNAP days of its state, minus the pattern averaged over the other days. This is the quantity that the data identify, because the SNAP days are fixed days of the month.
+
+- The lift is strongest for the FOODS departments of the Wisconsin and Texas stores, up to +0.52 for WI_2/FOODS_2, that is a factor of 1.7 on SNAP days.
+- It is small for HOBBIES and HOUSEHOLD, at most +0.06.
+
+This is what we expect of a food-stamp program, and it agrees with the kit's bottom-up model of the baselines notebook. The SNAP coefficient \beta_j alone is smaller (at most +0.22), because the day-of-month pattern of the store-department carries the rest of the lift.
 
 
 ``` python
@@ -1458,16 +1724,22 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-29-output-1.png" class="figure-img" width="911" height="1211" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-30-output-1.png" class="figure-img" width="911" height="1211" /></p>
 </figure>
 
 
-The calendar event effects are as expected. Every effect is the lift of the event over an ordinary day of the department. Thanksgiving is about -0.4 for FOODS_3 and -0.8 for HOBBIES_1 (the stores close early), Mother's Day and New Year are negative, Labor Day, Presidents' Day and Columbus Day are positive for FOODS_3. Christmas is the one event with a wide posterior: the stores are closed, `saled` is zero and the effect only sees its prior.
+An event effect is the lift of the event over an ordinary day of the department with the same day of the month. The effects have the expected signs:
+
+- Thanksgiving is about -0.2 for FOODS_3 and -0.6 for HOBBIES_1, because the stores close early;
+- Mother's Day and New Year are negative for both departments;
+- Labor Day, Presidents' Day and Columbus Day are positive for FOODS_3.
+
+Christmas has the only wide posterior: the stores are closed, `saled` is zero, and the effect sees only its prior.
 
 
 ## In-sample fit and forecast of the focus items
 
-The seven focus items of the prior predictive check, now with the posterior: `subset_posterior` picks the columns of these series out of the item-level draws, and the seven-series instance of the model gives the in-sample predictive and the forecast through [predict_in_sample()](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast).
+We return to the seven focus items of the prior predictive check, now with the posterior. `subset_posterior` picks the columns of these series out of the item-level draws, and the seven-series instance of the model gives their in-sample predictive and their forecast through [predict_in_sample()](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast).
 
 
 ``` python
@@ -1518,16 +1790,21 @@ del pp_focus
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-31-output-1.png" class="figure-img" width="1511" height="1106" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-32-output-1.png" class="figure-img" width="1511" height="1106" /></p>
 </figure>
 
 
-Compared with the kit's bottom-up model on the same seven items, the level is right: the item intercept and the block walk put every band on the observed series, where the department regression of the baselines notebook forecast the best sellers at a fraction of their level. The wide upper tails of FOODS_3_090 are the negative binomial dispersion of a bursty series, and HOUSEHOLD_1_334 shows the block walk at work: its level dropped in May and the forecast follows the last block, not the two-year mean. The forecast bands are a little wider than the in-sample ones, by the one fresh block innovation and the fresh store weeks of the horizon.
+The bands now sit on the observed series of all seven items. In the baselines notebook, the department regression of the kit's bottom-up model forecast these best sellers at a fraction of their level; here the item intercept and the block walk get the level right. Two items show the components at work:
+
+- FOODS_3_090 has wide upper tails, the negative binomial dispersion of a series with bursts of high sales;
+- HOUSEHOLD_1_334 dropped to a lower level in May, and its forecast follows the last block, not the two-year mean.
+
+The forecast bands are a little wider than the in-sample bands, because the horizon adds one fresh block innovation and fresh store weeks.
 
 
 # The evaluation window
 
-The final model forecasts the 28 evaluation days (`d_1942` to `d_1969`) with 500 draws and is scored against the top-down baseline, re-run here with 500 draws as well; the middle-out and bottom-up baselines scored 0.634 and 0.728 on this window in the baselines notebook. The competition's own metric, the weighted scaled pinball loss (WSPL) at the nine competition quantiles, is computed here too, to place both models on the published leaderboard.
+The final model forecasts the 28 evaluation days (`d_1942` to `d_1969`) with 500 draws, and we score it against the top-down baseline, re-run here with 500 draws as well. On this window the middle-out and bottom-up baselines scored 0.634 and 0.728 in the baselines notebook. We also compute the metric of the competition, the **weighted scaled pinball loss** (WSPL) at its nine quantiles, to place both models on the published leaderboard.
 
 
 ``` python
@@ -1654,17 +1931,28 @@ fig.suptitle("Scores of the two models on the evaluation window", fontsize=18, f
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-34-output-1.png" class="figure-img" width="1611" height="1006" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-35-output-1.png" class="figure-img" width="1611" height="1006" /></p>
 </figure>
 
 
 ## Reading the comparison
 
-The evaluation window is one window, and the kit's model is sensitive to its SVI seed: it fits one 1,941-day series with a StudentT likelihood in 1,001 steps, and its noise scale and degrees of freedom move from seed to seed (it scored 0.569 in the baselines notebook, 0.563 here, and 0.605 with a different key stream). The backtest windows are the stronger evidence: 0.504, 0.513 and 0.502 against 0.553, 0.553 and 0.570, a mean of 0.506 against 0.558, 7\\ to 12\\ better window by window. On the evaluation window the state space model is ahead by less, 0.550 against 0.563, and the competition's WSPL follows, 0.188 against 0.195 (the winner of the uncertainty competition scored 0.154).
+The evaluation window is a single window, and the kit's model is sensitive to its SVI seed: it fits one 1,941-day series with a StudentT likelihood in 1,001 steps, and its noise scale and degrees of freedom change from seed to seed. It scored 0.569 in the baselines notebook, 0.563 here, and 0.605 with a different key stream. The three backtest windows are therefore the stronger evidence. Over the four windows:
 
-The gain by level tells where each model is strong. On the backtest windows the state space model wins every aggregate level (0.414 against 0.486 over levels 1 to 9) and the item levels are a draw (0.784 against 0.776: the top-down model's Poisson split of a well-fitted total is hard to beat for a single item). On the evaluation window the picture is mixed at the top: the baseline's total happens to be very good on these 28 days, so it wins the total (level 1, by 0.033), the category level (level 4, by 0.070) and, narrowly, the department level (level 5, by 0.009), while the state space model wins the store, store-category and store-department levels (3, 8 and 9, by 0.04 to 0.07) and all three item levels (by 0.02). The levels where the hierarchy is wide are the state space model's; the levels with one or three series depend on how well a single StudentT regression happens to land.
+- **WS-CRPS**: 0.488, 0.489 and 0.496 against 0.546, 0.556 and 0.575 on the backtest windows (a mean of 0.491 against 0.559, 11\\ to 14\\ better window by window), and 0.482 against 0.563 on the evaluation window;
+- **WSPL** on the evaluation window: 0.163 against 0.195, where the winner of the uncertainty competition scored 0.154.
 
-The coverage panel shows the calibration. The top-down model's total is right on average but its 94\\ band at level 1 covers every day of every window: it is too wide, which the CRPS pays for on the backtest windows. The state space model's level-1 band covers 68 to 82 percent of the days on the backtest windows and 75 percent here: too narrow, because the only common uncertainty of the 30,490 items is the weekly store shocks and one block innovation, and a mean-field guide understates the posterior uncertainty of the origin level. At the store level (3) both are at 0.95 to 0.97, at the store-department level (9) the state space model is at 0.87 to 0.90 where the baseline is at 0.79 to 0.84, and at the item level (12) the negative binomial is a little wide at 0.98. The total-sales figure shows both bands on the evaluation window.
+The gain by level shows where each model is strong:
+
+- On the backtest windows, the state space model wins every aggregate level (0.394 against 0.486 over levels 1 to 9), and the item levels are a draw (0.783 against 0.778): for a single item, the Poisson split of a well-fitted total is hard to beat.
+- On the evaluation window, the state space model wins every level: by 0.08 to 0.13 at the aggregate levels except the category level (level 4, by 0.035), and by 0.025 to 0.030 at the three item levels. The 28 evaluation days run from May 23 to June 19 and contain a full turn of the month, where the day-of-month pattern and the SNAP days of the three states act.
+
+The coverage panel shows the calibration:
+
+- **Total (level 1).** The top-down total is right on average, but its 94\\ band covers every day of every window: it is too wide, and the CRPS pays for that. The state space band covers 61\\ to 79\\ of the days on the backtest windows, which is too narrow: the only common uncertainty of the 30,490 items is the weekly store shocks and one block innovation, and a mean-field guide understates the posterior uncertainty of the origin level. On the evaluation window the band covers 93\\ of the days, because there it is centered on the observed total (see the next figure).
+- **Stores (level 3).** Both models are at 0.95 to 0.97.
+- **Store-departments (level 9).** The state space model is at 0.89, the top-down model at 0.84.
+- **Items (level 12).** The negative binomial is a little wide at 0.98.
 
 
 ``` python
@@ -1704,11 +1992,16 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-35-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-36-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
-At the total level both bands follow the observed weekly pattern; the difference is their width. The top-down band is the StudentT noise of a single series fitted over five years, wide enough to hold every day with room to spare. The state space band is the sum of 30,490 negative binomial draws whose only common components are the store shocks and the block innovations, and it is too narrow: the observed total leaves it on several days between May 29 and June 17. A proper score rewards a narrow band only when it is right, and on this window the observed total sits far enough from the center of the narrow band for the wide band to win the level-1 CRPS by 0.03. A user of the total-level forecast should read the state space model's 94\\ band as something closer to a 75\\ band until a total-level shock is added.
+Both bands follow the weekly pattern of the total and its rise in the first days of June. They differ in width:
+
+- the top-down band is the StudentT noise of a single series fitted over five years, wide enough to hold every day with room to spare;
+- the state space band is the sum of 30,490 negative binomial draws whose only common components are the store shocks and the block innovations. The observed total leaves it on two of the 28 days and stays close to its center on the others, so the narrow band wins the level-1 CRPS by 0.09.
+
+On the backtest windows the same band covers only 61\\ to 79\\ of the days, so it is too narrow whenever the total drifts. Until the model has a total-level shock, its 94\\ band is closer to an 80\\ band.
 
 
 ``` python
@@ -1727,16 +2020,22 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-36-output-1.png" class="figure-img" width="1511" height="1520" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-37-output-1.png" class="figure-img" width="1511" height="1520" /></p>
 </figure>
 
 
-At the store level the bands are calibrated, which the coverage of 0.95 at level 3 confirms: the weekly store shocks give the sum of a store's items the common day-to-day variation that a sum of independent item draws lacks (compare the narrow store bands of the kit's bottom-up model in the baselines notebook), and the fresh future weeks widen the forecast bands by the right amount. WI_2 is the store with the strongest SNAP effects, and the rise of its sales in the first half of June, the SNAP days of Wisconsin, is in the forecast because the calendar is known in advance.
+The store-level bands are calibrated, with a coverage of 0.95 at level 3. The weekly store shocks give the sum of the items of a store the common day-to-day variation that a sum of independent item draws lacks (compare the narrow store bands of the kit's bottom-up model in the baselines notebook), and the fresh weeks of the horizon widen the forecast bands by the right amount. WI_2 has the strongest SNAP-day lifts, and its sales rise in the first half of June, on the SNAP days of Wisconsin and at the start of the month. The forecast has that rise, because the calendar is known in advance.
 
 
 # Cost
 
-The state space model costs about two minutes per window on a 14-core M4 Pro CPU: 97 seconds for 3,000 SVI steps over 1,500-series minibatches of two years of daily data (the number a full-batch model of 30,490 series would not reach) and 37 seconds to draw the 500 bottom-level forecasts of the evaluation window, while a backtest window with 250 draws takes 114 to 125 seconds in total; the top-down model takes 7 to 13 seconds. The figure compares the wall times of a fit plus forecast on a backtest window (mean over the three) and on the evaluation window. The whole notebook runs in about 11 minutes.
+On a 14-core M4 Pro CPU, the state space model costs two to three minutes per window:
+
+- the fit: 109 seconds for 3,000 SVI steps over 1,500-series minibatches of two years of daily data, a number of steps that a full-batch model of 30,490 series would not reach;
+- the forecast: 57 seconds for the 500 bottom-level draws of the evaluation window;
+- a backtest window with 250 draws: 133 seconds on average, fit and forecast together.
+
+The top-down model takes 8 to 13 seconds. The wall times of a laptop CPU change with its load from run to run (the final fit took 95 to 148 seconds across the executions of this notebook), so the figure shows the times of this execution, for a fit and forecast on a backtest window (mean over the three) and on the evaluation window. The whole notebook runs in about 13 minutes.
 
 
 ``` python
@@ -1767,22 +2066,40 @@ ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncols=2);
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-37-output-1.png" class="figure-img" width="811" height="511" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/_src-m5_hierarchical_state_space-cell-38-output-1.png" class="figure-img" width="811" height="511" /></p>
 </figure>
 
 
 # Discussion
 
-The result is a single hierarchical model of all 30,490 M5 series that beats the best starter-kit baseline by 7\\ to 12\\ in WS-CRPS on the three backtest windows, is ahead on the evaluation window (0.550 against 0.563, where the baseline draws a favorable SVI seed), improves the competition's pinball loss from 0.195 to 0.188 and carries better-calibrated uncertainty than the baseline at the store-department level (a 94\\ coverage of 0.87 to 0.90 against 0.79 to 0.84), with both models calibrated at the store level. It does so with plain NumPyro and the `numpyro_forecast` building blocks: [Horizon.from_data](../../reference/models.Horizon.md#numpyro_forecast.models.Horizon.from_data) and [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict) for the train-and-forecast bookkeeping, explicit block and week plates for the state space components, `AutoNormal` with `create_plates` and `numpyro.subsample` for the minibatching, [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) with a `transform` and `per_window_metrics` for the hierarchy-wide score, and [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample()](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [predictions_to_datatree()](../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree) for the plots.
+A single hierarchical model of all 30,490 M5 series beats the best starter-kit baseline:
+
+- by 11\\ to 14\\ in WS-CRPS on the three backtest windows, and by 14\\ on the evaluation window (0.482 against 0.563);
+- in the pinball loss of the competition, from 0.195 to 0.163 (the winner scored 0.154);
+- in calibration at the store-department level, with a 94\\ coverage of 0.87 to 0.89 against 0.77 to 0.84, while both models are calibrated at the store level.
+
+It uses plain NumPyro and the `numpyro_forecast` building blocks:
+
+- [Horizon.from_data](../../reference/models.Horizon.md#numpyro_forecast.models.Horizon.from_data) and [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict) for the train-and-forecast bookkeeping;
+- explicit block and week plates for the state space components;
+- `AutoNormal` with `create_plates` and `numpyro.subsample` for the minibatches;
+- [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) with a `transform` and `per_window_metrics` for the score over the hierarchy;
+- [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample()](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [predictions_to_datatree()](../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree) for the plots.
 
 What the model selection and the backtest say about modeling this kind of data:
 
-- **The level process does most of the work.** Centering the intercepts on the last-28-day level and letting an end-anchored block walk explain the past is what makes 30,490 independent item models competitive; every other component is a refinement. The block resolution matters: daily item walks and daily shared walks were tried during development and lost to the baseline, because a mean-field SVI fit lets a daily latent absorb noise as level and then projects it over the horizon.
-- **Common shocks are for calibration, not for the score.** The weekly store shocks leave the CRPS unchanged and move the store-level 94\\ coverage from 0.70 to 0.95. A score that mixes twelve levels does not reward them much; a user of store-level forecasts does.
-- **Level 1 is still too narrow.** The total of the M5 data has day-to-day variation that is neither an item's nor a store's; a state-level or total-level shock (or a non-mean-field guide over the origin levels) is the next component to try, and the coverage metric is the way to judge it.
-- **The item levels are where the baseline holds.** A share of a well-fitted total with Poisson noise is a strong item forecast for the competition's weights: the 7,772 series that sold on fewer than one day in five of the last training year carry 24\\ of the scaled level-12 weight w_s / \sigma_s; a hurdle or zero-inflated likelihood for those series is the other open item.
+- **The level process does most of the work.** Intercepts centered on the last-28-day level and an end-anchored block walk that explains the past make 30,490 item models competitive; the other components refine them. The time resolution matters: daily item walks and daily shared walks were tried during development and lost to the baseline, because a mean-field SVI fit lets a daily latent variable absorb noise as level and then carries that level over the horizon.
+- **Common shocks are for calibration, not for the score.** The weekly store shocks leave the CRPS unchanged and raise the store-level 94\\ coverage from 0.70 to 0.95. A score that mixes twelve levels rewards them little; a user of store-level forecasts needs them.
+- **The calendar gave the largest gain per line of code.** The day-of-month pattern, the last component added, improves the selection window from 0.517 to 0.490 and the two other backtest windows from 0.511 to 0.498 and from 0.504 to 0.498. During development we also tried a neural network correction in the style of [part III of the hierarchical forecasting series](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_3/), a flax NNX module registered with [`nnx_module`](https://num.pyro.ai/en/stable/primitives.html#nnx-module) and fitted in the same SVI run, in three places: on the calendar, inside the block-walk transition and per item. None beat the day-of-month term by more than the seed noise. The nets with the yearly harmonics among their inputs memorized the dates of the training window and broke the forecast (scores of 0.62 to 1.06), and the one signal the nets found, the day-of-month effect, is what the linear term carries.
+- **Level 1 is still too narrow.** The total of the M5 data has day-to-day variation that belongs to no single item or store: the level-1 coverage is 0.61 to 0.79 on the backtest windows (0.93 on the evaluation window, where the band happens to be centered). A state-level or total-level shock, or a guide that is not mean-field over the origin levels, is the next component to try, and the coverage metric is the way to judge it.
+- **The item levels are where the baseline holds.** A share of a well-fitted total with Poisson noise is a strong item forecast for the competition's weights. The 7,772 series that sold on fewer than one day in five of the last training year carry 24\\ of the scaled level-12 weight w_s / \sigma_s, and a hurdle or zero-inflated likelihood for those series is the other open item.
 
-Two fairness notes. The model uses the `saled` flag over the horizon, that is, it knows which items are listed during the evaluation days, as the kit models do through their shares; and the calendar (weekdays, SNAP days, events) is known in advance, so nothing else leaks.
+The day-of-month patterns rest on two years of data per store-department; shrinking them toward a department-level pattern was not tried.
+
+Two fairness notes:
+
+- the model uses the `saled` flag over the horizon, so it knows which items are listed during the evaluation days, as the kit models do through their shares;
+- the calendar (weekdays, days of the month, SNAP days, events) is known in advance, so nothing else leaks.
 
 
 # References
@@ -1790,3 +2107,4 @@ Two fairness notes. The model uses the `saled` flag over the horizon, that is, i
 - [Pyro M5 Starter Kit](https://github.com/pyro-ppl/Pyro-M5-Starter-Kit): the three baseline models and the WS-CRPS harness ported in the [M5 baselines notebook](m5_forecasting.md).
 - [Makridakis, Spiliotis and Assimakopoulos (2022), *The M5 uncertainty competition: results, findings and conclusions*](https://doi.org/10.1016/j.ijforecast.2021.10.009), for the WSPL metric and the competition results.
 - [NumPyro: stochastic variational inference with subsampling](https://num.pyro.ai/en/stable/svi.html), the `subsample` and `create_plates` mechanics used here.
+- [Forecasting hierarchical models, part III](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_3/), the neural network correction inside a hierarchical state space model that the discussion refers to, and [`numpyro.contrib.module.nnx_module`](https://num.pyro.ai/en/stable/primitives.html#nnx-module), the flax NNX integration it uses.

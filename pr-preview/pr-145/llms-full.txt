@@ -247,7 +247,9 @@ such: per-step error scales, if that is what you meant.
 each opens its own ``time_future`` plate. Scoping a helper that contains the
 call is fine (``handlers.scope`` prefixes the error site and the plate; use
 ``name="eps"`` inside a scoped helper so the site reads ``z/eps_future``,
-or ``z_eps_future`` with ``divider="_"``);
+or ``z_eps_future`` with ``divider="_"``, which
+`~~numpyro_forecast.convert.to_datatree()` needs because `xarray.DataTree`
+rejects ``"/"`` in a variable name);
 register ``"obs"`` and ``"forecast"`` outside any scope and build the
 forecast from the channels' ``y_future``.
 
@@ -1013,8 +1015,12 @@ plate. Each targeted site ``name`` becomes a ``deterministic`` site of the
 same shape, computed from a new sample site ``f"{name}_haar"`` or
 ``f"{name}_dct"`` whose event shape owns the time axis and every plate axis
 to its right (plate axes to the left of time stay batch axes). The
-transform is orthonormal, so the model's log density is unchanged; only the
-geometry inference sees changes.
+transform is orthonormal and acts on the unconstrained value of each site,
+so the posterior and the unconstrained potential energy that NUTS and
+``AutoNormal`` target are the same function of the rotated coordinates;
+only the geometry inference sees changes. For a site with a constrained support
+(positive or bounded), the `numpyro.infer.util.log_density` values and the
+``AutoDelta`` MAP estimates are not those of the plain model: see the Notes.
 
 Parameters
 ----------
@@ -1072,6 +1078,12 @@ Notes
   ``a/drift_haar``; ``time_reparam(scope(model, "a"))`` yields
   ``a/a/drift_haar`` because the auxiliary sample passes through ``scope``
   a second time (generic NumPyro reparam-under-scope behavior).
+  To export with `~~numpyro_forecast.convert.to_datatree()`, which
+  rejects ``"/"`` in a posterior key, scope a latent component with
+  ``divider="_"`` and call ``predict`` outside every scope
+  (``scope(time_reparam(trend), prefix="a", divider="_")`` yields
+  ``a_drift_haar`` and ``a_drift``); see the ``posterior`` parameter of
+  `~~numpyro_forecast.convert.to_datatree()`.
 - It composes with the per-block ``reparam=`` hook: after
   ``innovations(..., reparam=LocScaleReparam(0))`` the site under the plate
   is ``drift_decentered``, so the auxiliary site is
@@ -1083,6 +1095,33 @@ Notes
   unaffected), the scan sites of
   `~~numpyro_forecast.models.markov_series()`, the error sites of
   `~~numpyro_forecast.models.ssoe()`, observed sites and discrete sites.
+- Constrained supports. The rotation ``T`` acts on the unconstrained value
+  ``u = biject_to(support).inv(x)`` of a targeted site ``x``, so the
+  auxiliary site holds ``T(u)``. The potential energy in the unconstrained
+  space is the same function of the rotated coordinates for every support:
+  NUTS and the guides that work in that space (``AutoNormal``, for example)
+  target the same density, only in the rotated basis. A mean-field guide
+  such as ``AutoNormal`` is not rotation invariant, so its fit and its ELBO
+  can change; that is the point of the feature. For a site with real
+  support, ``u`` is ``x`` and the value of `numpyro.infer.util.log_density`
+  is unchanged too. For a site with a constrained support, the value of
+  `numpyro.infer.util.log_density` of the wrapped model at the auxiliary
+  value ``T(u)`` is the value of the plain model at ``x`` plus the log
+  absolute Jacobian determinant of ``biject_to(support)`` at ``u``:
+  ``sum(log(x))`` for a ``LogNormal`` site and
+  ``sum(log(x) + log(1 - x))`` for a ``Beta`` site. Values of
+  `numpyro.infer.util.log_density` and ``AutoDelta`` MAP estimates are
+  therefore not comparable with those of the plain model (NumPyro's
+  ``AutoDelta`` does MAP in constrained space, so the plain model's
+  estimate is the mode in ``x``; the wrapped model's auxiliary site is
+  real-valued, so its estimate is the mode in ``u``, which is what
+  ``AutoLaplaceApproximation`` gives for the plain model). To keep them
+  comparable, sample the innovation on the real line, for example
+  ``innovations(h, "log_growth", dist.Normal(0.0, 0.5))``, and apply
+  ``jnp.exp`` to it (to its cumulative sum for a multiplicative random
+  walk); the MAP is then the mode in the log for both models. Pyro's
+  ``time_reparam`` and NumPyro's ``UnitJacobianReparam`` behave the same
+  way.
 - Time latents under a subsampled plate are not supported. The auxiliary
   site is sampled outside every enclosing plate, so a subsampled plate
   would apply no ``size / subsample_size`` scale to it and an ``AutoGuide``
@@ -1558,6 +1597,10 @@ metrics
     `~~numpyro_forecast.typing.Metric`); bind any metric-specific
     parameters with `functools.partial()`, e.g.
     ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
+    Each window is scored through `evaluate_forecast()`, so the integer
+    draws of a count model need no cast and every metric receives
+    floating arrays. ``transform`` receives the draws as ``forecast_fn``
+    returned them; ``keep_predictions`` stores them after ``transform``.
 per_window_metrics
     Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
     extra metrics merged over ``metrics`` for each window. Use it for
@@ -1632,7 +1675,11 @@ ValueError
     If ``data`` or ``covariates`` has fewer than two axes (time must be at
     axis ``-2``), if their durations differ, if ``eval_train=True`` but
     ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small (see
-    ``num_samples``).
+    ``num_samples``). Also if a metric returns a value that is not 0-d or
+    does not have a bool, integer or floating dtype (see
+    `evaluate_forecast()`): the error names the metric and comes when the
+    first window is scored, after its fit, because a metric may run on the
+    host here and so is not traced before the fit.
 BacktestWindowError
     If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
     ``train_window``, or ``"expanding"`` with one).
@@ -1718,8 +1765,9 @@ num_samples
     least 2 when ``metrics`` contains `eval_crps()` (as
     `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
     are checked before the fit. A CRPS inside another wrapper (a
-    ``lambda`` or a ``jax.jit`` function) is not checked up front: it
-    fails only after the fit.
+    ``lambda`` or a ``jax.jit`` function) raises the error of
+    `~~numpyro_forecast.metrics.crps_empirical()` instead, also before the
+    fit (see ``metrics``).
 metrics
     Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
     Each metric is vmapped over the window axis, so any pure-JAX mapping,
@@ -1727,7 +1775,24 @@ metrics
     ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}``,
     is scored inside the single fused computation. Host-side metrics are
     unsupported here; use `backtest()`, or ``keep_predictions=True``
-    and score on the host.
+    and score on the host. The integer draws of a count model need no
+    cast: the forecasts and the truth windows are cast to the default
+    float dtype once before scoring, so every metric (a custom one
+    included) receives floating arrays, while ``predictions`` keeps the
+    dtype of the draws. A custom metric that needs the integer draws must
+    read them from ``predictions`` (``keep_predictions=True``) or cast
+    back inside the metric. Before the fit, the scoring is traced with
+    ``jax.eval_shape`` on the shapes of the windows (no computation), so a
+    metric that breaks the `~~numpyro_forecast.typing.Metric` contract
+    fails before any window is fitted; that trace calls each metric once
+    more, on tracers. It is a ``jit``-style trace, so a metric must be
+    ``jit``-compatible as `~~numpyro_forecast.typing.Metric` says: a host
+    conversion of a ``jnp`` value, even one computed from shapes or
+    constants (``int(jnp.ceil(p.shape[0] * 0.1))``), raises
+    `VectorizedMetricError`; compute static values with Python or
+    ``math`` instead. A bool or integer metric result is cast to float, so
+    every entry of ``VectorizedBacktestResult.metrics`` has a floating
+    dtype.
 keep_predictions
     If ``True``, retain the stacked forecast samples on the result.
 
@@ -1744,7 +1809,10 @@ ValueError
     small (see ``num_samples``), if ``guide`` is an autoguide that is
     already set up (see ``guide``), or if ``metrics`` is not empty and the
     model's ``"forecast"`` site does not have the shape of ``data`` over
-    the test window.
+    the test window. Also, before the fit, if a metric returns a value that
+    is not 0-d or does not have a bool, integer or floating dtype for one
+    window: the message names the metric and gives the shape and dtype it
+    returned for one window.
 BacktestWindowError
     If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
     there is no room for a single window.
@@ -1755,10 +1823,12 @@ RuntimeError
     example no valid initial parameters), that error is raised instead;
     an eager init of window 0 before the fit raises it for window 0.
 VectorizedMetricError
-    If a metric is not a pure JAX function under ``vmap``: it forces a host
-    conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
-    indexing or a NumPy call on a traced value) or builds a value-dependent
-    shape (a boolean mask index such as ``x[x > 0]``).
+    If a metric is not a pure JAX function under a ``jit``-style trace: it
+    forces a host conversion (``float(...)``, ``int(...)``, ``range(...)``,
+    Python list indexing or a NumPy call on a traced value, including a
+    ``jnp`` value computed only from shapes or constants) or builds a
+    value-dependent shape (a boolean mask index such as ``x[x > 0]``).
+    Raised before the fit, from the trace of the scoring (see ``metrics``).
 
 BacktestResult(t0: int, t1: int, t2: int, num_samples: int, walltime: float, metrics: dict[str, float], train_metrics: dict[str, float] = <factory>, prediction: jax.Array | numpy.ndarray | None = None) -> None
 
@@ -1821,7 +1891,7 @@ dict(iterable) -> new dictionary initialized as if via:
 dict(**kwargs) -> new dictionary initialized with the name=value pairs
     in the keyword argument list.  For example:  dict(one=1, two=2)
 
-evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None) -> dict[str, float]
+evaluate_forecast(pred: jaxtyping.Real[Array, 'sample *batch'] | jaxtyping.Real[ndarray, 'sample *batch'], truth: jaxtyping.Real[Array, '*batch'] | jaxtyping.Real[ndarray, '*batch'] | numpy.number | int | float, *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None) -> dict[str, float]
 
 Evaluate forecast samples against ground truth for several metrics at once.
 
@@ -1845,25 +1915,33 @@ Parameters
 ----------
 pred
     Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+    Integer draws (a count model) are accepted.
 truth
-    Ground-truth values with shape ``(*batch)``.
+    Ground-truth values with shape ``(*batch)``. Integer values are accepted.
 metrics
     Mapping of metric name to function; when ``None`` defaults to
     `DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
-    Each function takes ``(pred, truth)`` and returns a scalar array (see
+    Each function takes ``(pred, truth)`` and returns a 0-d array (see
     `~~numpyro_forecast.typing.Metric`); bind any extra parameters
-    with `functools.partial()` (see above).
+    with `functools.partial()` (see above). Each function receives
+    floating arrays: an integer ``pred`` or ``truth`` is cast to the
+    default float dtype once, before the first metric runs. A per-cell
+    function such as `~~numpyro_forecast.metrics.crps_empirical()` is not
+    a metric: use `eval_crps()`, its mean over the cells.
 
 Returns
 -------
 dict[str, float]
-    Each metric name mapped to its value.
+    Each metric name mapped to its value. A bool or integer metric result
+    is converted to ``float``, whatever the other metrics are.
 
 Raises
 ------
 ValueError
     If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
-    check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
+    check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair. Also
+    if a metric returns a value that is not 0-d or does not have a bool, integer or floating
+    dtype; the message names the metric and gives the shape and dtype it returned.
 
 results_to_dataframe(results: 'Sequence[BacktestResult] | VectorizedBacktestResult') -> 'pd.DataFrame'
 
@@ -1897,11 +1975,14 @@ Raises
 ImportError
     If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
 
-eval_crps(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, batch_size: int | None = None) -> jax.Array
+eval_crps(pred: jaxtyping.Real[Array, 'sample *batch'] | jaxtyping.Real[ndarray, 'sample *batch'], truth: jaxtyping.Real[Array, '*batch'] | jaxtyping.Real[ndarray, '*batch'] | numpy.number | int | float, *, batch_size: int | None = None) -> jax.Array
 
 Empirical CRPS averaged over all data elements.
 
-A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
+A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`). An
+integer ``pred`` or ``truth`` (the draws of a count model) is cast to the
+default float dtype (`~~numpyro_forecast.offload.float_view()`), one
+``batch_size`` block at a time on the chunked path.
 
 Parameters
 ----------
@@ -1921,7 +2002,7 @@ batch_size
     to float tolerance, not bitwise); at or above the cell count the
     single-pass path runs instead, which moves any host-committed operand
     back to device memory first
-    (`~~numpyro_forecast.offload.device_view()`) so either
+    (`~~numpyro_forecast.offload.float_view()`) so either
     ``pred`` or ``truth`` (or both) may be host-committed regardless of
     ``batch_size``. ``None`` (default) evaluates in one pass.
 
@@ -1935,14 +2016,16 @@ Raises
 ValueError
     If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
-eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
+eval_mae(pred: jaxtyping.Real[Array, 'sample *batch'] | jaxtyping.Real[ndarray, 'sample *batch'], truth: jaxtyping.Real[Array, '*batch'] | jaxtyping.Real[ndarray, '*batch'] | numpy.number | int | float) -> jax.Array
 
 Mean absolute error using the forecast sample median as point estimate.
 
 A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 ``pred`` and ``truth`` are moved to device memory first
-(`~~numpyro_forecast.offload.device_view()`), so either (or
+(`~~numpyro_forecast.offload.float_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
+An integer operand (the draws of a count model) is cast to the default
+float dtype in the same step.
 
 Parameters
 ----------
@@ -1961,14 +2044,16 @@ Raises
 ValueError
     If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
-eval_rmse(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
+eval_rmse(pred: jaxtyping.Real[Array, 'sample *batch'] | jaxtyping.Real[ndarray, 'sample *batch'], truth: jaxtyping.Real[Array, '*batch'] | jaxtyping.Real[ndarray, '*batch'] | numpy.number | int | float) -> jax.Array
 
 Root mean squared error using the forecast sample mean as point estimate.
 
 A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 ``pred`` and ``truth`` are moved to device memory first
-(`~~numpyro_forecast.offload.device_view()`), so either (or
+(`~~numpyro_forecast.offload.float_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
+An integer operand (the draws of a count model) is cast to the default
+float dtype in the same step.
 
 Parameters
 ----------
@@ -1987,7 +2072,7 @@ Raises
 ValueError
     If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
-eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9, batch_size: int | None = None) -> jax.Array
+eval_coverage(pred: jaxtyping.Real[Array, 'sample *batch'] | jaxtyping.Real[ndarray, 'sample *batch'], truth: jaxtyping.Real[Array, '*batch'] | jaxtyping.Real[ndarray, '*batch'] | numpy.number | int | float, *, alpha: float = 0.9, batch_size: int | None = None) -> jax.Array
 
 Empirical coverage of the central ``alpha`` prediction interval.
 
@@ -1996,7 +2081,10 @@ The central ``alpha`` interval is bounded by the ``(1 - alpha) / 2`` and
 fraction of ground-truth values that fall inside it. A well-calibrated
 forecast has coverage close to ``alpha``. A pure JAX scalar kernel (see
 `~~numpyro_forecast.typing.Metric`); bind a non-default level with
-``functools.partial(eval_coverage, alpha=...)``.
+``functools.partial(eval_coverage, alpha=...)``. An integer ``pred`` or
+``truth`` (the draws of a count model) is cast to the default float dtype
+(`~~numpyro_forecast.offload.float_view()`), one ``batch_size`` block at a
+time on the chunked path.
 
 Parameters
 ----------
@@ -2013,7 +2101,7 @@ batch_size
     the identical count; only the precision of the final division differs
     from the single pass. Either path accepts a host-committed ``pred``
     or ``truth`` (or both); the single pass moves them to device memory
-    first (`~~numpyro_forecast.offload.device_view()`).
+    first (`~~numpyro_forecast.offload.float_view()`).
     ``None`` (default) evaluates in one pass.
 
 Returns
@@ -2028,7 +2116,7 @@ ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
     ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
-crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jaxtyping.Float[Array, '*batch']
+crps_empirical(pred: jaxtyping.Real[Array, 'sample *batch'] | jaxtyping.Real[ndarray, 'sample *batch'], truth: jaxtyping.Real[Array, '*batch'] | jaxtyping.Real[ndarray, '*batch'] | numpy.number | int | float) -> jaxtyping.Float[Array, '*batch']
 
 Compute the empirical Continuous Ranked Probability Score (CRPS).
 
@@ -2049,9 +2137,12 @@ pred
     Forecast samples with the sample axis first, shape ``(sample, *batch)``.
     May be host-committed (e.g. draws sampled with ``device="host"``),
     regardless of whether ``truth`` is: either operand is moved to device
-    memory first (`~~numpyro_forecast.offload.device_view()`).
+    memory first (`~~numpyro_forecast.offload.float_view()`). Integer
+    draws (a count model) are cast to the default float dtype there; a
+    floating ``pred`` keeps its dtype.
 truth
     Ground-truth values with shape ``(*batch)`` (matching ``pred`` without the sample axis).
+    Integer values are cast like ``pred``.
 
 Returns
 -------
@@ -2070,7 +2161,7 @@ Tilmann Gneiting, Adrian E. Raftery (2007). "Strictly Proper Scoring Rules,
 Prediction, and Estimation". *Journal of the American Statistical
 Association*.
 
-eval_pinball(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, quantile: float = 0.5) -> jax.Array
+eval_pinball(pred: jaxtyping.Real[Array, 'sample *batch'] | jaxtyping.Real[ndarray, 'sample *batch'], truth: jaxtyping.Real[Array, '*batch'] | jaxtyping.Real[ndarray, '*batch'] | numpy.number | int | float, *, quantile: float = 0.5) -> jax.Array
 
 Mean pinball (quantile) loss of the forecast ``quantile``.
 
@@ -2080,8 +2171,10 @@ data elements. At ``quantile=0.5`` it is half the mean absolute error. A
 pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`);
 ``quantile`` is static so each level specializes its own branch. ``pred``
 and ``truth`` are moved to device memory first
-(`~~numpyro_forecast.offload.device_view()`), so either (or
+(`~~numpyro_forecast.offload.float_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
+An integer operand (the draws of a count model) is cast to the default
+float dtype in the same step.
 
 Parameters
 ----------
@@ -2103,7 +2196,7 @@ ValueError
     If ``quantile`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
     ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
-eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9) -> jax.Array
+eval_interval_score(pred: jaxtyping.Real[Array, 'sample *batch'] | jaxtyping.Real[ndarray, 'sample *batch'], truth: jaxtyping.Real[Array, '*batch'] | jaxtyping.Real[ndarray, '*batch'] | numpy.number | int | float, *, alpha: float = 0.9) -> jax.Array
 
 Mean Winkler interval score for the central ``alpha`` prediction interval.
 
@@ -2114,8 +2207,10 @@ averaged over all data elements. It rewards narrow intervals and penalizes
 ground truth falling outside them; lower is better.
 A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 ``pred`` and ``truth`` are moved to device memory first
-(`~~numpyro_forecast.offload.device_view()`), so either (or
+(`~~numpyro_forecast.offload.float_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
+An integer operand (the draws of a count model) is cast to the default
+float dtype in the same step.
 
 Parameters
 ----------
@@ -2137,7 +2232,7 @@ ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
     ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
-make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'] | jaxtyping.Float[ndarray, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], jax.Array]
+make_mase(train_data: jaxtyping.Real[Array, '*batch time obs_dim'] | jaxtyping.Real[ndarray, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], jax.Array]
 
 Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 
@@ -2147,14 +2242,19 @@ the in-sample MAE of the seasonal-naive forecast on ``train_data``,
 time; the returned metric has the standard scalar-array signature (see
 `~~numpyro_forecast.typing.Metric`). ``train_data`` and the returned
 metric's ``pred``/``truth`` are all moved to device memory first
-(`~~numpyro_forecast.offload.device_view()`), so any of
+(`~~numpyro_forecast.offload.float_view()`), so any of
 them may be host-committed, e.g. draws sampled with ``device="host"``.
+Integer counts are cast to the default float dtype in the same step, so
+the seasonal-naive differences of ``train_data`` are computed in floating
+point: in the integer dtype a ``uint8`` difference wraps and the ``abs`` of
+the ``int16`` minimum stays negative.
 
 Parameters
 ----------
 train_data
     Training data with time at axis ``-2``; leading batch axes are allowed
-    and the seasonal-naive scale is averaged over all axes.
+    and the seasonal-naive scale is averaged over all axes. Integer counts
+    are accepted.
 seasonality
     Seasonal period (``>= 1``); ``1`` is the random-walk naive baseline.
 
@@ -2211,7 +2311,17 @@ posterior
     key is dropped, as in
     `~~numpyro_forecast.predictive.predict_in_sample()`: it is not in the
     ``posterior`` group, and the in-sample draws come from the latent
-    sites.
+    sites. Every other key becomes a ``posterior`` variable, and
+    `xarray.DataTree` rejects a variable name that contains ``"/"``, so a
+    key that contains ``"/"`` raises ``ValueError`` before any draw.
+    `numpyro.handlers.scope` joins its prefix and the site name with
+    ``"/"`` by default (``trend/drift``): pass ``divider="_"`` to every
+    ``scope`` call of a model you export (``trend_drift``). The divider
+    changes only the names: a fit drawn under ``"/"`` exports without a
+    refit once the model uses ``divider="_"`` and the posterior keys are
+    renamed the same way. Both must change, because the predictive
+    drivers ignore a posterior key that matches no site and draw that
+    site from the prior with no error.
 data
     In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
     the observation dim at axis ``-1`` and any batch axes to the left
@@ -2341,6 +2451,10 @@ ValueError
     no sample axis, if a forecast-horizon key of ``posterior`` (one that
     ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
     has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
+    a ``posterior`` key contains ``"/"`` (a site scoped with the default
+    divider of `numpyro.handlers.scope`; an empty forecast-horizon key
+    counts, because the export keeps it as a variable; see ``posterior``
+    above), if
     ``time_coord`` or a ``coords`` value is not a one-dimensional
     collection of labels (a set, a dict, a scalar, a 2-D array, ragged
     input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
@@ -3371,6 +3485,18 @@ should use array creation routines offered in :mod:`jax.numpy`, such as
 :func:`jax.numpy.array`, :func:`jax.numpy.zeros`, :func:`jax.numpy.ones`,
 :func:`jax.numpy.full`, :func:`jax.numpy.arange`, etc.
 
+Union
+
+Represent a union type
+
+E.g. for int | str
+
+Union
+
+Represent a union type
+
+E.g. for int | str
+
 Callable(*args, **kwargs)
 
 Callable(*args, **kwargs)
@@ -3381,7 +3507,7 @@ Callable(*args, **kwargs)
 Batched autocorrelation and partial autocorrelation diagnostics.
 
 
-acf(y: jaxtyping.Float[Array, '*batch time'] | jaxtyping.Float[ndarray, '*batch time'], max_lag: int) -> jaxtyping.Float[Array, '*batch lags']
+acf(y: jaxtyping.Real[Array, '*batch time'] | jaxtyping.Real[ndarray, '*batch time'], max_lag: int) -> jaxtyping.Float[Array, '*batch lags']
 
 Compute the empirical autocorrelation function up to ``max_lag``.
 
@@ -3403,7 +3529,12 @@ Parameters
 ----------
 y
     Time series with time on the last axis, shape ``(*batch, time)``.
-    NumPy arrays are accepted directly.
+    NumPy arrays are accepted directly; integer counts are cast to the
+    default float dtype (`~~numpyro_forecast.offload.float_view_resident()`).
+    A CPU-committed series (``device="host"`` draws with the CPU backend
+    initialized, see `~~numpyro_forecast.predictive.draw_posterior()`)
+    stays on the CPU; a pinned series, floating or integer, is copied
+    back onto its own device first.
 max_lag
     Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -3434,7 +3565,7 @@ References
 Adapted from `numpyro.diagnostics.autocorrelation()`, itself adapted
 from the Stan implementation.
 
-pacf(y: jaxtyping.Float[Array, '*batch time'] | jaxtyping.Float[ndarray, '*batch time'], max_lag: int) -> jaxtyping.Float[Array, '*batch lags']
+pacf(y: jaxtyping.Real[Array, '*batch time'] | jaxtyping.Real[ndarray, '*batch time'], max_lag: int) -> jaxtyping.Float[Array, '*batch lags']
 
 Compute the empirical partial autocorrelation function up to ``max_lag``.
 
@@ -3458,7 +3589,12 @@ Parameters
 ----------
 y
     Time series with time on the last axis, shape ``(*batch, time)``.
-    NumPy arrays are accepted directly.
+    NumPy arrays are accepted directly; integer counts are cast to the
+    default float dtype (`~~numpyro_forecast.offload.float_view_resident()`).
+    A CPU-committed series (``device="host"`` draws with the CPU backend
+    initialized, see `~~numpyro_forecast.predictive.draw_posterior()`)
+    stays on the CPU; a pinned series, floating or integer, is copied
+    back onto its own device first.
 max_lag
     Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -3491,7 +3627,7 @@ l'Institut International de Statistique*.
 Fourier design matrices and seasonal tiling.
 
 
-fourier_features(duration: int, period: float, num_terms: int) -> jaxtyping.Float[Array, 'duration two_num_terms']
+fourier_features(duration: int | numpy.integer, period: int | numpy.integer | float | numpy.floating, num_terms: int | numpy.integer) -> jaxtyping.Float[Array, 'duration two_num_terms']
 
 Build a Fourier seasonality design matrix.
 
@@ -3504,19 +3640,31 @@ default float dtype (``float64`` with x64 enabled, ``float32`` otherwise).
 Parameters
 ----------
 duration
-    Number of time steps.
+    Number of time steps, a non-negative Python or NumPy integer (not a
+    ``float``).
 period
-    Seasonal period (in time steps).
+    Seasonal period (in time steps): a positive, finite Python or NumPy
+    integer or float, for example ``7`` for daily data with a weekly season.
+    A NumPy float is used at its exact binary value, so ``np.float32(0.1)``
+    is the period ``0.10000000149011612``, not ``0.1``, and the two spellings
+    are two memo entries.
 num_terms
-    Number of harmonics; the output has ``2 * num_terms`` columns
-    (sine then cosine).
+    Number of harmonics, a non-negative Python or NumPy integer; the output
+    has ``2 * num_terms`` columns (sine then cosine), none for ``0``.
 
 Returns
 -------
 Float[Array, "duration two_num_terms"]
     The design matrix of shape ``(duration, 2 * num_terms)``.
 
-periodic_repeat(x: jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex, duration: int, *, axis: int = -1) -> jax.Array
+Raises
+------
+ValueError
+    If ``duration`` or ``num_terms`` is negative, or ``period`` is not
+    positive and finite (``0`` or ``nan`` would cache an all-``nan``
+    matrix without an error, and ``inf`` a constant one).
+
+periodic_repeat(x: jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex, duration: int | numpy.integer, *, axis: int = -1) -> jax.Array
 
 Tile a seasonal pattern to cover ``duration`` time steps.
 
@@ -3526,7 +3674,8 @@ x
     Seasonal pattern; the repeated axis has length equal to the period.
     Accepts any array-like (e.g. a raw ``numpyro.sample`` draw).
 duration
-    Target length along ``axis``.
+    Target length along ``axis``: a non-negative Python or NumPy integer
+    (not a ``float``).
 axis
     Axis to repeat along (defaults to ``-1``).
 
@@ -3534,6 +3683,11 @@ Returns
 -------
 Array
     ``x`` periodically repeated to length ``duration`` along ``axis``.
+
+Raises
+------
+ValueError
+    If ``duration`` is negative.
 
 
 ## Array helpers
@@ -3580,7 +3734,7 @@ Returns
 Array
     The concatenation of ``prefix`` and ``suffix`` along ``axis``.
 
-pad_future(x: jax.Array, future: int, *, value: float = 0.0) -> jax.Array
+pad_future(x: jax.Array, future: int | numpy.integer, *, value: int | numpy.integer | float | numpy.floating = 0.0) -> jax.Array
 
 Append ``future`` rows filled with ``value`` along the time axis.
 
@@ -3595,14 +3749,21 @@ Parameters
 x
     In-sample array with time at axis ``-2``, shape ``(*batch, t_obs, obs)``.
 future
-    Number of forecast rows to append.
+    Number of forecast rows to append, a non-negative Python or NumPy
+    integer (for example ``h.future`` or ``np.sum(mask)``).
 value
-    Fill value of the appended rows, cast to ``x.dtype``.
+    Fill value of the appended rows, a Python or NumPy integer or float,
+    cast to ``x.dtype`` by ``jnp.full`` (an integer fill stays exact).
 
 Returns
 -------
 Array
     ``x`` followed by ``future`` constant rows, shape ``(*batch, t_obs + future, obs)``.
+
+Raises
+------
+ValueError
+    If ``future`` is negative.
 
 
 ## Datasets
@@ -3803,6 +3964,8 @@ metric forces a host conversion under ``vmap`` (``float(...)``,
 traced value) or builds a value-dependent shape (a boolean mask index such
 as ``x[x > 0]``; use ``jnp.where`` instead). Metrics must be pure JAX
 functions returning a scalar array; see `~~numpyro_forecast.typing.Metric`.
+The scoring is traced on the window shapes before the fit, so this error
+comes before any window is fitted.
 
 KernelConfigError(message: str | None = None) -> None
 
