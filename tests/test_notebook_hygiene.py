@@ -10,7 +10,7 @@ broken in more than one notebook, so they are checked here for all of them.
 
 The preliz checks make sure that a prior elicited with ``maxent`` is the prior the model uses.
 The default ``mass`` of ``maxent`` is ``rcParams["stats.ci_prob"]``, which went from 0.94
-(preliz 0.20) to 0.89 (preliz 0.24), and two notebooks plotted the default-mass fit while
+(preliz 0.22) to 0.89 (preliz 0.23), and two notebooks plotted the default-mass fit while
 their models hard-coded the 0.94 fit (issue #198). So every call passes ``mass``, and the
 fitted distribution is read after the call instead of copied by hand.
 """
@@ -20,9 +20,10 @@ import re
 from pathlib import Path
 from typing import TypeGuard
 
+import nbformat
 import pytest
 import yaml
-from notebook_cells import NOTEBOOKS, read_cells, source, stderr
+from notebook_cells import NOTEBOOKS, Cell, read_cells, source, stderr
 
 REPO = Path(__file__).resolve().parent.parent
 SITE = "https://juanitorduz.github.io/numpyro_forecast/"
@@ -35,8 +36,9 @@ ENVIRONMENT_WARNINGS = (
 # anchors contain dots (``#numpyro_forecast.models.ssoe``).
 RELATIVE_LINK = re.compile(r"\]\((?!https?://)(?P<path>[\w./]+\.html)(?:#[^)\s]*)?\)")
 NOTEBOOK_IDS = [path.stem for path in NOTEBOOKS]
-# IPython magics (``%load_ext``, ``%%time``) and shell escapes are not Python.
-MAGIC_LINE = re.compile(r"^\s*[%!]")
+# IPython magics (``%load_ext``, ``%%time``) and shell escapes (``!pip``) are not Python. The
+# magic name follows the sigil directly, so a wrapped ``% 24`` operator line does not match.
+MAGIC_LINE = re.compile(r"^(?P<indent>\s*)[%!]{1,2}[A-Za-z_]")
 
 
 def _reference_entries() -> set[str]:
@@ -49,14 +51,27 @@ def _reference_entries() -> set[str]:
     }
 
 
-def _code_trees(path: Path) -> list[tuple[int, ast.Module]]:
-    """Parse every code cell, with magic lines blanked so that line numbers stay the same."""
+def _code_trees(name: str, cells: list[Cell]) -> list[tuple[int, ast.Module]]:
+    """Parse every code cell of notebook ``name`` as Python.
+
+    A magic line becomes ``pass`` at the same indentation, so line numbers and block bodies
+    survive. A cell that is still not Python (``pz.maxent?``) fails the test by name.
+    """
     trees = []
-    for index, cell in enumerate(read_cells(path)):
+    for index, cell in enumerate(cells):
         if cell["cell_type"] != "code":
             continue
-        lines = ["" if MAGIC_LINE.match(line) else line for line in source(cell).splitlines()]
-        trees.append((index, ast.parse("\n".join(lines), filename=f"{path.name}, cell {index}")))
+        lines = [
+            f"{match['indent']}pass" if (match := MAGIC_LINE.match(line)) else line
+            for line in source(cell).splitlines()
+        ]
+        try:
+            tree = ast.parse("\n".join(lines))
+        except SyntaxError as exc:
+            pytest.fail(
+                f"{name} cell {index} is not Python once IPython magics are blanked: {exc}"
+            )
+        trees.append((index, tree))
     return trees
 
 
@@ -70,22 +85,28 @@ def _is_maxent(node: ast.AST | None) -> TypeGuard[ast.Call]:
     )
 
 
-def _maxent_calls(path: Path) -> list[tuple[int, ast.Call, set[str]]]:
+def _maxent_calls(name: str, cells: list[Cell]) -> list[tuple[int, ast.Call, set[str]]]:
     """Return ``(cell index, call, names that hold the fit)`` for every ``maxent`` call.
 
     ``maxent`` fits its distribution argument in place and returns it (as ``(distribution,
     axes)`` when it plots, the default), so the fit is in the argument when it is a name and
-    in the first assignment target.
+    in the first assignment target. A comprehension whose element is the call binds its fits
+    to the assignment target as well.
     """
     calls = []
-    for index, tree in _code_trees(path):
+    for index, tree in _code_trees(name, cells):
         assigned: dict[int, set[str]] = {}
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Assign | ast.AnnAssign) or not _is_maxent(node.value):
+            if not isinstance(node, ast.Assign | ast.AnnAssign):
+                continue
+            value = node.value
+            if isinstance(value, ast.ListComp | ast.GeneratorExp | ast.SetComp):
+                value = value.elt
+            if not _is_maxent(value):
                 continue
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             firsts = [t.elts[0] if isinstance(t, ast.Tuple | ast.List) else t for t in targets]
-            assigned[id(node.value)] = {t.id for t in firsts if isinstance(t, ast.Name)}
+            assigned[id(value)] = {t.id for t in firsts if isinstance(t, ast.Name)}
         for node in ast.walk(tree):
             if not _is_maxent(node):
                 continue
@@ -100,43 +121,140 @@ def _maxent_calls(path: Path) -> list[tuple[int, ast.Call, set[str]]]:
     return calls
 
 
-@pytest.mark.parametrize("path", NOTEBOOKS, ids=NOTEBOOK_IDS)
-def test_maxent_calls_pass_mass(path: Path) -> None:
-    """Every preliz ``maxent`` call passes ``mass``: its default changed between releases."""
+def _passes_mass(call: ast.Call) -> bool:
+    """Whether a ``maxent`` call passes ``mass``, other than an explicit ``None``.
+
+    ``mass`` is the fourth positional parameter; ``**kwargs`` (``arg is None``) may hold it.
+    ``mass=None`` still resolves to ``rcParams["stats.ci_prob"]``.
+    """
+    return len(call.args) >= 4 or any(
+        keyword.arg is None
+        or (
+            keyword.arg == "mass"
+            and not (isinstance(keyword.value, ast.Constant) and keyword.value.value is None)
+        )
+        for keyword in call.keywords
+    )
+
+
+def _check_maxent_calls_pass_mass(name: str, cells: list[Cell]) -> None:
+    """Fail when a ``maxent`` call of notebook ``name`` leaves ``mass`` to the preliz default."""
     found = [
         f"cell {index}, line {call.lineno}"
-        for index, call, _ in _maxent_calls(path)
-        # ``mass`` is the fourth positional parameter; ``**kwargs`` (``arg is None``) may hold it.
-        if len(call.args) < 4 and not any(k.arg in {"mass", None} for k in call.keywords)
+        for index, call, _ in _maxent_calls(name, cells)
+        if not _passes_mass(call)
     ]
     assert not found, (
-        f"{path.name} calls maxent without mass; its default follows "
+        f"{name} calls maxent without mass; its default follows "
         'rcParams["stats.ci_prob"], which differs between preliz releases:\n' + "\n".join(found)
     )
 
 
-@pytest.mark.parametrize("path", NOTEBOOKS, ids=NOTEBOOK_IDS)
-def test_maxent_fits_are_used(path: Path) -> None:
-    """The distribution that ``maxent`` fits is read after the call, not copied by hand."""
+def _check_maxent_fits_are_used(name: str, cells: list[Cell]) -> None:
+    """Fail when a ``maxent`` fit of notebook ``name`` is bound to no name that is read later.
+
+    A fit is read when one of the names that hold it (the first assignment target or the
+    distribution argument, ``_`` excluded) is loaded after the call ends: later on the same
+    line, on a later line of the cell, or in a later cell.
+    """
     loads = [
-        (index, node.lineno, node.id)
-        for index, tree in _code_trees(path)
+        (index, node.lineno, node.col_offset, node.id)
+        for index, tree in _code_trees(name, cells)
         for node in ast.walk(tree)
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
     ]
     found = [
         f"cell {index}, line {call.lineno}"
-        for index, call, names in _maxent_calls(path)
+        for index, call, names in _maxent_calls(name, cells)
         if not any(
-            name in names and (cell, line) > (index, call.end_lineno or call.lineno)
-            for cell, line, name in loads
+            name in names
+            and (cell, line, column)
+            > (index, call.end_lineno or call.lineno, call.end_col_offset or call.col_offset)
+            for cell, line, column, name in loads
         )
     ]
     assert not found, (
-        f"{path.name} discards a maxent fit; build the model's prior from the fitted "
-        "distribution (for example dist.InverseGamma(concentration=fit.alpha, rate=fit.beta)) "
-        "instead of copying its parameters:\n" + "\n".join(found)
+        f"{name} discards a maxent fit: every fit must be bound to a name that is read after "
+        "the call (not bound to _), and the model's prior built from it (for example "
+        "dist.InverseGamma(concentration=fit.alpha, rate=fit.beta)) instead of copying its "
+        "parameters:\n" + "\n".join(found)
     )
+
+
+@pytest.mark.parametrize("path", NOTEBOOKS, ids=NOTEBOOK_IDS)
+def test_maxent_calls_pass_mass(path: Path) -> None:
+    """Every preliz ``maxent`` call passes ``mass``: its default changed between releases."""
+    _check_maxent_calls_pass_mass(path.name, read_cells(path))
+
+
+@pytest.mark.parametrize("path", NOTEBOOKS, ids=NOTEBOOK_IDS)
+def test_maxent_fits_are_used(path: Path) -> None:
+    """Every ``maxent`` fit is bound to a name that is read after the call."""
+    _check_maxent_fits_are_used(path.name, read_cells(path))
+
+
+def _cells(*sources: str) -> list[Cell]:
+    """Build the code cells of an in-memory notebook, one per source string."""
+    return [nbformat.v4.new_code_cell(text) for text in sources]
+
+
+def test_maxent_check_rejects_a_discarded_fit() -> None:
+    """A fit bound to ``_`` and never read fails, naming the rule and the cell."""
+    cells = _cells("import preliz as pz", "_ = pz.maxent(pz.Gamma(), 0, 10, mass=0.9)")
+    with pytest.raises(AssertionError, match=r"discards a maxent fit(.|\n)*cell 1, line 1"):
+        _check_maxent_fits_are_used("synthetic.ipynb", cells)
+
+
+def test_maxent_check_rejects_a_plot_only_call() -> None:
+    """A call whose fit is neither bound nor read fails, even when it only draws a plot."""
+    cells = _cells("pz.maxent(pz.Gamma(), 0, 10, mass=0.9)")
+    with pytest.raises(AssertionError, match="discards a maxent fit"):
+        _check_maxent_fits_are_used("synthetic.ipynb", cells)
+
+
+def test_maxent_check_counts_a_read_on_the_same_line() -> None:
+    """A read after the call on the same line counts as using the fit."""
+    cells = _cells("fit, ax = pz.maxent(pz.Gamma(), 0, 10, mass=0.9); print(fit.alpha)")
+    _check_maxent_fits_are_used("synthetic.ipynb", cells)
+
+
+def test_maxent_check_counts_a_comprehension_target() -> None:
+    """A comprehension of fits binds them to the assignment target, read in a later cell."""
+    cells = _cells(
+        "fits = [pz.maxent(d, 0, 10, mass=0.9, plot=False) for d in (pz.Gamma(), pz.Beta())]",
+        "print(fits)",
+    )
+    _check_maxent_fits_are_used("synthetic.ipynb", cells)
+
+
+def test_maxent_check_rejects_mass_none() -> None:
+    """``mass=None`` still takes the preliz default, so it does not pass the check."""
+    cells = _cells("fit, ax = pz.maxent(pz.Gamma(), 0, 10, mass=None)\nprint(fit)")
+    with pytest.raises(AssertionError, match="calls maxent without mass"):
+        _check_maxent_calls_pass_mass("synthetic.ipynb", cells)
+    _check_maxent_calls_pass_mass("synthetic.ipynb", _cells("fit = pz.maxent(d, mass=0.9)"))
+
+
+def test_code_trees_fail_on_a_cell_that_is_not_python() -> None:
+    """An IPython help query is not a magic, so the cell fails the test by name."""
+    with pytest.raises(pytest.fail.Exception, match=r"synthetic\.ipynb cell 1 is not Python"):
+        _code_trees("synthetic.ipynb", _cells("x = 1", "pz.maxent?"))
+
+
+def test_code_trees_keep_the_body_of_an_indented_magic() -> None:
+    """An indented ``%time`` becomes ``pass``, so the enclosing block still parses."""
+    (tree,) = [
+        tree for _, tree in _code_trees("s.ipynb", _cells("for _ in range(2):\n    %time x = 1"))
+    ]
+    (loop,) = tree.body
+    assert isinstance(loop, ast.For) and isinstance(loop.body[0], ast.Pass)
+
+
+def test_code_trees_keep_a_wrapped_modulo_operator() -> None:
+    """A continuation line that starts with the ``%`` operator is not a magic."""
+    (tree,) = [tree for _, tree in _code_trees("s.ipynb", _cells("x = (\n    hours\n    % 24\n)"))]
+    (assign,) = tree.body
+    assert isinstance(assign, ast.Assign) and isinstance(assign.value, ast.BinOp)
 
 
 @pytest.mark.parametrize("path", NOTEBOOKS, ids=NOTEBOOK_IDS)
