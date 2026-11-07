@@ -156,10 +156,11 @@ def _chunked_cell_metric(
     is never chunked. Inputs are normalized with
     `~~numpyro_forecast.offload.leaf_view()` so a host-committed
     panel is sliced on the host instead of raising when a device-resident
-    index array gathers against it. Each block goes through
-    `~~numpyro_forecast.offload.float_view()` on its way to the kernel, so an
-    integer panel is cast one block at a time and never as a whole on the
-    accelerator.
+    index array gathers against it. When called directly, each block goes
+    through `~~numpyro_forecast.offload.float_view()` on its way to the
+    kernel, so an integer panel is cast one block at a time; inside
+    `evaluate_forecast()` (and with it `backtest()`) the whole panel is cast
+    once up front, before any metric runs.
 
     Parameters
     ----------
@@ -923,8 +924,8 @@ def backtest(
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
         Each window is scored through `evaluate_forecast()`, so the integer
         draws of a count model need no cast and every metric receives
-        floating arrays. ``transform`` receives, and ``keep_predictions``
-        stores, the draws as ``forecast_fn`` returned them.
+        floating arrays. ``transform`` receives the draws as ``forecast_fn``
+        returned them; ``keep_predictions`` stores them after ``transform``.
     per_window_metrics
         Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
         extra metrics merged over ``metrics`` for each window. Use it for
@@ -1119,8 +1120,11 @@ def _vmapped_metrics(
     custom, is scored by one ``vmap`` per metric over the leading window axis;
     the single device-to-host transfer is deferred to the caller. Integer
     forecasts and truth (a count model) are cast to the default float dtype
-    once for all windows and metrics, so every metric sees floating arrays.
+    once for all windows and metrics, so every metric sees floating arrays;
+    an empty mapping returns before the cast allocates anything.
     """
+    if not metrics:
+        return {}
     predictions, truth = float_view(predictions), float_view(truth)
     try:
         return {name: jax.vmap(fn)(predictions, truth) for name, fn in metrics.items()}
@@ -1319,8 +1323,11 @@ def backtest_vectorized(
         unsupported here; use `backtest()`, or ``keep_predictions=True``
         and score on the host. The integer draws of a count model need no
         cast: the forecasts and the truth windows are cast to the default
-        float dtype once before scoring, so every metric receives floating
-        arrays, while ``predictions`` keeps the dtype of the draws.
+        float dtype once before scoring, so every metric (a custom one
+        included) receives floating arrays, while ``predictions`` keeps the
+        dtype of the draws. A custom metric that needs the integer draws must
+        read them from ``predictions`` (``keep_predictions=True``) or cast
+        back inside the metric.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
 

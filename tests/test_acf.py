@@ -250,12 +250,24 @@ def test_dtype_preserved(rng_key: Array) -> None:
 
 
 @pytest.mark.parametrize("kind", ["pinned", "cpu"])
-def test_host_committed_series_matches_device_series(rng_key: Array, kind: str) -> None:
-    """A host-committed series (``device="host"`` draws) is moved to device memory first."""
+def test_host_committed_series_stays_committed_and_matches_device_series(
+    monkeypatch: pytest.MonkeyPatch, rng_key: Array, kind: str
+) -> None:
+    """A host-committed series (``device="host"`` draws) is scored where it lives.
+
+    The ``cpu`` case simulates an accelerator default backend: the integer
+    cast happens on the CPU and the result stays committed there, so a large
+    host-offloaded panel is never moved to the accelerator.
+    """
     y = random.normal(rng_key, (2, 40))
+    counts = jnp.asarray(_COUNTS, jnp.int32)
+    y_host, counts_host = commit_host(y, kind), commit_host(counts, kind)
+    if kind == "cpu":
+        monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
     for fn in (acf, pacf):
-        np.testing.assert_allclose(fn(commit_host(y, kind), max_lag=4), fn(y, max_lag=4))
-        counts = jnp.asarray(_COUNTS, jnp.int32)
-        np.testing.assert_allclose(
-            fn(commit_host(counts, kind), max_lag=4), fn(counts.astype(jnp.float32), max_lag=4)
-        )
+        np.testing.assert_allclose(fn(y_host, max_lag=4), fn(y, max_lag=4))
+        got = fn(counts_host, max_lag=4)
+        np.testing.assert_allclose(got, fn(counts.astype(jnp.float32), max_lag=4))
+        if kind == "cpu":
+            assert got.committed
+            assert got.devices() == {jax.devices("cpu")[0]}

@@ -599,11 +599,20 @@ def test_metric_vmaps_over_integer_counts(metric: Callable[[Array, Array], Array
 
 @pytest.mark.parametrize("batch_size", [None, 4], ids=["single_pass", "chunked"])
 @pytest.mark.parametrize("kind", ["pinned", "cpu"])
-def test_metrics_accept_host_committed_integer_draws(kind: str, batch_size: int | None) -> None:
-    """Host-offloaded count draws (``device="host"``) are moved and cast in either path."""
+def test_metrics_accept_host_committed_integer_draws(
+    monkeypatch: pytest.MonkeyPatch, kind: str, batch_size: int | None
+) -> None:
+    """Host-offloaded count draws (``device="host"``) are moved and cast in either path.
+
+    The ``cpu`` case simulates an accelerator default backend, as on a
+    CPU-only machine a CPU-committed leaf is not host-resident and would take
+    the plain device path.
+    """
     pred_int, truth_int = _count_inputs("int16")
     pred, truth = jnp.asarray(pred_int), jnp.asarray(truth_int)
     pred_host = commit_host(pred, kind)
+    if kind == "cpu":
+        monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
     for metric in (partial(eval_crps, batch_size=batch_size), eval_mae, eval_pinball):
         np.testing.assert_allclose(
             metric(pred_host, truth),
@@ -708,6 +717,18 @@ def test_float_view_moves_and_casts_a_pinned_integer_leaf() -> None:
     viewed = float_view(hosted)
     assert viewed.dtype == jnp.result_type(float)
     assert viewed.sharding.memory_kind not in {"pinned_host", "unpinned_host"}
+    np.testing.assert_array_equal(viewed, np.arange(4.0))
+
+
+def test_float_view_casts_a_cpu_committed_integer_leaf_on_the_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Under an accelerator default a CPU-committed integer leaf is cast once, uncommitted."""
+    hosted = commit_host(jnp.arange(4, dtype=jnp.int32), "cpu")
+    monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
+    viewed = float_view(hosted)
+    assert viewed.dtype == jnp.result_type(float)
+    assert not viewed.committed
     np.testing.assert_array_equal(viewed, np.arange(4.0))
 
 

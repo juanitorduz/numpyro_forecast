@@ -1383,7 +1383,8 @@ def test_backtest_scores_count_model_like_its_float_cast(batch_size: int | None)
 
     Before the fix every window raised ``TypeCheckError`` after the first fit.
     The oracle is the same run with a ``transform`` that casts to float, the
-    manual workaround; ``keep_predictions`` keeps the integer draws.
+    manual workaround; ``keep_predictions`` keeps the draws after
+    ``transform``: the integer draws without one, the float cast with it.
     """
     data, covariates = poisson_counts(28)
     metrics = {
@@ -1420,7 +1421,10 @@ def test_backtest_scores_count_model_like_its_float_cast(batch_size: int | None)
     assert len(got) == len(expected) == 3
     for window, oracle in zip(got, expected, strict=True):
         assert window.prediction is not None
+        assert oracle.prediction is not None
         assert jnp.issubdtype(window.prediction.dtype, jnp.integer)
+        assert oracle.prediction.dtype == jnp.float32
+        np.testing.assert_array_equal(oracle.prediction, window.prediction.astype(jnp.float32))
         assert window.metrics.keys() == {*DEFAULT_METRICS, "mase"}
         for name, value in oracle.metrics.items():
             np.testing.assert_allclose(window.metrics[name], value, rtol=1e-6)

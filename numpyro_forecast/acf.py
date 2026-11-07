@@ -25,7 +25,7 @@ from jax.typing import ArrayLike
 from jaxtyping import Float, Real
 from numpyro.diagnostics import _fft_next_fast_len
 
-from numpyro_forecast.offload import float_view
+from numpyro_forecast.offload import float_cast_in_place
 from numpyro_forecast.typing import Array
 
 
@@ -111,10 +111,12 @@ def acf(
     ----------
     y
         Time series with time on the last axis, shape ``(*batch, time)``.
-        NumPy arrays are accepted directly. As for the metrics
-        (`~~numpyro_forecast.offload.float_view()`), integer counts are cast
-        to the default float dtype and host-committed draws (``device="host"``)
-        are moved to device memory before the computation.
+        NumPy arrays are accepted directly. Integer counts are cast to the
+        default float dtype where the series lives
+        (`~~numpyro_forecast.offload.float_cast_in_place()`): host-committed
+        draws (``device="host"``) stay on the CPU and are not moved to the
+        accelerator; a pinned series (``device="pinned_host"``) is copied
+        back onto its own device first.
     max_lag
         Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -145,7 +147,7 @@ def acf(
     Adapted from `numpyro.diagnostics.autocorrelation()`, itself adapted
     from the Stan implementation.
     """
-    y = float_view(y)
+    y = float_cast_in_place(y)
     _validate_max_lag("acf", y.shape[-1], max_lag)
     return _acf(y, max_lag=max_lag)
 
@@ -176,10 +178,12 @@ def pacf(
     ----------
     y
         Time series with time on the last axis, shape ``(*batch, time)``.
-        NumPy arrays are accepted directly. As for the metrics
-        (`~~numpyro_forecast.offload.float_view()`), integer counts are cast
-        to the default float dtype and host-committed draws (``device="host"``)
-        are moved to device memory before the computation.
+        NumPy arrays are accepted directly. Integer counts are cast to the
+        default float dtype where the series lives
+        (`~~numpyro_forecast.offload.float_cast_in_place()`): host-committed
+        draws (``device="host"``) stay on the CPU and are not moved to the
+        accelerator; a pinned series (``device="pinned_host"``) is copied
+        back onto its own device first.
     max_lag
         Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -206,6 +210,6 @@ def pacf(
     James Durbin (1960). "The Fitting of Time-Series Models". *Revue de
     l'Institut International de Statistique*.
     """
-    y = float_view(y)
+    y = float_cast_in_place(y)
     _validate_max_lag("pacf", y.shape[-1], max_lag)
     return _pacf(y, max_lag=max_lag)
