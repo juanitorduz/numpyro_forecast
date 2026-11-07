@@ -1016,8 +1016,8 @@ to its right (plate axes to the left of time stay batch axes). The
 transform is orthonormal and acts on the unconstrained value of each site,
 so the posterior and the unconstrained potential energy are unchanged; only
 the geometry inference sees changes. For a site with a constrained support
-(positive or bounded), the constrained-space log density changes: see the
-Notes.
+(positive or bounded), the `numpyro.infer.util.log_density` values and the
+``AutoDelta`` MAP estimates are not those of the plain model: see the Notes.
 
 Parameters
 ----------
@@ -1086,21 +1086,28 @@ Notes
   unaffected), the scan sites of
   `~~numpyro_forecast.models.markov_series()`, the error sites of
   `~~numpyro_forecast.models.ssoe()`, observed sites and discrete sites.
-- Constrained supports. The rotation acts on the unconstrained value
+- Constrained supports. The rotation ``T`` acts on the unconstrained value
   ``u = biject_to(support).inv(x)`` of a targeted site ``x``, so the
-  auxiliary site holds the rotated ``u``. The potential energy in the
-  unconstrained space, which NUTS and the guides that work in that space
-  (``AutoNormal``, for example) use, is unchanged for every support. For a
-  site with real support, ``u`` is ``x`` and the constrained-space log
-  density is unchanged too. For a site with a constrained support, the
-  constrained-space log density of the wrapped model is that of the plain
-  model plus the log absolute Jacobian determinant of
-  ``biject_to(support)`` at ``u``: ``sum(log(x))`` for a ``LogNormal``
-  site and ``sum(log(x) + log(1 - x))`` for a ``Beta`` site. Values of
-  `numpyro.infer.util.log_density` and ``AutoDelta`` MAP estimates (the
-  mode in the coordinates of ``u``, not of ``x``) are therefore not
-  comparable with those of the plain model. To keep them comparable,
-  sample the innovation on the real line, for example
+  auxiliary site holds ``T(u)``. The potential energy in the unconstrained
+  space is the same function of the rotated coordinates for every support:
+  NUTS and the guides that work in that space (``AutoNormal``, for example)
+  target the same density, only in the rotated basis. A mean-field guide
+  such as ``AutoNormal`` is not rotation invariant, so its fit and its ELBO
+  can change; that is the point of the feature. For a site with real
+  support, ``u`` is ``x`` and the value of `numpyro.infer.util.log_density`
+  is unchanged too. For a site with a constrained support, the value of
+  `numpyro.infer.util.log_density` of the wrapped model at the auxiliary
+  value ``T(u)`` is the value of the plain model at ``x`` plus the log
+  absolute Jacobian determinant of ``biject_to(support)`` at ``u``:
+  ``sum(log(x))`` for a ``LogNormal`` site and
+  ``sum(log(x) + log(1 - x))`` for a ``Beta`` site. Values of
+  `numpyro.infer.util.log_density` and ``AutoDelta`` MAP estimates are
+  therefore not comparable with those of the plain model (NumPyro's
+  ``AutoDelta`` does MAP in constrained space, so the plain model's
+  estimate is the mode in ``x``; the wrapped model's auxiliary site is
+  real-valued, so its estimate is the mode in ``u``, which is what
+  ``AutoLaplaceApproximation`` gives for the plain model). To keep them
+  comparable, sample the innovation on the real line, for example
   ``innovations(h, "log_growth", dist.Normal(0.0, 0.5))``, and apply
   ``jnp.exp`` to it (to its cumulative sum for a multiplicative random
   walk). Pyro's ``time_reparam`` and NumPyro's ``UnitJacobianReparam``
