@@ -1162,7 +1162,7 @@ Literal(*args, **kwargs)
 Drawing posterior samples and generating forecasts and in-sample predictions.
 
 
-draw_posterior(rng_key: jax.Array, guide: numpyro.infer.autoguide.AutoGuide, params: dict[str, jax.Array], num_samples: int, *, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = None) -> dict[str, jax.Array | numpy.ndarray]
+draw_posterior(rng_key: jax.Array, guide: numpyro.infer.autoguide.AutoGuide, params: dict[str, jaxtyping.PyTree[jax.Array]], num_samples: int, *, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = None) -> dict[str, jax.Array | numpy.ndarray]
 
 Draw ``num_samples`` posterior samples of the latent sites from a fitted guide.
 
@@ -1185,7 +1185,11 @@ guide
     ``SVI``.
 params
     The learned variational parameters, e.g. the trained parameters from
-    ``svi.run``'s result.
+    ``svi.run``'s result. A value may be any pytree of arrays, not only
+    an array: the flow weights of ``AutoIAFNormal`` and ``AutoBNAFNormal``
+    are lists of per-layer tuples of arrays, with an empty tuple for each
+    parameter-free layer. ``params`` only reaches the guide's
+    ``sample_posterior``; ``device`` and ``batch_size`` act on the draws.
 num_samples
     Number of posterior draws.
 batch_size
@@ -1790,9 +1794,10 @@ metrics
     conversion of a ``jnp`` value, even one computed from shapes or
     constants (``int(jnp.ceil(p.shape[0] * 0.1))``), raises
     `VectorizedMetricError`; compute static values with Python or
-    ``math`` instead. A bool or integer metric result is cast to float, so
-    every entry of ``VectorizedBacktestResult.metrics`` has a floating
-    dtype.
+    ``math`` instead. A bool, integer, ``float8`` or ``float4`` metric
+    result is cast to float (a ``float6`` one keeps its dtype: XLA on CPU
+    cannot convert it), so every entry of
+    ``VectorizedBacktestResult.metrics`` has a floating dtype.
 keep_predictions
     If ``True``, retain the stacked forecast samples on the result.
 
@@ -1932,8 +1937,10 @@ metrics
 Returns
 -------
 dict[str, float]
-    Each metric name mapped to its value. A bool or integer metric result
-    is converted to ``float``, whatever the other metrics are.
+    Each metric name mapped to its value. A bool, integer, ``float8`` or
+    ``float4`` metric result is converted to ``float``, whatever the other
+    metrics are (a ``float6`` result keeps its dtype: XLA on CPU cannot
+    convert it).
 
 Raises
 ------

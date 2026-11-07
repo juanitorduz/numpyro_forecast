@@ -25,8 +25,8 @@ PRNG key.
 `guide: AutoGuide`  
 The fitted variational guide, e.g. the `AutoGuide` instance passed to `SVI`.
 
-`params: dict[str, Array]`  
-The learned variational parameters, e.g. the trained parameters from `svi.run`'s result.
+`params: dict[str, PyTree[Array]]`  
+The learned variational parameters, e.g. the trained parameters from `svi.run`'s result. A value may be any pytree of arrays, not only an array: the flow weights of `AutoIAFNormal` and `AutoBNAFNormal` are lists of per-layer tuples of arrays, with an empty tuple for each parameter-free layer. `params` only reaches the guide's `sample_posterior`; `device` and `batch_size` act on the draws.
 
 `num_samples: int`  
 Number of posterior draws.
