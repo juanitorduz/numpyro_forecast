@@ -256,35 +256,21 @@ def eval_crps(
     )
 
 
-def _coverage_cells(pred: Array, truth: Array, alpha: float) -> tuple[Array, Array]:
-    """Per-cell masks of the truth inside the central ``alpha`` interval and of a NaN cell.
+@partial(jax.jit, static_argnames=("alpha",))
+def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
+    """Per-cell coverage indicator: 1.0 inside the central ``alpha`` interval, else 0.0.
 
-    A cell is NaN when ``truth`` is NaN or a draw of the cell is NaN (which
-    makes its quantiles NaN).
+    The indicator is NaN where ``truth`` is NaN or a draw of the cell is NaN
+    (which makes its quantiles NaN). float32 holds 0, 1 and NaN exactly, and
+    its mean equals the mean of the boolean indicator, also with x64 on.
+    `eval_coverage()` averages the chunked path in float64 on the host, so the
+    count stays exact beyond the 2**24 cells a float32 sum can count.
     """
     tail = (1.0 - alpha) / 2.0
     lo = jnp.quantile(pred, tail, axis=0)
     hi = jnp.quantile(pred, 1.0 - tail, axis=0)
-    inside = (truth >= lo) & (truth <= hi)
-    return inside, jnp.isnan(truth) | jnp.isnan(lo) | jnp.isnan(hi)
-
-
-@partial(jax.jit, static_argnames=("alpha",))
-def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
-    """Per-cell coverage indicator for the chunked path: 1.0, 0.0, or NaN for a NaN cell.
-
-    `eval_coverage()` averages it in float64 on the host, so the count is exact
-    whatever the dtype of the indicator.
-    """
-    inside, nan_cell = _coverage_cells(pred, truth, alpha)
-    return jnp.where(nan_cell, jnp.nan, inside.astype(jnp.result_type(float)))
-
-
-@partial(jax.jit, static_argnames=("alpha",))
-def _eval_coverage_single_pass(pred: Array, truth: Array, *, alpha: float) -> Array:
-    """Whole-panel coverage: the mean of the boolean indicator, or NaN if any cell is NaN."""
-    inside, nan_cell = _coverage_cells(pred, truth, alpha)
-    return jnp.where(nan_cell.any(), jnp.nan, inside.mean())
+    inside = ((truth >= lo) & (truth <= hi)).astype(jnp.float32)
+    return jnp.where(jnp.isnan(truth) | jnp.isnan(lo) | jnp.isnan(hi), jnp.nan, inside)
 
 
 def eval_coverage(
@@ -342,10 +328,8 @@ def eval_coverage(
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
     if batch_size is None or batch_size >= np.size(truth):
-        return _eval_coverage_single_pass(float_view(pred), float_view(truth), alpha=alpha)
+        return _coverage_indicator(float_view(pred), float_view(truth), alpha=alpha).mean()
     kernel = partial(_coverage_indicator, alpha=alpha)
-    # The indicators are 0.0 and 1.0 in the default float dtype; a float64 sum
-    # counts them exactly beyond the 2**24 cells a float32 sum can count.
     return _chunked_cell_metric(
         kernel,
         cast("Array | np.ndarray", pred),
@@ -370,11 +354,12 @@ DEFAULT_METRICS: dict[str, Metric] = {
 a forecast draw is NaN, for example a missing observation in the test window.
 So with these metrics a window with a NaN gets NaN for every metric, and
 dropping the NaN rows of a backtest table drops that whole window. To score a
-series with gaps, drop the missing cells before scoring, for example
-``pred[:, mask]`` and ``truth[mask]`` with ``mask = ~jnp.isnan(truth)``
-(in `backtest()`, inside its ``transform``). The rule covers NaN only: an
-infinite truth value or draw gives a finite, infinite or NaN score depending on
-the metric.
+test window with missing observations, drop the missing cells before scoring,
+for example ``pred[:, mask]`` and ``truth[mask]`` with
+``mask = ~jnp.isnan(truth)``. This covers scoring only: in a backtest the
+model itself must handle a gap that falls in a later training window. The rule
+covers NaN only: an infinite truth value or draw gives a finite, infinite or
+NaN score depending on the metric.
 """
 
 

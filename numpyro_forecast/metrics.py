@@ -169,8 +169,7 @@ def _eval_interval_score(
     penalty = 2.0 / (1.0 - alpha)
     # A comparison with NaN is False, so a NaN truth or quantile takes the
     # penalty branch and the NaN reaches the mean. A multiply by the mask
-    # (truth < lo) compiles to a select that sets a NaN cell to zero, and
-    # jnp.maximum(lo - truth, 0.0) can change the last bit of a finite mean.
+    # (truth < lo) compiles to a select that sets a NaN cell to zero.
     below = jnp.where(truth >= lo, 0.0, penalty * (lo - truth))
     above = jnp.where(truth <= hi, 0.0, penalty * (truth - hi))
     return (hi - lo + below + above).mean()
