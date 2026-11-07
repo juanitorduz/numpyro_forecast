@@ -1,23 +1,29 @@
 """Behavioral tests for `~~numpyro_forecast.reparam.time_reparam()`.
 
 Grouped by contract: which sites are targeted and what shapes they get, that the
-change of coordinates is exact (transform identity, unit Jacobian), that the
-drivers consume the auxiliary site, and that the reparameterized model runs end
-to end under SVI and NUTS.
+change of coordinates is exact (transform identity, unit Jacobian in the
+unconstrained space, and the value of ``log_density`` of the wrapped model at
+the auxiliary value ``T(u)`` equal to the plain value at ``x`` plus the
+log-Jacobian of ``biject_to(support)`` at ``u``), that the drivers consume the
+auxiliary site, and that the reparameterized model runs end to end under SVI
+and NUTS.
 """
 
 from collections.abc import Callable
+from typing import NamedTuple
 
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
 from jax import random
+from numpyro.distributions import biject_to
 from numpyro.distributions.transforms import DiscreteCosineTransform, HaarTransform, Transform
 from numpyro.handlers import scope, seed
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
-from numpyro.infer.util import log_density
+from numpyro.infer.util import log_density, potential_energy
 from numpyro.optim import Adam
 
 from numpyro_forecast import draw_posterior, forecast, predict_in_sample, time_reparam
@@ -373,7 +379,13 @@ def test_auxiliary_is_the_transform_of_the_site_along_time(transform: TimeTransf
 
 @pytest.mark.parametrize("transform", ["haar", "dct"])
 def test_log_density_is_unchanged(transform: TimeTransform) -> None:
-    """Unit Jacobian: the wrapped model evaluated at ``aux`` equals the original at ``drift``."""
+    """Unit Jacobian on a real site: the wrapped model at ``aux`` equals the original at ``drift``.
+
+    ``drift`` has real support, so its unconstrained value is the value itself.
+    The positive ``drift_scale`` and ``sigma`` are outside the time plate and are
+    not targeted, so they add nothing. Constrained sites are covered by
+    ``test_log_density_gains_the_support_log_jacobian``.
+    """
     wrapped, data, covariates = _split(time_reparam(rw_model, transform))
     train = covariates[:T_OBS]
     tr = get_trace(wrapped, train, data)
@@ -389,6 +401,120 @@ def test_log_density_is_unchanged(transform: TimeTransform) -> None:
         rw_model, (train, data), {}, {**scalars, "drift": tr["drift"]["value"]}
     )
     assert jnp.allclose(wrapped_ld, plain_ld, rtol=1e-6)
+
+
+class _SupportCase(NamedTuple):
+    """An innovation prior and the closed-form log-Jacobian of its ``biject_to`` at ``x``."""
+
+    prior: dist.Distribution
+    log_jacobian: Callable[[Array], Array]
+
+
+_SUPPORT_CASES: dict[str, _SupportCase] = {
+    "real": _SupportCase(dist.Normal(0.0, 0.5), lambda x: jnp.zeros(())),
+    "positive": _SupportCase(dist.LogNormal(0.0, 0.5), lambda x: jnp.log(x).sum()),
+    "unit-interval": _SupportCase(
+        dist.Beta(2.0, 3.0), lambda x: (jnp.log(x) + jnp.log1p(-x)).sum()
+    ),
+    "interval": _SupportCase(
+        dist.Uniform(-1.0, 3.0),
+        lambda x: (jnp.log(x + 1.0) + jnp.log(3.0 - x) - jnp.log(4.0)).sum(),
+    ),
+}
+"""Real, positive and bounded supports: ``exp`` gives ``log(x)``, the (scaled) sigmoid
+``log((x - a)(b - x) / (b - a))``. The formulas are written by hand so a package transform
+that rotates the constrained value, or drops ``biject_to(...).inv``, cannot cancel against
+the expectation; they pin NumPyro's current bijectors (``exp``, ``sigmoid``, ``sigmoid``
+then affine), so a change of ``biject_to`` upstream fails them even if the contract still
+holds. `test_log_density_gains_the_support_log_jacobian()` therefore also compares the gap
+with the contract-level value ``biject_to(support).log_abs_det_jacobian(u, x)``."""
+
+NUM_POINTS = 8
+
+
+def _step_model(prior: dist.Distribution) -> ForecastModel:
+    """One in-sample time latent ``step`` with ``prior``, observed through its cumulative sum."""
+
+    def body(h: Horizon, covariates: Array) -> None:
+        step = innovations(h, "step", prior)
+        predict(h, dist.Normal(0.0, 1.0), jnp.cumsum(step, axis=-2))
+
+    return as_model(body)
+
+
+def _step_model_args() -> tuple[Array, Array]:
+    """In-sample ``(covariates, data)`` for `_step_model()`: no horizon, so no prior draws."""
+    return empty_covariates(T_OBS), jnp.zeros((T_OBS, 1))
+
+
+def _unconstrained_points() -> Array:
+    """``NUM_POINTS`` unconstrained values of ``step``, small enough to keep off the bounds."""
+    return 0.5 * random.normal(random.PRNGKey(3), (NUM_POINTS, T_OBS, 1))
+
+
+@pytest.mark.parametrize("support", _SUPPORT_CASES.values(), ids=_SUPPORT_CASES.keys())
+@pytest.mark.parametrize("transform", ["haar", "dct"])
+def test_potential_energy_is_unchanged_for_every_support(
+    transform: TimeTransform, support: _SupportCase
+) -> None:
+    """Unit Jacobian in the unconstrained space: NUTS and ``AutoNormal`` see the same target.
+
+    The plain model at the unconstrained value ``u`` and the wrapped model at its
+    rotation ``T(u)`` have the same potential energy for every support. One
+    jitted ``vmap`` checks a batch of points.
+    """
+    plain = _step_model(support.prior)
+    wrapped = time_reparam(plain, transform)
+    args = _step_model_args()
+    rotate = TRANSFORMS[transform]
+
+    @jax.jit
+    @jax.vmap
+    def energies(u: Array) -> tuple[Array, Array]:
+        plain_pe = potential_energy(plain, args, {}, {"step": u})
+        wrapped_pe = potential_energy(wrapped, args, {}, {f"step_{transform}": rotate(u)})
+        return plain_pe, wrapped_pe
+
+    plain_pe, wrapped_pe = energies(_unconstrained_points())
+    assert jnp.allclose(wrapped_pe, plain_pe, rtol=1e-5, atol=1e-4)
+
+
+@pytest.mark.parametrize("support", _SUPPORT_CASES.values(), ids=_SUPPORT_CASES.keys())
+@pytest.mark.parametrize("transform", ["haar", "dct"])
+def test_log_density_gains_the_support_log_jacobian(
+    transform: TimeTransform, support: _SupportCase
+) -> None:
+    """The wrapped ``log_density`` is the plain one plus the log-Jacobian of ``biject_to`` (#206).
+
+    The auxiliary site holds the rotated unconstrained value ``T(u)``, so the
+    value of ``log_density`` of the wrapped model there is the plain value at
+    ``x`` plus the log absolute Jacobian determinant of ``biject_to(support)``
+    at ``u``: zero for a real site, ``sum(log(x))`` for a ``LogNormal`` site,
+    and the sigmoid terms for a bounded site. That is why ``log_density``
+    values and ``AutoDelta`` MAP estimates of a constrained site are not
+    comparable between the plain and the wrapped model. The gap is checked
+    against both the closed form and NumPyro's own ``log_abs_det_jacobian``, so
+    a change of bijector upstream is told apart from a package regression. One
+    jitted ``vmap`` checks a batch of points.
+    """
+    plain = _step_model(support.prior)
+    wrapped = time_reparam(plain, transform)
+    args = _step_model_args()
+    rotate = TRANSFORMS[transform]
+    to_support = biject_to(support.prior.support)
+
+    @jax.jit
+    @jax.vmap
+    def gap_and_expected(u: Array) -> tuple[Array, Array, Array]:
+        x = jnp.asarray(to_support(u))
+        plain_ld, _ = log_density(plain, args, {}, {"step": x})
+        wrapped_ld, _ = log_density(wrapped, args, {}, {f"step_{transform}": rotate(u)})
+        contract = jnp.asarray(to_support.log_abs_det_jacobian(u, x)).sum()
+        return wrapped_ld - plain_ld, support.log_jacobian(x), contract
+
+    gap, expected, contract = gap_and_expected(_unconstrained_points())
+    assert jnp.allclose(gap, expected, rtol=1e-5, atol=1e-4)
+    assert jnp.allclose(gap, contract, rtol=1e-5, atol=1e-4)
 
 
 def test_predictive_reads_the_auxiliary_and_ignores_a_stale_deterministic() -> None:
