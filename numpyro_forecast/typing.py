@@ -56,6 +56,22 @@ annotations reject a mismatched array first and raise
 ``jaxtyping.TypeCheckError``. A Python or NumPy scalar ``truth`` passes the
 annotations, so the explicit check raises ``ValueError`` for it. Either way a
 mismatched ``truth`` never broadcasts into a wrong value.
+
+``pred`` and ``truth`` may have any real dtype. A count model (a discrete
+observation family in `~~numpyro_forecast.models.predict()`) needs integer
+data, so its forecast draws are integers. The built-in metrics cast an integer
+operand to the default float dtype (``float32``, or ``float64`` with x64
+enabled) before they compute, and keep a floating operand in its own dtype.
+``float32`` holds every integer up to $2^{24}$ exactly; larger counts round
+unless x64 is enabled.
+`~~numpyro_forecast.evaluate.evaluate_forecast()` (and with it
+`~~numpyro_forecast.evaluate.backtest()`) and
+`~~numpyro_forecast.evaluate.backtest_vectorized()` cast once before they
+call the metrics, so every metric receives floating arrays and can compute
+``jnp.abs(pred - truth)`` without integer wraparound; a custom metric that
+needs the integer draws must read them from the kept predictions
+(``keep_predictions=True``) or cast back inside the metric. The built-in
+metrics reject boolean and complex arrays.
 """
 
 

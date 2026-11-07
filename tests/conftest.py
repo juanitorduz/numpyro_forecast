@@ -241,6 +241,24 @@ def rw_model_factory() -> ForecastModel:
     return model
 
 
+def poisson_model(covariates: Array, data: Array | None = None) -> None:
+    """A constant-rate Poisson count model (shared by the count-metric tests, #163).
+
+    ``predict()`` requires integer ``data`` for a discrete observation family,
+    so the ``forecast`` and in-sample draws of this model are integers.
+    """
+    h = Horizon.from_data(covariates, data)
+    log_rate = jnp.asarray(numpyro.sample("log_rate", dist.Normal(1.0, 1.0)))
+    prediction = jnp.full((h.duration, 1), log_rate)
+    predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), prediction)
+
+
+def poisson_counts(duration: int, rate: float = 3.0) -> tuple[Array, Array]:
+    """Integer Poisson counts shaped ``(duration, 1)`` and empty covariates."""
+    counts = random.poisson(random.PRNGKey(0), rate, (duration, 1)).astype(jnp.int32)
+    return counts, jnp.zeros((duration, 0))
+
+
 def as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
     """Wrap a ``(Horizon, covariates)`` body as a plain ``(covariates, data=None)`` model."""
 
