@@ -396,7 +396,7 @@ def test_single_svi_compilation(
     first to prime those caches; only the *counted* calls below measure this
     call's own (repeat) compilation behavior, which is what I3 actually claims.
     """
-    duration = TRAIN + TEST + 9  # exactly 10 windows at stride 1
+    duration = TRAIN + TEST + 9
     data, cov = _series(duration)
     model = rw_model
 
@@ -415,23 +415,15 @@ def test_single_svi_compilation(
         )
         jax.block_until_ready(result.losses)
 
-    # Untracked warm-up: absorbs the cold-process, order-dependent compilation
-    # cost described above so the counted calls below isolate the invariant.
     run()
 
     with count_compilations() as tally:
         run()
     first = int(tally.count)
-    # Warmed, a repeat call with identical shapes measured a stable 3 backend
-    # compiles across repeated fresh-process runs (the fresh AutoNormal instance
-    # of each call is traced and compiled again, plus a couple of residual
-    # traces); this is a generous margin above that, and nowhere near
-    # the 75-132+ a cold process pays.
     assert first < 10
 
     with count_compilations() as tally:
         run()
-    # A further identical call should not compile more than the previous one.
     assert tally.count <= max(first, 1)
 
 
@@ -629,7 +621,6 @@ def test_result_schema_and_dataframe_row_shape() -> None:
         num_samples=15,
     )
     num_windows = result.t0.shape[0]
-    # Every per-window field has a leading window axis.
     assert result.t0.shape == (num_windows,)
     assert result.t1.shape == (num_windows,)
     assert result.t2.shape == (num_windows,)
@@ -639,9 +630,8 @@ def test_result_schema_and_dataframe_row_shape() -> None:
     df = results_to_dataframe(result)
     assert len(df) == num_windows
     metric_cols = [c for c in df.columns if c.startswith("metric_")]
-    assert metric_cols  # at least one metric column
+    assert metric_cols
     assert {"t0", "t1", "t2", "num_samples"}.issubset(df.columns)
-    # A vectorized run has no per-window walltimes or train_metrics.
     assert not any(c.startswith("train_metric_") or c.startswith("param_") for c in df.columns)
     assert "walltime" not in df.columns
 
@@ -686,12 +676,9 @@ def test_custom_coverage_alpha_stays_vectorized() -> None:
         metrics=metrics_50,
         keep_predictions=True,
     )
-    # Same key, same fits: everything but the coverage level is identical.
     for name in ("mae", "rmse", "crps"):
         assert jnp.array_equal(vec_50.metrics[name], vec_default.metrics[name])
-    # Central quantile intervals are nested, so coverage is monotone in alpha.
     assert bool(jnp.all(vec_50.metrics["coverage"] <= vec_default.metrics["coverage"]))
-    # The vectorized values match scoring each window's kept predictions directly.
     assert vec_50.predictions is not None
     for i in range(int(vec_50.t0.shape[0])):
         t1, t2 = int(vec_50.t1[i]), int(vec_50.t2[i])
@@ -778,9 +765,6 @@ def test_host_metric_raises_actionable_error(host_mae: Callable[[Array, Array], 
             num_samples=10,
             metrics={"host_mae": host_mae},
         )
-
-
-# --- Metric result contract (issue #194) -----------------------------------------------
 
 
 def _count_inside(pred: Array, truth: Array) -> Array:

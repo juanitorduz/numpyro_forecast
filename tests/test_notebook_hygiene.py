@@ -25,21 +25,14 @@ from notebook_cells import NOTEBOOKS, Cell, read_cells, source, stderr
 
 REPO = Path(__file__).resolve().parent.parent
 SITE = "https://juanitorduz.github.io/numpyro_forecast/"
-# Warnings that describe the author's environment, not the example.
 ENVIRONMENT_WARNINGS = (
     "PyMC not installed",
     "When multiple credible intervals are plotted",
 )
-# A relative link from an example page to another example or to a reference page. Reference
-# anchors contain dots (``#numpyro_forecast.models.ssoe``).
 RELATIVE_LINK = re.compile(r"\]\((?!https?://)(?P<path>[\w./]+\.html)(?:#[^)\s]*)?\)")
 NOTEBOOK_IDS = [path.stem for path in NOTEBOOKS]
-# IPython magics (``%load_ext``, ``%%time``) and shell escapes (``!pip``) are not Python. The
-# magic name follows the sigil directly, so a wrapped ``% 24`` operator line does not match.
 MAGIC_LINE = re.compile(r"^(?P<indent>\s*)[%!]{1,2}[A-Za-z_]")
-# A flag-less ``%time``/``%timeit`` line magic runs its statement, so the statement is kept.
 TIME_MAGIC_LINE = re.compile(r"^(?P<indent>\s*)%time(?:it)?\s+(?P<stmt>[^-\s].*)$")
-# A cell that calls ``maxent`` must parse, so the mass check cannot skip it.
 MAXENT_CALL = re.compile(r"\bmaxent\s*\(")
 
 
