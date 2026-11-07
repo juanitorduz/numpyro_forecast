@@ -316,7 +316,7 @@ simple exponential smoothing of the demand indicator, updated **only when the pr
 
 # Prior for the smoothing parameters
 
-Both smoothing parameters get a \text{Beta}(1.5, 3) prior. This is a weakly informative choice. Its mode is 0.2, inside the range \[0.1, 0.3\] that classical practice uses for smoothing parameters, and its mean is 1/3. The density stays clearly positive from 0 up to about 0.8, so a series whose data call for a very stiff level (near 0) or a reactive one (up to about 0.8) can reach it without fighting the prior. Contrast this with the blog post's \text{Beta}(10, 40), which pins the parameter to a narrow band around 0.2; with 1{,}000 series each contributing its own posterior, there is no reason to constrain them that tightly a priori, and we let the data decide instead.
+Both smoothing parameters get a \text{Beta}(1.5, 3) prior. This is a weakly informative choice. Its mode is 0.2, inside the range \[0.1, 0.3\] that classical practice uses for smoothing parameters, and its mean is 1/3. The density stays clearly positive across most of the unit interval, so a series whose data call for a very stiff level (near 0) or a reactive one can reach it without fighting the prior. Contrast this with the blog post's \text{Beta}(10, 40), which pins the parameter to a narrow band around 0.2; with 1{,}000 series each contributing its own posterior, there is no reason to constrain them that tightly a priori, and we let the data decide instead.
 
 
 ``` python
@@ -679,8 +679,8 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 
     mean ELBO loss over the last 100 steps: 56,657
-    CPU times: user 12.4 s, sys: 10.8 s, total: 23.1 s
-    Wall time: 7.6 s
+    CPU times: user 13.9 s, sys: 10.7 s, total: 24.6 s
+    Wall time: 8.85 s
 
 
 <figure class="figure">
@@ -1284,7 +1284,7 @@ Group: /
 │           z_noise            (chain, draw, z_noise_dim_0) float32 4MB 2.114 ... 1.463
 │           z_smoothing        (chain, draw, z_smoothing_dim_0) float32 4MB 0.1354 .....
 │       Attributes:
-│           created_at:                 2026-11-07T19:15:02.500995+00:00
+│           created_at:                 2026-11-07T19:30:36.806427+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1299,7 +1299,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 200MB -2.411 2.176 ... 3.494
 │       Attributes:
-│           created_at:                 2026-11-07T19:15:03.105286+00:00
+│           created_at:                 2026-11-07T19:30:37.410857+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1312,7 +1312,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 200kB 1.0 1.0 2.0 3.0 ... 2.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-11-07T19:15:03.105539+00:00
+│           created_at:                 2026-11-07T19:30:37.411147+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1326,7 +1326,7 @@ Group: /
 │       Data variables:
 │           covariates  (covariate, time, obs_dim) float32 400kB 1.0 1.0 2.0 ... 1.0 0.0
 │       Attributes:
-│           created_at:                 2026-11-07T19:15:03.105845+00:00
+│           created_at:                 2026-11-07T19:30:37.411452+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1341,7 +1341,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 40MB -0.0 1.284 ... -0.0 0.0
 │       Attributes:
-│           created_at:                 2026-11-07T19:15:03.497722+00:00
+│           created_at:                 2026-11-07T19:30:37.743313+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1355,7 +1355,7 @@ Group: /
         Data variables:
             covariates  (covariate, time, obs_dim) float32 80kB 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-11-07T19:15:03.498105+00:00
+            created_at:                 2026-11-07T19:30:37.743670+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1711,7 +1711,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:15:02.500995+00:00
+2026-11-07T19:30:36.806427+00:00
 
 creation_library :  
 ArviZ
@@ -1847,7 +1847,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:15:03.105286+00:00
+2026-11-07T19:30:37.410857+00:00
 
 creation_library :  
 ArviZ
@@ -1941,7 +1941,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:15:03.105539+00:00
+2026-11-07T19:30:37.411147+00:00
 
 creation_library :  
 ArviZ
@@ -2056,7 +2056,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:15:03.105845+00:00
+2026-11-07T19:30:37.411452+00:00
 
 creation_library :  
 ArviZ
@@ -2192,7 +2192,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:15:03.497722+00:00
+2026-11-07T19:30:37.743313+00:00
 
 creation_library :  
 ArviZ
@@ -2307,7 +2307,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:15:03.498105+00:00
+2026-11-07T19:30:37.743670+00:00
 
 creation_library :  
 ArviZ
@@ -2589,20 +2589,26 @@ fig, (ax_cov, ax_crps) = plt.subplots(
 )
 x = np.arange(len(nominal_levels))
 width = 0.35
-for k, (view, color) in enumerate(zip(views, ["C0", "C1"], strict=True)):
-    bars = ax_cov.bar(x + (k - 0.5) * width, coverage[view], width, color=color, label=view)
+
+# coverage and CRPS bars, one color per view
+for offset, (view, color) in enumerate(zip(views, ["C0", "C1"], strict=True)):
+    bars = ax_cov.bar(x + (offset - 0.5) * width, coverage[view], width, color=color, label=view)
     ax_cov.bar_label(bars, fmt="{:.1%}", fontsize=11, padding=8)
     crps_bar = ax_crps.bar(view, crps[view], color=color)
     ax_crps.bar_label(crps_bar, fmt="{:.4f}", fontsize=11)
-for k, level in enumerate(nominal_levels):
+
+# nominal coverage levels as reference lines
+for position, level in enumerate(nominal_levels):
     ax_cov.hlines(
         level,
-        k - width * 1.2,
-        k + width * 1.2,
+        position - width * 1.2,
+        position + width * 1.2,
         color="black",
         ls="--",
-        label="nominal level" if k == 0 else None,
+        label="nominal level" if position == 0 else None,
     )
+
+# axes labels and titles
 ax_cov.set(
     xticks=x,
     xticklabels=[f"{level:.0%} interval" for level in nominal_levels],
@@ -2611,6 +2617,8 @@ ax_cov.set(
     title="Central-interval coverage",
 )
 ax_crps.set(ylabel="CRPS", title="Test CRPS")
+
+# shared legend below the panels
 fig.legend(*ax_cov.get_legend_handles_labels(), loc="outside lower center", ncol=3)
 fig.suptitle(
     f"Realized-availability forecast scores ({off_shelf_share:.1%} of test cells off the shelf)",
@@ -2625,7 +2633,7 @@ fig.suptitle(
 </figure>
 
 
-In the figure, on the on-shelf cells the forecast is close to nominal at the 50\\ level and slightly wide at the 94\\ level:
+On the on-shelf cells, the forecast is close to nominal at the 50\\ level and slightly wide at the 94\\ level:
 
 - On-shelf cells: 50\\ coverage 49.3\\, 94\\ coverage 95.9\\, CRPS 0.9122.
 - All cells: 50\\ coverage 69.6\\, 94\\ coverage 97.5\\, CRPS 0.5467.
