@@ -438,7 +438,16 @@ def test_forecast_rejects_a_multivariate_normal_across_series(form: str, series:
 
 
 class _CrossSeriesMVN(dist.MultivariateNormal):
-    """An MVN across the series with its own time-axis surgery along batch axis ``-1``."""
+    """An MVN across the series with its own surgery, time at batch axis ``-1``.
+
+    It registers all three dispatchers, as `tests/test_consistency.py` requires
+    of every correlated family.
+    """
+
+
+@shift_loc.register
+def _(noise_dist: _CrossSeriesMVN, loc: Array) -> dist.Distribution:
+    return _CrossSeriesMVN(noise_dist.loc + loc, scale_tril=noise_dist.scale_tril)
 
 
 @slice_time.register
