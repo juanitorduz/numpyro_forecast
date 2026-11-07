@@ -5,11 +5,14 @@ import subprocess
 import sys
 import warnings
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from unittest import mock
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro
+import numpyro.distributions as dist
 import pytest
 from conftest import (
     assert_host_resident,
@@ -22,35 +25,38 @@ from conftest import (
     svi_guide_params,
 )
 from jax import random
-from numpyro.infer import MCMC, NUTS
+from jax.typing import ArrayLike
+from numpyro.infer import MCMC, NUTS, Predictive
 from numpyro.infer.autoguide import AutoNormal
+from numpyro.infer.reparam import LocScaleReparam
 
 import numpyro_forecast
-from numpyro_forecast._offload import (
-    _WARNING_SKIP_PREFIXES,
-    _device_view,
-    _draw_chunked,
+from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
+from numpyro_forecast.models import Horizon, innovations, predict
+from numpyro_forecast.offload import (
+    WARNING_SKIP_PREFIXES,
     _host_memory_kind,
     _host_sharding,
     _is_cpu_committed,
     _is_host_resident,
-    _leaf_view,
     _memory_budget_line,
-    _oom_advice,
-    _resolve_device,
-    _stitch_chunks,
-    _transfer,
+    chunk_indices,
+    device_view,
+    draw_chunked,
+    leaf_view,
+    oom_advice,
+    resolve_device,
+    stitch_chunks,
+    transfer,
 )
-from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
 from numpyro_forecast.predictive import (
-    _chunk_indices,
     _chunked_draws,
-    _predict,
     _sample_axis_size,
     draw_posterior,
     forecast,
     predict_in_sample,
 )
+from numpyro_forecast.reparam import time_reparam
 from numpyro_forecast.typing import Array, ForecastModel
 
 
@@ -106,8 +112,6 @@ def test_forecast_parallel_matches_serial() -> None:
 
 
 def test_forecast_parallel_matches_serial_batched() -> None:
-    # With batch_size fixed, only the within-chunk mapping changes (vmap vs
-    # lax.map), so the chunked-vmap path must match the chunked-serial path.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     kwargs = {"batch_size": 3}
@@ -125,6 +129,194 @@ def test_forecast_rejects_covariates_not_longer() -> None:
     post = draw_posterior(random.PRNGKey(2), guide, params, 5)
     with pytest.raises(ValueError, match="covariates must extend beyond data"):
         forecast(random.PRNGKey(3), model, post, data, empty_covariates(30))
+
+
+def test_forecast_rejects_covariates_without_time_axis() -> None:
+    post = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(
+        ValueError, match=r"covariates must have time at axis -2.*got shape \(8,\)"
+    ):
+        forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((6, 1)), jnp.arange(8.0))
+
+
+def test_forecast_rejects_data_without_observations() -> None:
+    """A cold-start series with no observations names the cause, not the empty plate."""
+    post = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 0, 1))}
+    with pytest.raises(ValueError, match="data has no observed time steps"):
+        forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((0, 1)), empty_covariates(8))
+
+
+@pytest.mark.parametrize("level", [jnp.array(0.0), 0.0])
+def test_forecast_rejects_posterior_leaf_without_sample_axis(level: ArrayLike) -> None:
+    post = {"level": level, "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(ValueError, match=r"posterior sites \['level'\] have no sample axis"):
+        forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((6, 1)), empty_covariates(8))
+
+
+def _handwritten_rw_model(covariates: Array, data: Array | None = None) -> None:
+    """A random walk that registers its own ``"obs"`` and ``"forecast"`` sites, no `predict()`."""
+    h = Horizon.from_data(covariates, data)
+    level = jnp.cumsum(innovations(h, "drift", dist.Normal(0.0, 0.1)), axis=-2)
+    numpyro.sample("obs", dist.Normal(level[..., : h.t_obs, :], 0.1), obs=data)
+    if h.future > 0:
+        numpyro.deterministic("forecast", level[..., h.t_obs :, :])
+
+
+@pytest.mark.parametrize(
+    ("driver", "model", "posterior", "match"),
+    [
+        pytest.param(
+            "forecast",
+            rw_model,
+            {"drift": jnp.zeros((4, 3, 1))},
+            r"site 'drift' to have 5 time steps at axis -2 \(the size of the 'time' plate\), "
+            r"but its value has shape \(3, 1\)\. The usual cause is a posterior drawn for a "
+            r"different training length",
+            id="short-posterior",
+        ),
+        pytest.param(
+            "predict_in_sample",
+            _handwritten_rw_model,
+            {"drift": jnp.zeros((4, 7, 1))},
+            r"site 'drift' to have 5 time steps .* has shape \(7, 1\)",
+            id="long-posterior-hidden-by-sliced-obs",
+        ),
+        pytest.param(
+            "forecast",
+            time_reparam(rw_model, "haar"),
+            {"drift_haar": jnp.zeros((4, 7, 1))},
+            r"site 'drift' to have 5 time steps .* has shape \(7, 1\)",
+            id="time-reparam",
+        ),
+        pytest.param(
+            "predict_in_sample",
+            rw_model,
+            {"drift": jnp.zeros((4, 5))},
+            r"the value of site 'drift' to have at least 2 axes, with time at axis -2 .* "
+            r"has shape \(5,\)\. A univariate series keeps a size-1 observation axis",
+            id="squeezed-posterior-leaf",
+        ),
+    ],
+)
+def test_innovations_rejects_posterior_fit_on_another_window(
+    driver: str, model: ForecastModel, posterior: Mapping[str, Array], match: str
+) -> None:
+    """Issue #168: a posterior value of another length raises at the `innovations()` site.
+
+    NumPyro substitutes the value without checking it against the time plate,
+    so a posterior fit on a shorter window used to shorten the forecast, and a
+    longer one went unnoticed by `predict_in_sample()` when the model sliced
+    its own ``"obs"`` site to the covariates.
+    """
+    with pytest.raises(ValueError, match=rf"^innovations expects {match}"):
+        _run_driver(driver, model, posterior, None)
+
+
+def test_innovations_rejects_a_horizon_value_of_another_length() -> None:
+    """A plain ``Predictive`` call reaches the check of a substituted ``_future`` value.
+
+    The drivers reject a posterior that holds a horizon site before the model
+    runs (issue #161), so only a direct NumPyro call gets this far.
+    """
+    posterior = {"drift": jnp.zeros((4, 5, 1)), "drift_future": jnp.zeros((4, 6, 1))}
+    predictive = Predictive(rw_model, posterior_samples=posterior)
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^innovations expects site 'drift_future' to have 3 time steps .* 'time_future' "
+            r"plate.* has shape \(6, 1\)\. The usual cause is a posterior that holds the "
+            r"forecast-horizon site"
+        ),
+    ):
+        predictive(random.PRNGKey(0), empty_covariates(8), jnp.zeros((5, 1)))
+
+
+def _plate_rw_model(covariates: Array, data: Array | None = None) -> None:
+    """A random walk whose time latents are plain plate sites, not `innovations()` sites."""
+    h = Horizon.from_data(covariates, data)
+    with numpyro.plate("steps", h.t_obs, dim=-2):
+        drift = jnp.asarray(numpyro.sample("drift", dist.Normal(0.0, 0.1)))
+    if h.future > 0:
+        with numpyro.plate("steps_future", h.future, dim=-2):
+            drift_future = jnp.asarray(numpyro.sample("drift_future", dist.Normal(0.0, 0.1)))
+        drift = jnp.concatenate([drift, drift_future], axis=-2)
+    predict(h, dist.Normal(0.0, 0.1), jnp.cumsum(drift, axis=-2))
+
+
+@pytest.mark.parametrize(
+    ("posterior_rows", "batch_size"),
+    [(3, None), (7, 3)],
+    ids=["short-posterior", "long-posterior-chunked"],
+)
+def test_forecast_rejects_draws_of_another_length(
+    posterior_rows: int, batch_size: int | None
+) -> None:
+    """Issue #168: forecast draws must have one step per covariate row past ``data``.
+
+    A time latent outside `innovations()` takes the posterior's length, so a
+    posterior fit on 3 (or 7) steps used to return 1 (or 5) forecast steps
+    for 5 observed steps and a 3-step horizon, without an error.
+    """
+    posterior = {"drift": jnp.zeros((4, posterior_rows, 1))}
+    got = posterior_rows + 3 - 5
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^forecast expects the model's 'forecast' site to have 3 time steps at axis -2 "
+            r"\(covariates\.shape\[-2\] - data\.shape\[-2\]\), but it has shape "
+            rf"\({got}, 1\) per draw\. .*they must have 5 rows"
+        ),
+    ):
+        _run_driver("forecast", _plate_rw_model, posterior, batch_size)
+
+
+def test_forecast_names_a_posterior_shorter_than_the_observed_data() -> None:
+    """A posterior too short to cover ``data`` fails in `predict()`, which names the cause.
+
+    A time latent outside `innovations()` takes the posterior's length: a
+    posterior fit on 1 step gives a 4-row predictor (1 step plus the 3-step
+    horizon) for 5 observed steps. That distribution does not broadcast against
+    the data, so `predict()` raises before `forecast()` checks the draws, and
+    its message must name the posterior, as the driver message of issue #168
+    does.
+    """
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^predict expects .*A posterior drawn for a different training length also causes "
+            r"this when its time latents are not innovations\(\) sites: they must have 5 rows"
+        ),
+    ):
+        _run_driver("forecast", _plate_rw_model, {"drift": jnp.zeros((4, 1, 1))}, None)
+
+
+def test_predict_in_sample_rejects_draws_of_another_length() -> None:
+    """Issue #168: the ``obs`` draws must span the covariates, not the posterior's rows."""
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^predict_in_sample expects the model's 'obs' site to have 5 time steps at axis -2 "
+            r"\(one per row of the in-sample covariates\), but it has shape \(3, 1\) per draw\. "
+            r".*they must have 5 rows"
+        ),
+    ):
+        _run_driver("predict_in_sample", _plate_rw_model, {"drift": jnp.zeros((4, 3, 1))}, None)
+
+
+def _squeezed_forecast_model(covariates: Array, data: Array | None = None) -> None:
+    """A model whose ``"forecast"`` site drops the observation axis: ``(future,)`` per draw."""
+    h = Horizon.from_data(covariates, data)
+    loc = numpyro.sample("loc", dist.Normal(0.0, 1.0))
+    numpyro.deterministic("forecast", jnp.full((h.future,), loc))
+
+
+def test_forecast_rejects_site_without_observation_axis() -> None:
+    """A ``(future,)`` site raises a layout error; its only axis is not read as time at ``-2``."""
+    with pytest.raises(
+        ValueError,
+        match=r"^forecast expects each draw .* has shape \(3,\) per draw\. A univariate series",
+    ):
+        _run_driver("forecast", _squeezed_forecast_model, {"loc": jnp.zeros(4)}, None)
 
 
 def test_predict_in_sample_shape_and_finite() -> None:
@@ -157,9 +349,6 @@ def test_predict_in_sample_parallel_matches_serial() -> None:
     assert jnp.allclose(vmapped, serial, atol=1e-4)
 
 
-# --- P5: chunk indexing & compile discipline ----------------------------------
-
-
 def test_sample_axis_size_rejects_empty() -> None:
     with pytest.raises(ValueError, match="non-empty"):
         _sample_axis_size({})
@@ -171,6 +360,12 @@ def test_sample_axis_size_rejects_ragged_sample_axis() -> None:
         _sample_axis_size(posterior)
 
 
+def test_sample_axis_size_rejects_leaves_without_sample_axis() -> None:
+    posterior = {"a": jnp.zeros(()), "b": jnp.zeros((5, 1)), "c": np.zeros(())}
+    with pytest.raises(ValueError, match=r"posterior sites \['a', 'c'\] have no sample axis"):
+        _sample_axis_size(posterior)
+
+
 def test_sample_axis_size_returns_shared_length() -> None:
     posterior = {"a": jnp.zeros((5, 1)), "b": jnp.zeros((5, 3))}
     assert _sample_axis_size(posterior) == 5
@@ -178,20 +373,20 @@ def test_sample_axis_size_returns_shared_length() -> None:
 
 def test_chunk_indices_rejects_non_positive_batch() -> None:
     with pytest.raises(ValueError, match="batch_size must be positive"):
-        _chunk_indices(5, 0)
+        chunk_indices(5, 0)
 
 
 def test_chunk_indices_wraps_final_block() -> None:
-    blocks = _chunk_indices(10, 4)
+    blocks = chunk_indices(10, 4)
     assert [tuple(int(i) for i in block) for block in blocks] == [
         (0, 1, 2, 3),
         (4, 5, 6, 7),
-        (8, 9, 0, 1),  # the tail wraps around to re-use leading draws
+        (8, 9, 0, 1),
     ]
 
 
 def test_chunk_indices_no_wrap_when_exact_multiple() -> None:
-    blocks = _chunk_indices(8, 4)
+    blocks = chunk_indices(8, 4)
     assert [tuple(int(i) for i in block) for block in blocks] == [(0, 1, 2, 3), (4, 5, 6, 7)]
 
 
@@ -205,16 +400,13 @@ def test_chunked_draws_splits_wraps_and_truncates() -> None:
 
     posterior = {"x": jnp.arange(10.0)[:, None]}
     out = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
-    # 10 samples make 3 wrapped chunks of 4; the result is cut back to 10.
     assert out.shape == (10, 1)
     assert jnp.allclose(out, posterior["x"] * 2.0)
     assert [chunk.shape for _, chunk in calls] == [(4, 1), (4, 1), (4, 1)]
-    # The tail chunk wraps around to the leading draws (the old padding scheme,
-    # bit for bit, without the padded posterior copy).
     assert jnp.array_equal(calls[-1][1][:, 0], jnp.array([8.0, 9.0, 0.0, 1.0]))
     keys = [key for key, _ in calls] + [random.PRNGKey(0)]
     raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for k in keys]
-    assert len(set(raw)) == len(raw)  # per-chunk subkeys distinct, parent unused
+    assert len(set(raw)) == len(raw)
 
 
 @pytest.mark.parametrize("batch_size", [None, 10, 64])
@@ -236,7 +428,6 @@ def test_chunked_draws_unchunked_passthrough(batch_size: int | None) -> None:
 
 @pytest.mark.parametrize("num_samples", [1, 3, 4, 5, 12])
 def test_forecast_chunked_shapes_and_finite(num_samples: int) -> None:
-    # Sweep num_samples around batch_size b=4: {1, b-1, b, b+1, 3b}.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, num_samples)
     fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=4)
@@ -245,8 +436,6 @@ def test_forecast_chunked_shapes_and_finite(num_samples: int) -> None:
 
 
 def test_forecast_chunked_close_to_unchunked() -> None:
-    # Chunking changes the PRNG layout, so draws differ; the sample means still
-    # agree within Monte Carlo error (same distribution).
     model, data, guide, params = _fit_data()
     n = 400
     post = draw_posterior(random.PRNGKey(2), guide, params, n)
@@ -260,39 +449,294 @@ def test_forecast_chunked_close_to_unchunked() -> None:
 
 
 def test_single_compile_while_chunking(count_compilations) -> None:
-    """Invariant I3: fixed shapes ⇒ fixed compile counts for chunked forecasts.
+    """Invariant I3: one compile per `forecast()` call, whatever the chunk count.
 
-    Padding makes every chunk share the ``(batch_size, future, obs)`` shape, so
-    the forecast kernel (`_predict`) compiles a single variant across the whole
-    ``num_samples`` sweep. The compile-count harness (roadmap §4.5) then proves
-    that replaying the sweep triggers zero further backend compilations once
-    every shape has been seen, and the ``_predict`` cache introspection pins the
-    forecast kernel specifically to one variant.
+    The wrapped index blocks make every chunk share the ``(batch_size, future,
+    obs)`` shape, so the predictive a call builds compiles a single variant and
+    is reused for every chunk. Nothing is cached across calls (issue #167), so
+    after a warm-up sweep (which compiles the eager gather, split and stitch
+    helpers once) every call costs exactly one compilation: the sweep below
+    runs 2, 2 and 3 chunks.
     """
     model, data, guide, params = _fit_data()
     covariates = empty_covariates(36)
-    # Pre-build posteriors OUTSIDE the counted block (draw/JIT would compile).
     posteriors = [draw_posterior(random.PRNGKey(2), guide, params, n) for n in (5, 8, 12)]
     jax.block_until_ready(posteriors)
 
-    def _sweep() -> None:
+    def _sweep() -> list[int]:
+        counts = []
         for post in posteriors:
-            jax.block_until_ready(
-                forecast(random.PRNGKey(3), model, post, data, covariates, batch_size=4)
-            )
+            with count_compilations() as tally:
+                jax.block_until_ready(
+                    forecast(random.PRNGKey(3), model, post, data, covariates, batch_size=4)
+                )
+            counts.append(tally.count)
+        return counts
 
-    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
-    _sweep()  # warm-up: compiles the single fixed-shape forecast kernel
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
-
-    # Replaying the sweep hits every cached shape, so nothing recompiles.
-    with count_compilations() as tally:
-        _sweep()
-    assert tally.count == 0
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+    _sweep()
+    assert _sweep() == [1, 1, 1]
 
 
-# --- P6: host offloading (issue #64) ------------------------------------------
+def _offset_level_model(settings: dict[str, float]) -> ForecastModel:
+    """Build a constant-level model whose mean reads ``settings["offset"]`` at trace time."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+        mean = jnp.full((h.duration, 1), level + settings["offset"])
+        predict(h, dist.Normal(0.0, 0.01), mean)
+
+    return model
+
+
+@dataclass
+class _ScaledLevelModel:
+    """A callable model object; ``@dataclass`` sets ``__hash__ = None``, so it is unhashable."""
+
+    scale: float = 0.01
+
+    def __call__(self, covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+        predict(h, dist.Normal(0.0, self.scale), jnp.full((h.duration, 1), level))
+
+
+def _run_driver(
+    driver: str, model: ForecastModel, posterior: Mapping[str, Array], batch_size: int | None
+) -> Array | np.ndarray:
+    """Call `forecast()` (5 observed steps, 3 future) or `predict_in_sample()` (5 steps)."""
+    data, covariates = jnp.zeros((5, 1)), empty_covariates(8)
+    if driver == "forecast":
+        return forecast(
+            random.PRNGKey(0), model, posterior, data, covariates, batch_size=batch_size
+        )
+    return predict_in_sample(
+        random.PRNGKey(0), model, posterior, covariates[:5], batch_size=batch_size
+    )
+
+
+@pytest.mark.parametrize("batch_size", [None, 3])
+@pytest.mark.parametrize("driver", ["forecast", "predict_in_sample"])
+def test_drivers_read_mutable_model_state_at_call_time(
+    driver: str, batch_size: int | None
+) -> None:
+    """Issue #167: a value the model reads is not frozen by an earlier driver call.
+
+    The model reads a mutable mapping (the same mechanism as a notebook global).
+    The second call has the same model object and the same shapes, so a
+    cross-call compile cache keyed on the model would replay the first program.
+    """
+    settings = {"offset": 0.0}
+    model = _offset_level_model(settings)
+    posterior = {"level": jnp.zeros(4)}
+    before = _run_driver(driver, model, posterior, batch_size)
+    settings["offset"] = 100.0
+    after = _run_driver(driver, model, posterior, batch_size)
+    assert np.allclose(np.asarray(after) - np.asarray(before), 100.0, atol=1e-3)
+
+
+@pytest.mark.parametrize("batch_size", [None, 3])
+@pytest.mark.parametrize("driver", ["forecast", "predict_in_sample"])
+def test_drivers_accept_unhashable_callable_models(driver: str, batch_size: int | None) -> None:
+    """Issue #167: a callable model need not be hashable (a plain ``@dataclass``)."""
+    model = _ScaledLevelModel()
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(model)
+    posterior = {"level": jnp.linspace(-1.0, 1.0, 4)}
+    draws = _run_driver(driver, model, posterior, batch_size)
+    site = "forecast" if driver == "forecast" else "obs"
+    reference = _run_driver(driver, _offset_level_model({"offset": 0.0}), posterior, batch_size)
+    assert draws.shape == reference.shape == (4, 3 if site == "forecast" else 5, 1)
+    assert np.allclose(np.asarray(draws), np.asarray(reference), atol=1e-6)
+    plain = Predictive(model, posterior, return_sites=[site])
+    args = (
+        (empty_covariates(8), jnp.zeros((5, 1))) if site == "forecast" else (empty_covariates(5),)
+    )
+    if batch_size is None:
+        assert np.allclose(np.asarray(draws), plain(random.PRNGKey(0), *args)[site], atol=1e-5)
+
+
+def test_handlers_around_a_driver_call_apply_after_an_earlier_compile() -> None:
+    """A handler around `forecast()` is honored even if the same model compiled without it.
+
+    The predictive is compiled per call, so it never replays a trace compiled
+    under different (or no) effect handlers. This is what lets
+    ``numpyro.handlers`` and dynestyx's ``Filter``/``Smoother``/``Simulator``
+    wrap a driver call (`numpyro_forecast.contrib.dynestyx`).
+    """
+    model, data, guide, params = _fit_data()
+    covariates = empty_covariates(36)
+    post = draw_posterior(random.PRNGKey(2), guide, params, 8)
+    plain = forecast(random.PRNGKey(3), model, post, data, covariates)
+    shift = {"drift_future": jnp.full((covariates.shape[-2] - data.shape[-2], 1), 100.0)}
+    with numpyro.handlers.substitute(data=shift):
+        shifted = forecast(random.PRNGKey(3), model, post, data, covariates)
+    assert float(shifted.mean()) > float(plain.mean()) + 50.0
+
+
+def _rw_decentered_model(covariates: Array, data: Array | None = None) -> None:
+    """``rw_model`` with a decentered drift: the horizon adds ``drift_future_decentered``."""
+    h = Horizon.from_data(covariates, data)
+    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+    sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+    drift = innovations(h, "drift", dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0))
+    predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
+
+
+@pytest.mark.parametrize("driver", ["forecast", "predict_in_sample"])
+def test_drivers_reject_the_output_of_a_predictive_call_over_a_horizon(driver: str) -> None:
+    """Issue #161: a posterior that holds horizon sites raises instead of pinning the draws.
+
+    ``Predictive`` substitutes every posterior sample site by name. Merged into
+    the posterior, its output over a horizon pinned the future path of
+    `forecast()` to the stale ``drift_future_decentered`` (the auxiliary of the
+    decentered horizon drift) and the forecast to ``obs_future``, and its
+    ``obs`` (the observed data) pinned every draw of `predict_in_sample()`, with
+    no error. ``drift_future`` and ``forecast`` are deterministic and only mark
+    the mistake.
+    """
+    posterior = {
+        "drift_scale": jnp.ones(4),
+        "sigma": jnp.full(4, 0.05),
+        "drift_decentered": jnp.zeros((4, 5, 1)),
+    }
+    over_horizon = Predictive(_rw_decentered_model, posterior_samples=posterior)(
+        random.PRNGKey(1), empty_covariates(8), jnp.zeros((5, 1))
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"\['drift_future', 'drift_future_decentered', 'forecast', 'obs_future'\]",
+    ):
+        _run_driver(driver, _rw_decentered_model, {**posterior, **over_horizon}, None)
+
+
+def _always_registered_horizon_model(covariates: Array, data: Array | None = None) -> None:
+    """A level model that registers its horizon sites on every call, also while training.
+
+    The level is named ``beta_futures`` (the weight of a futures price, say):
+    an in-sample site whose name contains ``_future``.
+    """
+    h = Horizon.from_data(covariates, data)
+    level = jnp.asarray(numpyro.sample("beta_futures", dist.Normal(0.0, 1.0)))
+    shock = numpyro.sample("shock_future", dist.Normal(0.0, 1.0).expand([h.future, 1]).to_event(2))
+    numpyro.sample("obs", dist.Normal(jnp.full((h.t_obs, 1), level), 0.1).to_event(2), obs=data)
+    numpyro.deterministic("forecast", level + jnp.asarray(shock))
+
+
+def test_drivers_drop_the_empty_horizon_keys_of_a_training_posterior() -> None:
+    """Issue #161: a training posterior passes, with its empty horizon keys dropped.
+
+    A site that the model registers on every call lands in the training
+    posterior with a size-0 time axis (MCMC also keeps deterministic sites).
+    Such a key holds nothing to pin, so the drivers drop it and draw the site
+    from the prior, as for a posterior without it. Substituted, the empty
+    ``shock_future`` gave the ``"forecast"`` site no steps (a misleading
+    training-length error) and shifted the in-sample draws. An in-sample name
+    that only contains ``_future`` (``beta_futures``) is no horizon site.
+    """
+    mcmc = MCMC(
+        NUTS(_always_registered_horizon_model), num_warmup=5, num_samples=4, progress_bar=False
+    )
+    mcmc.run(random.PRNGKey(0), empty_covariates(5), jnp.zeros((5, 1)))
+    posterior = mcmc.get_samples()
+    assert {name: leaf.shape for name, leaf in posterior.items()} == {
+        "beta_futures": (4,),
+        "shock_future": (4, 0, 1),
+        "forecast": (4, 0, 1),
+    }
+    without_empty = {"beta_futures": posterior["beta_futures"]}
+    for driver in ("forecast", "predict_in_sample"):
+        draws = _run_driver(driver, _always_registered_horizon_model, posterior, None)
+        reference = _run_driver(driver, _always_registered_horizon_model, without_empty, None)
+        assert np.array_equal(np.asarray(draws), np.asarray(reference))
+
+
+def test_predict_in_sample_ignores_an_obs_key_in_the_posterior() -> None:
+    """Issue #260: an ``"obs"`` key in the posterior does not pin the in-sample draws.
+
+    ``Predictive`` substitutes every posterior sample site by name. The ``"obs"``
+    output of a ``Predictive`` call with ``data``, merged into the posterior,
+    made every draw equal to the observed data. The driver now draws ``"obs"``
+    from the posterior latents as if the key were absent.
+    """
+    t = 6
+    covariates = empty_covariates(t)
+    data = 0.1 * random.normal(random.PRNGKey(0), (t, 1))
+    posterior = {
+        "drift_scale": jnp.ones(4),
+        "sigma": jnp.full(4, 0.05),
+        "drift": jnp.zeros((4, t, 1)),
+    }
+    observed = Predictive(rw_model, posterior_samples=posterior)(
+        random.PRNGKey(1), covariates, data
+    )
+    assert set(observed) == {"obs"}
+    draws = predict_in_sample(random.PRNGKey(2), rw_model, {**posterior, **observed}, covariates)
+    reference = predict_in_sample(random.PRNGKey(2), rw_model, posterior, covariates)
+    assert np.array_equal(np.asarray(draws), np.asarray(reference))
+    assert not np.allclose(np.asarray(draws), np.asarray(data))
+
+
+def test_predict_in_sample_rejects_a_posterior_that_holds_only_obs() -> None:
+    """The output of a ``Predictive`` call with ``data``, passed alone, names the dropped key."""
+    observed = {"obs": jnp.zeros((4, 6, 1))}
+    with pytest.raises(ValueError, match=r"posterior holds only the 'obs' site"):
+        predict_in_sample(random.PRNGKey(0), rw_model, observed, empty_covariates(6))
+
+
+def _shared_level_model(covariates: Array, data: Array | None = None) -> None:
+    """A level shared by every series, with a ``(duration, 1)`` predictor and no series plate."""
+    h = Horizon.from_data(covariates, data)
+    level = numpyro.sample("level", dist.Normal(0.0, 1.0))
+    predict(h, dist.Normal(0.0, 1.0), jnp.full((h.duration, 1), level))
+
+
+def _shared_level_plate_model(covariates: Array, data: Array | None = None) -> None:
+    """`_shared_level_model` with `predict()` inside a size-3 series plate at ``dim=-1``."""
+    h = Horizon.from_data(covariates, data)
+    level = numpyro.sample("level", dist.Normal(0.0, 1.0))
+    with numpyro.plate("series", 3, dim=-1):
+        predict(h, dist.Normal(0.0, 1.0), jnp.full((h.duration, 1), level))
+
+
+@pytest.mark.parametrize(
+    ("data_shape", "expected"),
+    [((5, 3), r"\(2, 3\)"), ((2, 5, 1), r"\(2, 2, 1\)")],
+    ids=["series", "batch"],
+)
+def test_forecast_rejects_a_predictor_shared_across_series_without_a_plate(
+    data_shape: tuple[int, ...], expected: str
+) -> None:
+    """Issue #259: a ``(duration, 1)`` predictor over wider data raises.
+
+    The ``"obs"`` density broadcasts the predictor over every series, so the
+    fit scores each series, but ``"obs_future"`` was drawn without the series
+    axis (or the batch axes): the forecast had one column, shared by every
+    series, and no error.
+    """
+    with pytest.raises(
+        ValueError, match=rf"end in the axes {expected} per draw.* but it has shape \(2, 1\)"
+    ):
+        forecast(
+            random.PRNGKey(0),
+            _shared_level_model,
+            {"level": jnp.zeros(4)},
+            jnp.zeros(data_shape),
+            empty_covariates(7),
+        )
+
+
+def test_forecast_draws_each_series_of_a_shared_predictor_inside_a_plate() -> None:
+    """Inside a size-3 series plate the shared predictor forecasts three independent series."""
+    draws = forecast(
+        random.PRNGKey(0),
+        _shared_level_plate_model,
+        {"level": jnp.zeros(4)},
+        jnp.zeros((5, 3)),
+        empty_covariates(7),
+    )
+    assert draws.shape == (4, 2, 3)
+    assert not np.allclose(np.asarray(draws[..., 0]), np.asarray(draws[..., 1]))
 
 
 def _cpu() -> jax.Device:
@@ -300,13 +744,13 @@ def _cpu() -> jax.Device:
 
 
 def test_resolve_device_none_passthrough() -> None:
-    assert _resolve_device(None) is None
+    assert resolve_device(None) is None
 
 
 def test_resolve_device_accepts_platform_string_and_device() -> None:
     cpu = _cpu()
-    assert _resolve_device("cpu") == cpu
-    assert _resolve_device(cpu) is cpu
+    assert resolve_device("cpu") == cpu
+    assert resolve_device(cpu) is cpu
 
 
 def test_chunked_draws_device_commits_result() -> None:
@@ -318,7 +762,7 @@ def test_chunked_draws_device_commits_result() -> None:
     posterior = {"x": jnp.arange(10.0)[:, None]}
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
     committed = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, _cpu())
-    assert isinstance(committed, jax.Array)  # a jax.Device target stays a jax.Array
+    assert isinstance(committed, jax.Array)
     assert committed.devices() == {_cpu()}
     assert jnp.array_equal(plain, committed)
 
@@ -342,14 +786,10 @@ def test_chunked_draws_transfers_each_chunk(monkeypatch: pytest.MonkeyPatch) -> 
     _chunked_draws(
         random.PRNGKey(0), lambda _key, post: jnp.asarray(post["x"]), posterior, 4, _cpu()
     )
-    # One transfer per chunk, then the stitched result: CPU-committed chunks are
-    # stitched through NumPy and committed back with a zero-copy device_put, so
-    # the last entry is a commit of host memory, not a fourth accelerator transfer.
     assert transfers == [(4, 1), (4, 1), (4, 1), (10, 1)]
 
 
 def test_forecast_device_bitwise_matches_no_device() -> None:
-    # device is a placement knob, never a draws knob.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
@@ -389,7 +829,6 @@ def test_forecast_device_string_alias() -> None:
 
 
 def test_forecast_unchunked_device_commits_result() -> None:
-    # The unchunked passthrough honors device too (single transfer of the result).
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
@@ -401,31 +840,32 @@ def test_forecast_unchunked_device_commits_result() -> None:
 
 @pytest.mark.parametrize("device", ["cpu", "host"])
 def test_single_compile_while_chunking_with_device(count_compilations, device: str) -> None:
-    """Off-accelerator transfers must not break the fixed-shape single-compile invariant."""
+    """Off-accelerator transfers keep the one-compile-per-call invariant."""
     model, data, guide, params = _fit_data()
     covariates = empty_covariates(36)
     posteriors = [draw_posterior(random.PRNGKey(2), guide, params, n) for n in (5, 8, 12)]
     jax.block_until_ready(posteriors)
 
-    def _sweep() -> None:
+    def _sweep() -> list[int]:
+        counts = []
         for post in posteriors:
-            jax.block_until_ready(
-                forecast(
-                    random.PRNGKey(3), model, post, data, covariates, batch_size=4, device=device
+            with count_compilations() as tally:
+                jax.block_until_ready(
+                    forecast(
+                        random.PRNGKey(3),
+                        model,
+                        post,
+                        data,
+                        covariates,
+                        batch_size=4,
+                        device=device,
+                    )
                 )
-            )
+            counts.append(tally.count)
+        return counts
 
-    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
-    _sweep()  # warm-up: compiles the single fixed-shape forecast kernel
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
-
-    with count_compilations() as tally:
-        _sweep()
-    assert tally.count == 0
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
-
-
-# --- P7: host offloading (``device="host"``: CPU device, NumPy fallback, explicit pinned)
+    _sweep()
+    assert _sweep() == [1, 1, 1]
 
 
 @pytest.mark.parametrize("device", ["host", "cpu"])
@@ -435,7 +875,7 @@ def test_resolve_device_host_resolves_to_the_cpu_device(device: str) -> None:
     That device is pageable host memory: it has no pinned-pool cap, which is
     what makes ``device="host"`` viable for a 50K-series posterior on a GPU host.
     """
-    assert _resolve_device(device) == jax.devices("cpu")[0]
+    assert resolve_device(device) == jax.devices("cpu")[0]
 
 
 _FALLBACK_WARNING = r"falls back to device='host'.*NumPy.*set_platform\('cuda,cpu'\)"
@@ -454,9 +894,9 @@ def test_resolve_device_host_without_cpu_backend_is_numpy_and_silent(
     monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        resolved = _resolve_device("host")
+        resolved = resolve_device("host")
     assert resolved == "numpy"
-    assert isinstance(_transfer(jnp.arange(4.0), resolved), np.ndarray)
+    assert isinstance(transfer(jnp.arange(4.0), resolved), np.ndarray)
 
 
 def test_resolve_device_cpu_without_cpu_backend_falls_back_to_numpy_with_warning(
@@ -465,7 +905,7 @@ def test_resolve_device_cpu_without_cpu_backend_falls_back_to_numpy_with_warning
     """An explicit ``"cpu"`` request that cannot be honored warns and takes the NumPy path."""
     monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
     with pytest.warns(UserWarning, match=_FALLBACK_WARNING):
-        resolved = _resolve_device("cpu")
+        resolved = resolve_device("cpu")
     assert resolved == "numpy"
 
 
@@ -479,11 +919,11 @@ def test_resolved_sentinels_pass_through_silently(sentinel: str) -> None:
     """
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert _resolve_device(sentinel) == sentinel
+        assert resolve_device(sentinel) == sentinel
 
 
 def test_is_host_resident_predicate(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``_is_host_resident`` is the one switch behind ``_leaf_view``/``_device_view``.
+    """``_is_host_resident`` is the one switch behind ``leaf_view``/``device_view``.
 
     A pinned leaf is host-resident on every backend. A CPU-committed leaf is
     host-resident only when the default backend is an accelerator: on a
@@ -497,7 +937,7 @@ def test_is_host_resident_predicate(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _is_cpu_committed(on_cpu)
     assert not _is_cpu_committed(x)
     assert _is_host_resident(pinned)
-    assert not _is_host_resident(on_cpu)  # real CPU backend: nothing to keep off
+    assert not _is_host_resident(on_cpu)
     assert not _is_host_resident(x)
 
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
@@ -518,10 +958,10 @@ def test_leaf_view_stages_cpu_committed_leaves_as_numpy_under_accelerator_defaul
     """
     x = jnp.arange(6.0).reshape(3, 2)
     on_cpu = commit_host(x, "cpu")
-    assert _leaf_view(on_cpu) is on_cpu  # real CPU backend: untouched
+    assert leaf_view(on_cpu) is on_cpu
 
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
-    viewed = _leaf_view(on_cpu)
+    viewed = leaf_view(on_cpu)
     assert isinstance(viewed, np.ndarray)
     assert np.array_equal(viewed, np.asarray(x))
     assert viewed.__array_interface__["data"][0] == on_cpu.unsafe_buffer_pointer()
@@ -540,7 +980,7 @@ def test_device_view_returns_uncommitted_copy_for_cpu_committed_leaf(
     on_cpu = commit_host(x, "cpu")
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
 
-    viewed = _device_view(on_cpu)
+    viewed = device_view(on_cpu)
     assert isinstance(viewed, jax.Array)
     assert not viewed.committed
     assert jnp.array_equal(viewed, x)
@@ -565,7 +1005,7 @@ def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu(
     """
     cpu = jax.devices("cpu")[0]
     rows = chunk_shape[0]
-    num_samples = 3 * rows - 2  # cut an overdraw so the slice path is covered too
+    num_samples = 3 * rows - 2
     chunks: list[Array | np.ndarray] = [
         commit_host(jnp.arange(float(np.prod(chunk_shape))).reshape(chunk_shape) + 10.0 * i, "cpu")
         for i in range(3)
@@ -580,7 +1020,7 @@ def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu(
         return real_device_put(x, device, **kwargs)
 
     with mock.patch.object(jax, "device_put", spy_device_put):
-        stitched = _stitch_chunks(chunks, num_samples, cpu)
+        stitched = stitch_chunks(chunks, num_samples, cpu)
 
     assert isinstance(stitched, jax.Array)
     assert stitched.committed
@@ -605,7 +1045,7 @@ def test_oom_advice_names_pinned_pool_for_host_memory_errors() -> None:
         "with allocator xla_gpu_host_bfc on device 0."
     )
     with pytest.raises(DeviceMemoryError) as excinfo:
-        with _oom_advice("posterior drawing", 250):
+        with oom_advice("posterior drawing", 250):
             raise RuntimeError(msg)
     text = str(excinfo.value)
     assert "pinned host memory" in text
@@ -653,7 +1093,7 @@ def test_resolve_device_missing_platform_raises_actionable_error(
 ) -> None:
     monkeypatch.setattr(jax, "devices", fail_devices_for("tpu"))
     with pytest.raises(DevicePlatformError, match="platform 'tpu' is not initialized"):
-        _resolve_device("tpu")
+        resolve_device("tpu")
 
 
 def test_host_memory_kind_prefers_pinned_host() -> None:
@@ -686,7 +1126,7 @@ def test_host_memory_kind_raises_without_a_host_kind() -> None:
 
 
 def test_leaf_view_stages_pinned_leaves_as_numpy() -> None:
-    """``_leaf_view`` is the host-gather switch: a pinned (fallback) leaf becomes NumPy.
+    """``leaf_view`` is the host-gather switch: a pinned (fallback) leaf becomes NumPy.
 
     A device-resident array must come back as the *same object* (no copy, no
     round-trip), a host-committed one as ``np.ndarray`` so downstream indexing
@@ -696,15 +1136,15 @@ def test_leaf_view_stages_pinned_leaves_as_numpy() -> None:
     x = jnp.arange(6.0).reshape(3, 2)
     hosted = jax.device_put(x, _host_sharding(x))
 
-    assert _leaf_view(x) is x  # device-resident: untouched, not even copied
-    viewed = _leaf_view(hosted)
+    assert leaf_view(x) is x
+    viewed = leaf_view(hosted)
     assert isinstance(viewed, np.ndarray)
     assert np.array_equal(viewed, np.asarray(x))
-    assert isinstance(_leaf_view(np.asarray(x)), np.ndarray)
+    assert isinstance(leaf_view(np.asarray(x)), np.ndarray)
 
 
 def test_leaf_view_passes_tracers_through() -> None:
-    """A tracer has no ``sharding``; ``_leaf_view`` must not reach for one.
+    """A tracer has no ``sharding``; ``leaf_view`` must not reach for one.
 
     Without the passthrough this raises ``AttributeError`` under ``vmap``,
     which would mask the actionable ``VectorizedMetricError`` that
@@ -713,17 +1153,17 @@ def test_leaf_view_passes_tracers_through() -> None:
     seen: list[bool] = []
 
     def probe(row: Array) -> Array:
-        viewed = _leaf_view(row)
+        viewed = leaf_view(row)
         seen.append(viewed is row)
         return jnp.sum(jnp.asarray(viewed))
 
     out = jax.vmap(probe)(jnp.ones((3, 4)))
-    assert seen == [True]  # the tracer itself, not a NumPy copy
+    assert seen == [True]
     assert np.array_equal(np.asarray(out), np.full((3,), 4.0))
 
 
 def test_device_view_moves_host_committed_leaves_to_device_memory() -> None:
-    """``_device_view`` is the metric-kernel-safe counterpart to ``_leaf_view``.
+    """``device_view`` is the metric-kernel-safe counterpart to ``leaf_view``.
 
     A host-committed leaf must come back as a device-resident ``jax.Array``
     with the same values (so a fused metric kernel never mixes memory kinds),
@@ -733,16 +1173,16 @@ def test_device_view_moves_host_committed_leaves_to_device_memory() -> None:
     x = jnp.arange(6.0).reshape(3, 2)
     hosted = jax.device_put(x, _host_sharding(x))
 
-    viewed = _device_view(hosted)
+    viewed = device_view(hosted)
     assert isinstance(viewed, jax.Array)
     assert viewed.sharding.memory_kind == "device"
     assert jnp.array_equal(viewed, x)
 
-    same = _device_view(x)
+    same = device_view(x)
     assert isinstance(same, jax.Array)
     assert jnp.array_equal(same, x)
 
-    from_numpy = _device_view(np.asarray(x))
+    from_numpy = device_view(np.asarray(x))
     assert isinstance(from_numpy, jax.Array)
     assert jnp.array_equal(from_numpy, x)
 
@@ -762,7 +1202,7 @@ def test_device_view_falls_back_to_numpy_when_device_put_rejects_pinned(
     hosted = jax.device_put(x, _host_sharding(x))
 
     with mock.patch.object(jax, "device_put", side_effect=error("no memory-kind move")):
-        viewed = _device_view(hosted)
+        viewed = device_view(hosted)
 
     assert isinstance(viewed, jax.Array)
     assert viewed.sharding.memory_kind == "device"
@@ -800,16 +1240,16 @@ def test_memory_budget_line_swallows_memory_stats_errors() -> None:
 
 
 def test_device_view_passes_tracers_through() -> None:
-    """A tracer has no ``sharding``; ``_device_view`` must not reach for one."""
+    """A tracer has no ``sharding``; ``device_view`` must not reach for one."""
     seen: list[bool] = []
 
     def probe(row: Array) -> Array:
-        viewed = _device_view(row)
+        viewed = device_view(row)
         seen.append(viewed is row)
         return jnp.sum(jnp.asarray(viewed))
 
     out = jax.vmap(probe)(jnp.ones((3, 4)))
-    assert seen == [True]  # the tracer itself, not a converted copy
+    assert seen == [True]
     assert np.array_equal(np.asarray(out), np.full((3,), 4.0))
 
 
@@ -818,9 +1258,9 @@ def test_chunked_draws_gathers_pinned_posterior_chunks_on_the_host() -> None:
 
     Indexing a pinned ``jax.Array`` with a device-resident index array raises
     (``memory_space of all inputs ... must be the same``), so ``_chunked_draws``
-    stages every leaf through ``_leaf_view`` first, which keeps the gather on
+    stages every leaf through ``leaf_view`` first, which keeps the gather on
     the host. Spying on the chunks actually handed to ``predict_fn`` is what
-    pins that: drop the ``_leaf_view`` call and these leaves come back as
+    pins that: drop the ``leaf_view`` call and these leaves come back as
     ``jax.Array``.
     """
     chunk_types: list[type] = []
@@ -835,7 +1275,6 @@ def test_chunked_draws_gathers_pinned_posterior_chunks_on_the_host() -> None:
     assert len(chunk_types) == 3
     assert all(issubclass(t, np.ndarray) for t in chunk_types), chunk_types
 
-    # The single-shot passthrough stages the posterior the same way.
     chunk_types.clear()
     _chunked_draws(random.PRNGKey(0), predict_fn, posterior, None)
     assert [issubclass(t, np.ndarray) for t in chunk_types] == [True]
@@ -879,7 +1318,7 @@ def test_chunked_draws_cpu_device_is_host_resident_and_matches_values() -> None:
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
     hosted = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, jax.devices("cpu")[0])
     assert_host_resident(hosted)
-    assert hosted.shape == (10, 1)  # the 12 drawn rows are cut back to 10
+    assert hosted.shape == (10, 1)
     assert np.array_equal(np.asarray(plain), np.asarray(hosted))
 
 
@@ -893,7 +1332,7 @@ def test_chunked_draws_numpy_sentinel_returns_numpy_and_matches_values() -> None
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
     hosted = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, "numpy")
     assert isinstance(hosted, np.ndarray)
-    assert hosted.shape == (10, 1)  # the 12 drawn rows are cut back to 10
+    assert hosted.shape == (10, 1)
     assert np.array_equal(np.asarray(plain), hosted)
 
 
@@ -920,7 +1359,7 @@ def test_chunked_draws_numpy_transfers_each_chunk_via_device_get(
     _chunked_draws(
         random.PRNGKey(0), lambda _key, post: jnp.asarray(post["x"]), posterior, 4, "numpy"
     )
-    assert gets == [(4, 1), (4, 1), (4, 1)]  # np.concatenate is not a transfer
+    assert gets == [(4, 1), (4, 1), (4, 1)]
     assert not any(_is_cpu_target(d) or _is_pinned_target(d) for d in puts)
 
 
@@ -984,14 +1423,13 @@ def test_chunked_draws_host_transfers_each_chunk(
         4,
         target,
     )
-    # One host copy per chunk, plus the single commit of the stitched result.
     assert transfers == [(4, 1), (4, 1), (4, 1), (10, 1)]
 
 
 def test_draw_chunked_host_is_host_resident_and_matches_values() -> None:
     """The shared draw driver's host path: same values, host memory, correct overdraw cut.
 
-    ``_draw_chunked`` is the loop behind ``draw_posterior`` and the Pathfinder
+    ``draw_chunked`` is the loop behind ``draw_posterior`` and the Pathfinder
     samplers, so its host contract is asserted directly on a deterministic
     ``draw_fn``: for one ``(rng_key, batch_size)``, ``device="host"`` must
     reproduce the ``device=None`` draws bit for bit while every leaf ends up
@@ -1003,19 +1441,18 @@ def test_draw_chunked_host_is_host_resident_and_matches_values() -> None:
         return {"a": random.normal(key, (n, 2)), "b": random.uniform(key, (n,))}
 
     key = random.PRNGKey(11)
-    plain = _draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
-    hosted = _draw_chunked(key, draw_fn, 7, batch_size=3, device="host", stage="test drawing")
+    plain = draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
+    hosted = draw_chunked(key, draw_fn, 7, batch_size=3, device="host", stage="test drawing")
 
     assert_host_resident(hosted)
     assert set(hosted) == {"a", "b"}
-    assert hosted["a"].shape == (7, 2)  # nine drawn rows cut back to seven
+    assert hosted["a"].shape == (7, 2)
     assert hosted["b"].shape == (7,)
     for name, leaf in plain.items():
         assert np.array_equal(np.asarray(leaf), np.asarray(hosted[name]))
 
 
 def test_forecast_host_bitwise_matches_cpu_and_default() -> None:
-    # "host" is a placement knob, never a draws knob.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
@@ -1048,8 +1485,8 @@ def test_draw_chunked_numpy_returns_numpy_and_matches_values() -> None:
         return {"a": random.normal(key, (n, 2)), "b": random.uniform(key, (n,))}
 
     key = random.PRNGKey(11)
-    plain = _draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
-    hosted = _draw_chunked(key, draw_fn, 7, batch_size=3, device="numpy", stage="test drawing")
+    plain = draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
+    hosted = draw_chunked(key, draw_fn, 7, batch_size=3, device="numpy", stage="test drawing")
     assert_numpy_host(hosted)
     assert hosted["a"].shape == (7, 2)
     assert hosted["b"].shape == (7,)
@@ -1149,9 +1586,7 @@ def test_cpu_fallback_warning_attributes_to_caller(monkeypatch: pytest.MonkeyPat
     matching = [r for r in records if "falls back to device='host'" in str(r.message)]
     assert [r.filename for r in matching] == [__file__]
     assert_numpy_host(hosted)
-    # The package prefix must be exactly the package directory: one level too high
-    # would skip the whole checkout (tests included) and misattribute the warning.
-    assert _WARNING_SKIP_PREFIXES[0] == os.path.dirname(numpyro_forecast.__file__)
+    assert WARNING_SKIP_PREFIXES[0] == os.path.dirname(numpyro_forecast.__file__)
 
 
 def test_predictive_oom_reports_batch_size() -> None:
@@ -1203,7 +1638,6 @@ def test_predict_in_sample_numpy_posterior_bitwise_matches_jax() -> None:
 
 
 def test_forecast_unchunked_host_is_host_resident() -> None:
-    # The unchunked passthrough honors "host" too (a single commit of the result).
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))

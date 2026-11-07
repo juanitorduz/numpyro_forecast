@@ -10,10 +10,11 @@ Durbin-Levinson recursion to the ACF.
 Unlike the model-data layout used elsewhere in the package (time at axis
 ``-2``), these functions reduce over time and return a lag spectrum, so they
 take time on the **last** axis: inputs are shaped ``(*batch, time)`` and
-outputs ``(*batch, max_lag + 1)``, with lag ``0`` (identically ``1.0``)
-included. For package-layout data shaped ``(*batch, time, obs)``, pass
-``jnp.moveaxis(data, -2, -1)`` to get per-series spectra ``(*batch, obs,
-max_lag + 1)``.
+outputs ``(*batch, max_lag + 1)``, with lag ``0`` included (identically
+``1.0``, except for a constant series, where every lag is NaN). For
+package-layout data shaped ``(*batch, time, obs)``, pass
+``jnp.moveaxis(data, -2, -1)`` to get per-series spectra
+``(*batch, obs, max_lag + 1)``.
 """
 
 from functools import partial
@@ -21,9 +22,10 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from jax.typing import ArrayLike
-from jaxtyping import Float
+from jaxtyping import Float, Real
 from numpyro.diagnostics import _fft_next_fast_len
 
+from numpyro_forecast.offload import float_view_resident
 from numpyro_forecast.typing import Array
 
 
@@ -35,6 +37,15 @@ def _acf(
 ) -> Float[Array, " *batch lags"]:
     """Jitted ACF core; the ``max_lag`` bounds guard lives in `acf()`."""
     m2 = 2 * _fft_next_fast_len(y.shape[-1])
+    # The float32 mean of a constant series is generally not exactly that
+    # constant (the sum rounds, and XLA multiplies by 1 / T), so centering alone
+    # leaves a tiny nonzero residual whose normalized autocovariance is a
+    # finite, AR(1)-like ratio such as (T - k) / T. After subtracting the first
+    # sample a constant series is exactly zero, so the mean, the FFT and the
+    # autocovariance are exact zeros and every lag is 0 / 0 = NaN. The ACF is
+    # shift invariant, and the shift also bounds every value by the range of
+    # the series, which avoids float32 cancellation for a large level.
+    y = y - y[..., :1]
     y_centered = y - y.mean(axis=-1, keepdims=True)
     freq = jnp.fft.rfft(y_centered, n=m2, axis=-1)
     autocov = jnp.fft.irfft(freq * jnp.conj(freq), n=m2, axis=-1)[..., : max_lag + 1]
@@ -77,7 +88,7 @@ def _validate_max_lag(name: str, time: int, max_lag: int) -> None:
 
 
 def acf(
-    y: Float[ArrayLike, " *batch time"],
+    y: Real[ArrayLike, " *batch time"],
     max_lag: int,
 ) -> Float[Array, " *batch lags"]:
     r"""Compute the empirical autocorrelation function up to ``max_lag``.
@@ -100,7 +111,12 @@ def acf(
     ----------
     y
         Time series with time on the last axis, shape ``(*batch, time)``.
-        NumPy arrays are accepted directly.
+        NumPy arrays are accepted directly; integer counts are cast to the
+        default float dtype (`~~numpyro_forecast.offload.float_view_resident()`).
+        A CPU-committed series (``device="host"`` draws with the CPU backend
+        initialized, see `~~numpyro_forecast.predictive.draw_posterior()`)
+        stays on the CPU; a pinned series, floating or integer, is copied
+        back onto its own device first.
     max_lag
         Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -108,7 +124,8 @@ def acf(
     -------
     Float[Array, "*batch lags"]
         Autocorrelations for lags ``0, 1, ..., max_lag`` (``max_lag + 1``
-        values; lag ``0`` is identically ``1.0``).
+        values; lag ``0`` is identically ``1.0``; all NaN for a constant
+        series).
 
     Raises
     ------
@@ -117,22 +134,26 @@ def acf(
 
     Notes
     -----
-    A constant series has zero variance, so the result is meaningless: all NaN
-    in eager execution (a ``0 / 0``), while under `jax.jit()` the rounding
-    of the mean can instead yield arbitrary finite values.
+    A constant series has zero variance and no autocorrelation, so every lag,
+    lag ``0`` included, is NaN (a ``0 / 0``), with or without `jax.jit()`.
+    The series is shifted by its first sample before centering, which makes a
+    constant series exactly zero in floating point. NaN does not imply a
+    constant series: a NaN or infinite sample also gives NaN at every lag,
+    and in float32 a series whose deviations from the mean are near the
+    underflow threshold (about ``1e-19``) can give NaN or inaccurate values.
 
     References
     ----------
     Adapted from `numpyro.diagnostics.autocorrelation()`, itself adapted
     from the Stan implementation.
     """
-    y = jnp.asarray(y)
+    y = float_view_resident(y)
     _validate_max_lag("acf", y.shape[-1], max_lag)
     return _acf(y, max_lag=max_lag)
 
 
 def pacf(
-    y: Float[ArrayLike, " *batch time"],
+    y: Real[ArrayLike, " *batch time"],
     max_lag: int,
 ) -> Float[Array, " *batch lags"]:
     r"""Compute the empirical partial autocorrelation function up to ``max_lag``.
@@ -157,7 +178,12 @@ def pacf(
     ----------
     y
         Time series with time on the last axis, shape ``(*batch, time)``.
-        NumPy arrays are accepted directly.
+        NumPy arrays are accepted directly; integer counts are cast to the
+        default float dtype (`~~numpyro_forecast.offload.float_view_resident()`).
+        A CPU-committed series (``device="host"`` draws with the CPU backend
+        initialized, see `~~numpyro_forecast.predictive.draw_posterior()`)
+        stays on the CPU; a pinned series, floating or integer, is copied
+        back onto its own device first.
     max_lag
         Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -165,7 +191,8 @@ def pacf(
     -------
     Float[Array, "*batch lags"]
         Partial autocorrelations for lags ``0, 1, ..., max_lag``
-        (``max_lag + 1`` values; lag ``0`` is identically ``1.0``).
+        (``max_lag + 1`` values; lag ``0`` is identically ``1.0``; all NaN
+        for a constant series).
 
     Raises
     ------
@@ -174,16 +201,15 @@ def pacf(
 
     Notes
     -----
-    A constant series has zero variance, so the result is meaningless (see
-    `acf()`); a near-deterministic series can likewise overflow the
-    recursion (the denominator above approaches zero) and produce infinities
-    or NaNs.
+    A constant series gives NaN at every lag, as in `acf()`; a
+    near-deterministic series can overflow the recursion (the denominator
+    above approaches zero) and produce infinities or NaNs.
 
     References
     ----------
     James Durbin (1960). "The Fitting of Time-Series Models". *Revue de
     l'Institut International de Statistique*.
     """
-    y = jnp.asarray(y)
+    y = float_view_resident(y)
     _validate_max_lag("pacf", y.shape[-1], max_lag)
     return _pacf(y, max_lag=max_lag)

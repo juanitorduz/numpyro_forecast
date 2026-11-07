@@ -16,18 +16,10 @@ from numpyro.handlers import seed, substitute, trace
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
-from numpyro_forecast._offload import _host_sharding
 from numpyro_forecast.models import Horizon, innovations, predict
+from numpyro_forecast.offload import _host_sharding
 from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.typing import ForecastFn, ForecastModel, InSampleFn
-
-# ---------------------------------------------------------------------------
-# Compile-count harness (roadmap §4.5). A single process-wide JAX monitoring
-# listener counts backend compilations; the ``count_compilations`` fixture
-# exposes a context manager that reports the delta over a tightly scoped block.
-# Pre-create every array OUTSIDE the block (array constructors compile too) and
-# call ``block_until_ready`` INSIDE it so the compile is attributed correctly.
-# ---------------------------------------------------------------------------
 
 _BACKEND_COMPILE_EVENT = "/jax/core/compile/backend_compile_duration"
 
@@ -53,7 +45,7 @@ def _install_compile_listener() -> None:
 
     try:
         jax.monitoring.register_event_duration_secs_listener(_listener)
-    except Exception:  # harness unavailability is non-fatal
+    except Exception:
         _HARNESS_AVAILABLE = False
     else:
         _HARNESS_AVAILABLE = True
@@ -231,14 +223,32 @@ def rw_model_factory() -> ForecastModel:
     ``rw_model`` itself is a plain module-level function: every ``ModelFactory``
     call would return the exact same object, unlike the former ``RandomWalkModel``
     class (a fresh instance per call). Tests that rely on ``model_fn()`` producing
-    a distinct object each call (e.g. the ``reuse_model=False`` compile-cache
-    invariant in ``evaluate.backtest``) use this instead of ``lambda: rw_model``.
+    a distinct object each call (e.g. the ``reuse_model`` call-count check of
+    ``evaluate.backtest``) use this instead of ``lambda: rw_model``.
     """
 
     def model(covariates: Array, data: Array | None = None) -> None:
         rw_model(covariates, data)
 
     return model
+
+
+def poisson_model(covariates: Array, data: Array | None = None) -> None:
+    """A constant-rate Poisson count model (shared by the count-metric tests, #163).
+
+    ``predict()`` requires integer ``data`` for a discrete observation family,
+    so the ``forecast`` and in-sample draws of this model are integers.
+    """
+    h = Horizon.from_data(covariates, data)
+    log_rate = jnp.asarray(numpyro.sample("log_rate", dist.Normal(1.0, 1.0)))
+    prediction = jnp.full((h.duration, 1), log_rate)
+    predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), prediction)
+
+
+def poisson_counts(duration: int, rate: float = 3.0) -> tuple[Array, Array]:
+    """Integer Poisson counts shaped ``(duration, 1)`` and empty covariates."""
+    counts = random.poisson(random.PRNGKey(0), rate, (duration, 1)).astype(jnp.int32)
+    return counts, jnp.zeros((duration, 0))
 
 
 def as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:

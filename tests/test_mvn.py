@@ -1,23 +1,25 @@
 """MultivariateNormal distribution-surgery tests (roadmap §9)."""
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
 from jax import Array, random
-from numpyro.infer import SVI, Trace_ELBO
+from numpyro.infer import SVI, Trace_ELBO, log_likelihood
 from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.exceptions import MVNLayoutError
 from numpyro_forecast.models import Horizon, predict
-from numpyro_forecast.predictive import draw_posterior
+from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.surgery import (
     _mvn_time_params,
     prefix_condition,
     shift_loc,
     slice_time,
 )
-from tests.conftest import empty_covariates
+from tests.conftest import as_model, empty_covariates, get_trace
 
 
 class _RawMVN(dist.MultivariateNormal):
@@ -86,7 +88,7 @@ def test_mvn_diagonal_matches_independent_normal_slice() -> None:
 
 
 def test_mvn_near_singular_prefix_still_valid() -> None:
-    """A near-singular ``Sigma_pp`` yields a valid distribution via jitter."""
+    """A near-singular ``Sigma_pp`` still yields a positive definite conditional."""
     time, t = 4, 2
     cov = jnp.ones((time, time)) * 0.99 + jnp.eye(time) * 0.01
     mvn = dist.MultivariateNormal(loc=jnp.zeros(time), covariance_matrix=cov)
@@ -98,14 +100,164 @@ def test_mvn_near_singular_prefix_still_valid() -> None:
     assert jnp.all(jnp.linalg.eigvalsh(cond_cov) > 0)
 
 
+def test_mvn_prefix_condition_factors_a_singular_covariance() -> None:
+    """A covariance with a repeated time step still gives a positive definite conditional.
+
+    Steps 4 and 5 share the time index of an AR(1) kernel, so the plain Cholesky
+    meets an exact zero pivot and fails on every backend. The construction is
+    traced, as inside a model, because an eager ``MultivariateNormal`` rejects
+    the covariance during argument validation.
+    """
+    idx = jnp.array([0.0, 1.0, 2.0, 3.0, 4.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0])
+    cov = 0.9 ** jnp.abs(idx[:, None] - idx[None, :])
+    assert not jnp.all(jnp.isfinite(jnp.linalg.cholesky(cov)))
+
+    @jax.jit
+    def conditional_cov(cov: Array) -> Array:
+        mvn = dist.MultivariateNormal(jnp.zeros(cov.shape[-1]), cov)
+        cond = prefix_condition(mvn, jnp.zeros((8, 1)))
+        assert isinstance(cond, dist.MultivariateNormal)
+        return jnp.asarray(cond.covariance_matrix)
+
+    cond_cov = np.asarray(conditional_cov(cov), dtype=np.float64)
+    assert np.isfinite(cond_cov).all()
+    assert np.linalg.eigvalsh(cond_cov).min() > 0
+
+
+def test_mvn_prefix_condition_of_a_zero_covariance_is_the_mean() -> None:
+    """A zero noise scale gives a finite forecast at the future mean (sd ``1e-3``, the jitter)."""
+    loc = jnp.arange(5.0)
+
+    @jax.jit
+    def conditional(cov: Array) -> tuple[Array, Array]:
+        cond = prefix_condition(dist.MultivariateNormal(loc, cov), jnp.ones((3, 1)))
+        assert isinstance(cond, dist.MultivariateNormal)
+        return cond.loc, jnp.asarray(cond.covariance_matrix)
+
+    mean, cov = conditional(jnp.zeros((5, 5)))
+    np.testing.assert_array_equal(np.asarray(mean), np.asarray(loc[3:]))
+    assert np.isfinite(np.asarray(cov)).all()
+
+
+@pytest.mark.parametrize(
+    "step_scale",
+    [
+        np.ones(6),
+        np.full(6, 1e-2),
+        np.full(6, 1e-4),
+        np.array([1.0, 1.0, 1.0, 1.0, 1e-3, 1e-3]),
+    ],
+    ids=["unit", "1e-2", "1e-4", "future-1e-3"],
+)
+def test_mvn_prefix_condition_is_exact_at_any_scale(step_scale: np.ndarray) -> None:
+    """The conditional equals the exact Schur complement for any covariance scale (#173).
+
+    An absolute jitter on the covariance dominated the conditional variance of a
+    small-scale series: at a noise scale of ``1e-4`` the forecast variance was
+    about 500 times the exact value. A jitter relative to the mean variance has
+    the same defect for forecast steps whose variance is far below the mean.
+    """
+    time, t = 6, 4
+    s = jnp.asarray(step_scale, dtype=jnp.float32)
+    cov = s[:, None] * _ar_covariance(time, 0.9) * s[None, :]
+    loc = jnp.linspace(-1.0, 1.0, time) * s
+    data = (s[:t] * jnp.array([0.3, -0.2, 0.5, 0.1]))[:, None]
+    cond = prefix_condition(dist.MultivariateNormal(loc=loc, covariance_matrix=cov), data)
+    assert isinstance(cond, dist.MultivariateNormal)
+    c = np.asarray(cov, dtype=np.float64)
+    m = np.asarray(loc, dtype=np.float64)
+    gain = c[t:, :t] @ np.linalg.inv(c[:t, :t])
+    expected_cov = c[t:, t:] - gain @ c[:t, t:]
+    expected_mean = m[t:] + gain @ (np.asarray(data[:, 0], dtype=np.float64) - m[:t])
+    np.testing.assert_allclose(np.asarray(cond.covariance_matrix), expected_cov, rtol=1e-3)
+    future_scale = step_scale[t:]
+    np.testing.assert_allclose(
+        np.asarray(cond.loc) / future_scale, expected_mean / future_scale, rtol=1e-3, atol=1e-4
+    )
+
+
+def test_mvn_prefix_condition_float64_uses_a_smaller_jitter() -> None:
+    """A float64 covariance gets a jitter of ``1e-8``, so a long random walk keeps its variance.
+
+    The one-step conditional variance of a random walk is the innovation
+    variance, ``1``, while the marginal variance grows with time, so the jitter
+    error is about ``2 * jitter * t_obs``: ``2e-3`` with the float32 jitter of
+    ``1e-6`` and ``2e-5`` with ``1e-8``.
+    """
+    time, t = 1_000, 999
+    with jax.enable_x64(True):
+        idx = jnp.arange(1, time + 1, dtype=jnp.float64)
+        cov = jnp.minimum(idx[:, None], idx[None, :])
+        mvn = dist.MultivariateNormal(
+            loc=jnp.zeros(time, dtype=jnp.float64), covariance_matrix=cov
+        )
+        cond = prefix_condition(mvn, jnp.zeros((t, 1), dtype=jnp.float64))
+        assert isinstance(cond, dist.MultivariateNormal)
+        cond_cov = np.asarray(cond.covariance_matrix)
+    assert cond_cov.dtype == np.float64
+    np.testing.assert_allclose(cond_cov, [[1.0]], rtol=1e-4)
+
+
 def test_mvn_shift_loc_adds_to_mean() -> None:
+    """A ``(time, 1)`` predictor becomes the mean and keeps its observation axis (#160)."""
     loc = jnp.zeros(4)
     cov = jnp.eye(4)
     mvn = dist.MultivariateNormal(loc=loc, covariance_matrix=cov)
-    shift = jnp.ones((4, 1))
+    shift = jnp.arange(4.0)[:, None]
+    shifted = shift_loc(mvn, shift)
+    assert shifted.event_shape == (4, 1)
+    assert jnp.allclose(shifted.mean, shift)
+
+
+def test_mvn_shift_loc_without_obs_axis_keeps_the_time_event() -> None:
+    """A ``(*batch, time)`` predictor keeps the bare ``(time,)`` event of the noise."""
+    mvn = dist.MultivariateNormal(loc=jnp.zeros((2, 4)), covariance_matrix=jnp.eye(4))
+    shift = jnp.arange(8.0).reshape(2, 4)
     shifted = shift_loc(mvn, shift)
     assert isinstance(shifted, dist.MultivariateNormal)
-    assert jnp.allclose(shifted.loc, jnp.ones(4))
+    assert shifted.batch_shape == (2,)
+    assert jnp.allclose(shifted.loc, shift)
+
+
+@pytest.mark.parametrize(
+    ("noise_dim", "predictor_shape"),
+    [
+        pytest.param(6, (6, 6), id="obs-equals-time"),
+        pytest.param(3, (8, 3), id="series-axis-noise"),
+    ],
+)
+def test_mvn_shift_loc_rejects_a_predictor_with_a_wide_obs_axis(
+    noise_dim: int, predictor_shape: tuple[int, int]
+) -> None:
+    """A ``(time, obs)`` predictor with ``obs > 1`` is a layout error, never a batch axis.
+
+    MVN noise over time needs ``obs == 1``; reading the time axis of the
+    predictor as a batch axis would correlate the noise across series instead.
+    """
+    mvn = dist.MultivariateNormal(jnp.zeros(noise_dim), covariance_matrix=jnp.eye(noise_dim))
+    with pytest.raises(MVNLayoutError):
+        shift_loc(mvn, jnp.zeros(predictor_shape))
+
+
+def test_mvn_shift_loc_twice_shifts_again_and_keeps_the_obs_axis() -> None:
+    """Shifting an already shifted MVN adds the second predictor to the mean."""
+    mvn = dist.MultivariateNormal(loc=jnp.zeros(4), covariance_matrix=jnp.eye(4))
+    first = shift_loc(mvn, jnp.ones((4, 1)))
+    second = shift_loc(first, jnp.arange(8.0).reshape(2, 4, 1))
+    assert second.batch_shape == (2,)
+    assert second.event_shape == (4, 1)
+    assert jnp.allclose(second.mean, 1.0 + jnp.arange(8.0).reshape(2, 4, 1))
+
+
+def test_mvn_shift_loc_broadcasts_a_constant_predictor_over_time() -> None:
+    """A ``(series, 1, 1)`` predictor shifts every time step of its series by one value."""
+    cov = _ar_covariance(4, 0.5)
+    mvn = dist.MultivariateNormal(jnp.zeros(4), covariance_matrix=cov)
+    shifted = shift_loc(mvn, jnp.arange(3.0).reshape(3, 1, 1))
+    assert shifted.batch_shape == (3,)
+    assert shifted.event_shape == (4, 1)
+    assert jnp.allclose(shifted.mean, jnp.broadcast_to(jnp.arange(3.0)[:, None, None], (3, 4, 1)))
+    assert jnp.allclose(shifted.variance, jnp.broadcast_to(jnp.diag(cov)[:, None], (3, 4, 1)))
 
 
 def test_mvn_slice_time_marginal_block() -> None:
@@ -119,7 +271,12 @@ def test_mvn_slice_time_marginal_block() -> None:
 
 
 def test_gp_noise_end_to_end() -> None:
-    """GP-style correlated noise fits through plain NumPyro SVI."""
+    """GP-style correlated noise fits through plain NumPyro SVI and forecasts.
+
+    Regression for #160: the ``obs`` log density is the joint MVN density of the
+    ``(t, 1)`` series, one value per draw (not ``t`` broadcast values), and the
+    drivers return draws with the observation axis, ``(sample, time, 1)``.
+    """
 
     def gp_model(covariates: Array, data: Array | None = None) -> None:
         h = Horizon.from_data(covariates, data)
@@ -131,15 +288,109 @@ def test_gp_noise_end_to_end() -> None:
         level = numpyro.sample("level", dist.Normal(0.0, 1.0))
         predict(h, noise, jnp.asarray(level) + jnp.zeros((time, 1)))
 
-    data = random.normal(random.PRNGKey(0), (12, 1))
-    cov = empty_covariates(16)
-    key_fit, key_draw = random.split(random.PRNGKey(1))
+    t, future, num_samples = 12, 4, 30
+    data = random.normal(random.PRNGKey(0), (t, 1))
+    cov = empty_covariates(t + future)
+    key_fit, key_draw, key_forecast, key_in_sample = random.split(random.PRNGKey(1), 4)
     guide = AutoNormal(gp_model)
     svi = SVI(gp_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
-    state = svi.run(key_fit, 150, cov[:12], data, progress_bar=False)
-    post = draw_posterior(key_draw, guide, state.params, 30)
+    state = svi.run(key_fit, 150, cov[:t], data, progress_bar=False)
+    post = draw_posterior(key_draw, guide, state.params, num_samples)
     assert set(post) >= {"sigma", "rho", "level"}
     assert jnp.all(jnp.isfinite(post["sigma"]))
+
+    def joint_log_density(sigma: Array, rho: Array, level: Array) -> Array:
+        cov_s = _ar_covariance(t, rho) * sigma**2
+        mvn = dist.MultivariateNormal(level * jnp.ones(t), covariance_matrix=cov_s)
+        return jnp.asarray(mvn.log_prob(data[:, 0]))
+
+    draws = (jnp.asarray(post[name]) for name in ("sigma", "rho", "level"))
+    expected = jax.vmap(joint_log_density)(*draws)
+    obs_log_density = log_likelihood(gp_model, post, cov[:t], data)["obs"]
+    assert obs_log_density.shape == (num_samples,)
+    assert jnp.allclose(obs_log_density, expected, rtol=1e-4, atol=1e-3)
+    assert forecast(key_forecast, gp_model, post, data, cov).shape == (num_samples, future, 1)
+    in_sample = predict_in_sample(key_in_sample, gp_model, post, cov[:t])
+    assert in_sample.shape == (num_samples, t, 1)
+
+
+def _ar_mvn_body(h: Horizon, covariates: Array) -> None:
+    """``predict`` with zero-mean AR(1)-correlated noise over time and a sampled ``rho``."""
+    rho = jnp.asarray(numpyro.sample("rho", dist.Uniform(0.0, 0.9)))
+    noise = dist.MultivariateNormal(
+        jnp.zeros(h.duration), covariance_matrix=_ar_covariance(h.duration, rho)
+    )
+    predict(h, noise, jnp.zeros((h.duration, 1)))
+
+
+def test_predict_mvn_forecast_sites_keep_the_obs_axis() -> None:
+    """While forecasting, ``obs`` and ``obs_future`` score ``(time, 1)`` values jointly.
+
+    Regression for #160: the MVN surgery dropped the observation axis, so ``obs``
+    scored ``(t, 1)`` data as ``t`` broadcast values instead of the joint density
+    and ``obs_future`` drew ``(future,)`` instead of ``(future, 1)``.
+    """
+    t, future, rho = 12, 4, 0.6
+    data = 0.1 * random.normal(random.PRNGKey(0), (t, 1))
+    truth = 0.1 * random.normal(random.PRNGKey(1), (future, 1))
+    tr = get_trace(
+        as_model(_ar_mvn_body),
+        empty_covariates(t + future),
+        data,
+        substitutions={"rho": jnp.asarray(rho)},
+    )
+
+    c = np.asarray(_ar_covariance(t + future, rho), dtype=np.float64)
+    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T
+    in_sample = dist.MultivariateNormal(jnp.zeros(t), covariance_matrix=jnp.asarray(c[:t, :t]))
+    conditional = dist.MultivariateNormal(
+        jnp.asarray(gain @ np.asarray(data[:, 0], dtype=np.float64)),
+        covariance_matrix=jnp.asarray(c[t:, t:] - gain @ c[:t, t:]),
+    )
+
+    obs_fn, future_fn = tr["obs"]["fn"], tr["obs_future"]["fn"]
+    assert obs_fn.event_shape == (t, 1)
+    assert obs_fn.log_prob(data).shape == ()
+    assert jnp.allclose(obs_fn.log_prob(data), in_sample.log_prob(data[:, 0]), atol=1e-4)
+    assert future_fn.event_shape == (future, 1)
+    assert tr["obs_future"]["value"].shape == (future, 1)
+    assert tr["forecast"]["value"].shape == (future, 1)
+    assert jnp.allclose(future_fn.log_prob(truth), conditional.log_prob(truth[:, 0]), atol=1e-3)
+
+
+@pytest.mark.parametrize("wrap", [False, True], ids=["batched", "to_event"])
+def test_predict_mvn_panel_scores_each_series_jointly(wrap: bool) -> None:
+    """A ``(series, time, 1)`` panel with MVN noise over time is scored per series.
+
+    The noise is either shared across series and batched by the
+    ``(series, time, 1)`` predictor, or batched per series and wrapped with
+    ``.to_event(1)``. Both raised a broadcasting error before #160.
+    """
+    series, t, future = 3, 12, 4
+    data = 0.1 * random.normal(random.PRNGKey(0), (series, t, 1))
+    full_cov = _ar_covariance(t + future, 0.6)
+
+    def body(h: Horizon, covariates: Array) -> None:
+        loc = jnp.zeros((series, h.duration)) if wrap else jnp.zeros(h.duration)
+        cov = full_cov[: h.duration, : h.duration]
+        noise: dist.Distribution = dist.MultivariateNormal(loc, covariance_matrix=cov)
+        if wrap:
+            noise = noise.to_event(1)
+        predict(h, noise, jnp.zeros((series, h.duration, 1)))
+
+    tr = get_trace(as_model(body), empty_covariates(t + future), data)
+
+    in_sample = dist.MultivariateNormal(jnp.zeros(t), covariance_matrix=full_cov[:t, :t])
+    per_series = jnp.asarray(in_sample.log_prob(data[..., 0]))
+    expected = per_series.sum() if wrap else per_series
+    obs_log_density = jnp.asarray(tr["obs"]["fn"].log_prob(data))
+    assert obs_log_density.shape == expected.shape
+    assert jnp.allclose(obs_log_density, expected, atol=1e-4)
+    assert tr["obs_future"]["value"].shape == (series, future, 1)
+    c = np.asarray(full_cov, dtype=np.float64)
+    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T
+    expected_mean = np.asarray(data[..., 0], dtype=np.float64) @ gain.T
+    assert jnp.allclose(tr["obs_future"]["fn"].mean, expected_mean[..., None], atol=1e-4)
 
 
 @pytest.mark.parametrize("batch", [(), (3,), (2, 3)])
@@ -175,8 +426,6 @@ def test_mvn_time_params_time_one_tiebreak() -> None:
     loc = jnp.zeros((3, 1))
     cov = jnp.broadcast_to(jnp.eye(1), (3, 1, 1))
     out_loc, _ = _mvn_time_params(_fake_mvn(loc, cov))
-    # The squeeze branch requires shape[-2] == time (3 != 1 here), so the
-    # loc falls through to the (*batch, time) branch and is kept unchanged.
     assert out_loc.shape == (3, 1)
 
 
@@ -198,7 +447,7 @@ def test_mvn_time_params_batch_cov_mismatch_raises() -> None:
     """A loc batch incompatible with the cov batch raises at the boundary.
 
     Without the guard, a mismatched user construction flows downstream and dies
-    deep in ``cho_solve`` with a shape error that never names the layout rule.
+    deep in ``solve_triangular`` with a shape error that never names the layout rule.
     """
     loc = jnp.zeros((3, 6))
     cov = jnp.broadcast_to(jnp.eye(6), (4, 6, 6))
@@ -208,7 +457,7 @@ def test_mvn_time_params_batch_cov_mismatch_raises() -> None:
 
 def test_mvn_time_params_rejects_mismatched_trailing_axis() -> None:
     """A loc whose trailing axis is neither time nor squeezable-1 raises."""
-    loc = jnp.zeros((3, 4))  # trailing 4 != time 6, not 1
+    loc = jnp.zeros((3, 4))
     cov = jnp.broadcast_to(jnp.eye(6), (3, 6, 6))
     with pytest.raises(MVNLayoutError, match="MultivariateNormal"):
         _mvn_time_params(_fake_mvn(loc, cov))
@@ -222,11 +471,11 @@ def test_shift_loc_mvn_batched() -> None:
     loc = random.normal(random.PRNGKey(0), (3, time))
     cov = jnp.broadcast_to(jnp.eye(time), (3, time, time))
     mvn = dist.MultivariateNormal(loc=loc, covariance_matrix=cov)
-    shift = jnp.ones((3, time, 1))  # (*batch, time, obs=1) as predict supplies
+    shift = jnp.ones((3, time, 1))
     shifted = shift_loc(mvn, shift)
-    assert isinstance(shifted, dist.MultivariateNormal)
-    assert jnp.allclose(shifted.loc, loc + 1.0)
-    # A non-size-1 extra trailing axis is a layout error, not a silent truncation.
+    assert shifted.batch_shape == (3,)
+    assert shifted.event_shape == (time, 1)
+    assert jnp.allclose(shifted.mean, loc[..., None] + 1.0)
     with pytest.raises(MVNLayoutError, match=MVNLayoutError.default_message[:20]):
         shift_loc(mvn, jnp.ones((3, time, 2)))
 
@@ -253,3 +502,37 @@ def test_slice_time_and_prefix_condition_mvn_batched() -> None:
         assert isinstance(cond_b, dist.MultivariateNormal)
         assert jnp.allclose(sliced.loc[b], sliced_b.loc)
         assert jnp.allclose(cond.loc[b], cond_b.loc, atol=1e-4)
+
+
+@pytest.mark.parametrize("depth", [1, 2], ids=["to_event", "nested_to_event"])
+def test_prefix_condition_independent_mvn_is_the_gaussian_conditional(depth: int) -> None:
+    """An ``Independent``-wrapped MVN over time conditions on the observed prefix.
+
+    Regression for #171: the ``Independent`` dispatch returned the horizon
+    marginal, so a ``.to_event(1)`` panel of time-correlated series ignored the
+    prefix and the forecast fell back to the prior mean. ``depth = 2`` wraps the
+    MVN twice (numpyro does not merge nested ``Independent`` wrappers).
+    """
+    time, t = 6, 4
+    lead = (1,) * (depth - 1)
+    cov = _ar_covariance(time, 0.9)
+    loc = jnp.stack([jnp.zeros(time), jnp.linspace(-1.0, 1.0, time)])
+    data = jnp.stack([jnp.ones((t, 1)), jnp.full((t, 1), -0.5)])
+    noise: dist.Distribution = dist.MultivariateNormal(
+        loc=loc.reshape(*lead, 2, time), covariance_matrix=cov
+    )
+    for _ in range(depth):
+        noise = noise.to_event(1)
+
+    cond = prefix_condition(noise, data.reshape(*lead, 2, t, 1))
+
+    c = np.asarray(cov, dtype=np.float64)
+    mu = np.asarray(loc, dtype=np.float64)
+    x = np.asarray(data[..., 0], dtype=np.float64)
+    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T
+    expected_mean = mu[:, t:] + (x - mu[:, :t]) @ gain.T
+    expected_var = np.broadcast_to(np.diag(c[t:, t:] - gain @ c[:t, t:]), (2, time - t))
+    assert isinstance(cond, dist.Independent)
+    assert cond.event_shape == (*lead, 2, time - t)
+    assert jnp.allclose(cond.mean, expected_mean.reshape(*lead, 2, time - t), atol=1e-4)
+    assert jnp.allclose(cond.variance, expected_var.reshape(*lead, 2, time - t), atol=1e-4)

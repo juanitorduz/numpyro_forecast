@@ -48,9 +48,6 @@ def test_ar1_forecast_matches_closed_form(fitter: str, rng_key: Array) -> None:
         state = svi.run(key_fit, 400, cov[:t_obs], data, progress_bar=False)
         post = draw_posterior(key_draw, guide, state.params, 200)
     else:
-        # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(),
-        # with no draw_posterior step (that's guide-based only); fit for exactly
-        # the wanted draw count instead of thinning/resampling after the fact.
         mcmc = MCMC(
             NUTS(_ar1_model),
             num_warmup=100,
@@ -179,6 +176,34 @@ def test_xs_threading() -> None:
         )
     ).get_trace()
     assert tr["z"]["value"].shape[0] == 8
+
+
+@pytest.mark.parametrize(
+    ("xs", "match"),
+    [
+        (
+            {"temp": jnp.ones((10, 1))},
+            r"span the full horizon \(duration = 13 .*\['temp'\] has 10",
+        ),
+        (jnp.ones((18, 1)), r"span the full horizon \(duration = 13 .*<root> has 18"),
+        (jnp.ones((13,)), r"leaf <root> has shape \(13,\)\. Add the axis"),
+    ],
+    ids=["observed-window", "too-long", "no-obs-axis"],
+)
+def test_xs_must_span_the_horizon(xs: Array | dict[str, Array], match: str) -> None:
+    """Issue #168: every ``xs`` leaf spans ``h.duration`` rows, as ``ssoe`` requires.
+
+    An ``xs`` of ``t_obs`` rows (sliced to the observed window) used to run a
+    zero-step forecast scan, and a longer one a forecast with more steps than
+    the covariates ask for, both without an error.
+    """
+    h = Horizon.from_data(empty_covariates(13), jnp.zeros((10, 1)))
+
+    def body() -> None:
+        markov_series(h, "z", jnp.zeros((1,)), _ar1_transition, xs)
+
+    with pytest.raises(ValueError, match=rf"^markov_series expects every xs leaf.*{match}"):
+        trace(seed(body, random.PRNGKey(0))).get_trace()
 
 
 def test_ar1_model_end_to_end_shape() -> None:

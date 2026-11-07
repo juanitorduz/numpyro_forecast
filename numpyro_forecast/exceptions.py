@@ -38,14 +38,20 @@ class VectorizedMetricError(NumpyroForecastError, TypeError):
     """A metric is not vmappable in the vectorized backtest.
 
     Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when a
-    metric forces a host conversion (e.g. ``float(...)`` or ``numpy`` calls)
-    under ``vmap``. Metrics must be pure JAX functions returning a scalar
-    array; see `~~numpyro_forecast.typing.Metric`.
+    metric forces a host conversion under ``vmap`` (``float(...)``,
+    ``int(...)``, ``range(...)``, Python list indexing or ``numpy`` calls on a
+    traced value) or builds a value-dependent shape (a boolean mask index such
+    as ``x[x > 0]``; use ``jnp.where`` instead). Metrics must be pure JAX
+    functions returning a scalar array; see `~~numpyro_forecast.typing.Metric`.
+    The scoring is traced on the window shapes before the fit, so this error
+    comes before any window is fitted.
     """
 
     default_message = (
         "backtest_vectorized metrics must be pure JAX functions returning a scalar "
-        "array; one forced a host conversion (e.g. float(...) or numpy) under vmap. "
+        "array; one forced a host conversion (e.g. float(...), int(...), range(...), "
+        "Python list indexing or numpy) or a value-dependent shape (a boolean mask such "
+        "as x[x > 0]; use jnp.where instead) under vmap. "
         "Use backtest(), or keep_predictions=True and score on the host."
     )
 
@@ -84,13 +90,18 @@ class MVNLayoutError(NumpyroForecastError, NotImplementedError):
     `~~numpyro_forecast.surgery.slice_time()`, and
     `~~numpyro_forecast.surgery.prefix_condition()` on MVN noise whose
     ``loc``/``covariance_matrix`` shapes do not match the supported
-    time-leading layout.
+    time-leading layout, and by `~~numpyro_forecast.surgery.shift_loc()` on a
+    predictor that is neither ``(*batch, time, 1)`` (time may be ``1``) nor
+    ``(*batch, time)`` with no more axes than the noise location.
     """
 
     default_message = (
         "MultivariateNormal time-axis surgery requires obs == 1 with time as the "
-        "leading correlation axis (loc shape ``(*batch, time)`` or "
-        "``(*batch, time, 1)`` with matching ``(*batch, time, time)`` covariance)."
+        "leading correlation axis: a noise loc of shape ``(*batch, time)`` (for example "
+        "``jnp.zeros(h.duration)``) or ``(*batch, time, 1)`` with a matching "
+        "``(*batch, time, time)`` covariance, and a predictor of shape "
+        "``(*batch, time, 1)``. The series of a panel go in the batch: "
+        "``(series, time, 1)``."
     )
 
 
@@ -117,7 +128,7 @@ class DeviceMemoryError(NumpyroForecastError, RuntimeError):
 class HostMemoryKindError(NumpyroForecastError, RuntimeError):
     """A device exposes no host memory kind for ``device="pinned_host"``.
 
-    Raised by `~~numpyro_forecast._offload._host_memory_kind()`, reached from
+    Raised by `~~numpyro_forecast.offload._host_memory_kind()`, reached from
     `~~numpyro_forecast.predictive.draw_posterior()`, the predictive drivers
     and everything built on them, when an explicit ``device="pinned_host"``
     targets a device whose addressable memories include neither
@@ -130,7 +141,7 @@ class HostMemoryKindError(NumpyroForecastError, RuntimeError):
 class DevicePlatformError(NumpyroForecastError, ValueError):
     """A ``device`` platform name has no initialized JAX backend.
 
-    Raised by `~~numpyro_forecast._offload._resolve_device()` (reached from
+    Raised by `~~numpyro_forecast.offload.resolve_device()` (reached from
     every function with a ``device`` parameter) when ``device`` names a platform,
     e.g. ``"tpu"``, whose backend is not initialized in this process. The
     message lists the available platforms and how to initialize the missing one

@@ -9,22 +9,25 @@ It is guide-only on purpose: MCMC users already hold their posterior samples via
 covariates, data)`` call; neither needs this function. The blackjax Pathfinder
 backend has its own analogous entry point,
 `~~numpyro_forecast.contrib.blackjax.pathfinder_samples()`, built on the same
-shared chunk-and-transfer loop, `~~numpyro_forecast._offload._draw_chunked()`.
+shared chunk-and-transfer loop, `~~numpyro_forecast.offload.draw_chunked()`.
 
 `forecast()` samples forecasts over the horizon from posterior draws, and
 `predict_in_sample()` samples the in-sample posterior predictive of the
-``obs`` site. Both drive a jitted ``Predictive`` wrapper through the shared
-chunking driver ``_chunked_draws``, which caps peak memory while compiling the
-predictive exactly once. With ``device`` set (e.g. ``"host"``: pageable host
-memory, as jax Arrays on the CPU backend device or as NumPy arrays when that
-backend is not initialized), every chunk is moved off the accelerator before
-the next one is drawn, so accelerator memory is bounded by a single chunk
-instead of the full draw array. The ``device`` contract is documented once, on
+``obs`` site. Each call jit-compiles a ``Predictive`` wrapper of the model once
+(`_compiled_predictive()`) and drives it through the shared chunking driver
+``_chunked_draws``, which caps peak memory while reusing that one program for
+every chunk. Nothing is cached across calls: like ``numpyro.infer.Predictive``,
+a driver call sees the model as it is at call time (including the globals,
+closure cells and attributes it reads), and the model need not be hashable.
+With ``device`` set (e.g. ``"host"``: pageable host memory, as jax Arrays on
+the CPU backend device or as NumPy arrays when that backend is not
+initialized), every chunk is moved off the accelerator before the next one is
+drawn, so accelerator memory is bounded by a single chunk instead of the full
+draw array. The ``device`` contract is documented once, on
 `draw_posterior()`; the predictive drivers share it.
 """
 
 from collections.abc import Callable, Mapping
-from functools import lru_cache, partial
 from typing import cast
 
 import jax
@@ -33,24 +36,29 @@ import numpy as np
 from jax import random
 from jax.tree_util import tree_map
 from jax.typing import ArrayLike
-from jaxtyping import Num
+from jaxtyping import Num, PyTree
 from numpyro.infer import Predictive
 from numpyro.infer.autoguide import AutoDelta, AutoGuide
 
-from numpyro_forecast._offload import (
-    _draw_chunked,
-    _leaf_view,
-    _oom_advice,
-    _resolve_device,
-    _ResolvedDevice,
-    _stitch_chunks,
-    _transfer,
-)
-from numpyro_forecast._validation import (
-    _require_covariates_extend_data,
-    _require_positive_num_samples,
+from numpyro_forecast.offload import (
+    ResolvedDevice,
+    chunk_indices,
+    draw_chunked,
+    leaf_view,
+    oom_advice,
+    resolve_device,
+    stitch_chunks,
+    transfer,
 )
 from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.validation import (
+    drop_empty_horizon_sites,
+    drop_obs_site,
+    require_covariates_extend_data,
+    require_positive_num_samples,
+    require_sample_axis,
+    require_time_axis,
+)
 
 
 def _ensure_sample_axis_for_delta(samples: dict[str, Array], num_samples: int) -> dict[str, Array]:
@@ -86,17 +94,24 @@ def _index_tree[Leaf: Array | np.ndarray](
     return tree_map(lambda leaf: leaf[index], tree)
 
 
-@lru_cache(maxsize=8)
 def _jitted_sample_posterior(guide: AutoGuide) -> Callable[..., dict[str, Array]]:
-    """Return a jitted, per-guide-cached ``sample_posterior`` with static ``sample_shape``.
+    """Return a freshly jitted ``sample_posterior`` of ``guide`` with static ``sample_shape``.
 
     Eagerly, ``sample_posterior`` materializes every latent and deterministic
     site (and their intermediates) at full sample size with no buffer planning,
     which is what blows accelerator memory on wide panels. Under ``jax.jit``
-    XLA schedules and reuses those buffers, and caching per guide instance
-    means every chunk of a `draw_posterior()` call (and repeated calls
-    with the same fit and sample count) shares one compiled executable, the
-    same single-compile discipline as the predictive drivers.
+    XLA schedules and reuses those buffers. `draw_posterior()` builds it once
+    per call and reuses it for every chunk, so a call compiles a single
+    program whatever the number of chunks.
+
+    Like the predictive drivers (`_compiled_predictive()`), nothing is cached
+    across calls. An ``AutoContinuous`` guide such as ``AutoNormal`` re-runs the
+    model through ``Predictive`` inside ``sample_posterior`` to recompute its
+    deterministic sites (for example the ``<name>`` site of a
+    `~~numpyro_forecast.reparam.time_reparam()` model), so a program cached on
+    the guide would replay the first trace of the model and return stale
+    deterministic draws after a global, closure value or attribute the model
+    reads changes (issue #167). The guide also need not be hashable.
 
     Parameters
     ----------
@@ -115,7 +130,7 @@ def _jitted_sample_posterior(guide: AutoGuide) -> Callable[..., dict[str, Array]
 def draw_posterior(
     rng_key: Array,
     guide: AutoGuide,
-    params: dict[str, Array],
+    params: dict[str, PyTree[Array]],
     num_samples: int,
     *,
     batch_size: int | None = None,
@@ -128,7 +143,10 @@ def draw_posterior(
     An ``AutoDelta`` guide is a MAP point estimate: it is drawn once and tiled to
     ``num_samples`` (`_ensure_sample_axis_for_delta()`), since it carries no
     posterior spread of its own. Every other ``AutoGuide`` is sampled through a
-    jitted, per-guide-cached ``sample_posterior`` (`_jitted_sample_posterior()`).
+    jitted ``sample_posterior`` (`_jitted_sample_posterior()`) that the call
+    compiles once and shares across its chunks; nothing is cached across calls,
+    so the draws (deterministic sites included) reflect the model as it is at
+    call time.
 
     Parameters
     ----------
@@ -139,7 +157,11 @@ def draw_posterior(
         ``SVI``.
     params
         The learned variational parameters, e.g. the trained parameters from
-        ``svi.run``'s result.
+        ``svi.run``'s result. A value may be any pytree of arrays, not only
+        an array: the flow weights of ``AutoIAFNormal`` and ``AutoBNAFNormal``
+        are lists of per-layer tuples of arrays, with an empty tuple for each
+        parameter-free layer. ``params`` only reaches the guide's
+        ``sample_posterior``; ``device`` and ``batch_size`` act on the draws.
     num_samples
         Number of posterior draws.
     batch_size
@@ -195,10 +217,10 @@ def draw_posterior(
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        `~~numpyro_forecast._offload._host_memory_kind()`).
+        `~~numpyro_forecast.offload._host_memory_kind()`).
     DevicePlatformError
         If ``device`` names a platform whose backend is not initialized (see
-        `~~numpyro_forecast._offload._resolve_device()`).
+        `~~numpyro_forecast.offload.resolve_device()`).
 
     Warns
     -----
@@ -212,16 +234,17 @@ def draw_posterior(
     function draws afresh from a variational guide, and chunks drawn from
     independent subkeys remain valid i.i.d. posterior samples.
     """
-    _require_positive_num_samples(num_samples)
+    require_positive_num_samples(num_samples)
+    is_delta = isinstance(guide, AutoDelta)
+    sample = None if is_delta else _jitted_sample_posterior(guide)
 
     def draw_fn(key: Array, n: int) -> dict[str, Array]:
-        if isinstance(guide, AutoDelta):
+        if sample is None:
             point = guide.sample_posterior(key, params)
             return _ensure_sample_axis_for_delta(point, n)
-        sample = _jitted_sample_posterior(guide)
         return sample(key, params, sample_shape=(n,))
 
-    return _draw_chunked(
+    return draw_chunked(
         rng_key,
         draw_fn,
         num_samples,
@@ -248,12 +271,14 @@ def _sample_axis_size(posterior: Mapping[str, Array | np.ndarray]) -> int:
     Raises
     ------
     ValueError
-        If ``posterior`` is empty or the leaves disagree on the sample-axis
-        length (the message names the offending sites).
+        If ``posterior`` is empty, a leaf has no sample axis (a 0-d leaf), or
+        the leaves disagree on the sample-axis length (the message names the
+        offending sites).
     """
     if not posterior:
         msg = "posterior must be non-empty"
         raise ValueError(msg)
+    require_sample_axis(posterior)
     sizes = {name: leaf.shape[0] for name, leaf in posterior.items()}
     distinct = set(sizes.values())
     if len(distinct) != 1:
@@ -262,49 +287,12 @@ def _sample_axis_size(posterior: Mapping[str, Array | np.ndarray]) -> int:
     return distinct.pop()
 
 
-def _chunk_indices(num_samples: int, batch_size: int) -> list[Array]:
-    """Build wrapped sample-axis index blocks of exactly ``batch_size`` rows each.
-
-    Block ``i`` holds ``arange(i * batch_size, (i + 1) * batch_size) % num_samples``:
-    every block shares one shape, so the jitted predictive compiles exactly
-    once regardless of ``num_samples``, and the final block wraps around to
-    re-use leading draws (when ``num_samples`` is not an exact multiple of
-    ``batch_size``), which `_chunked_draws()` discards with a final
-    ``[:num_samples]`` slice. The blocks reproduce the draws of the former
-    posterior-padding scheme bit for bit without materializing a padded copy of
-    the posterior.
-
-    Parameters
-    ----------
-    num_samples
-        Total number of posterior draws (callers with
-        ``num_samples <= batch_size`` take the unchunked passthrough instead).
-    batch_size
-        Positive chunk size.
-
-    Returns
-    -------
-    list[Array]
-        One integer index block of length ``batch_size`` per chunk.
-
-    Raises
-    ------
-    ValueError
-        If ``batch_size`` is not positive.
-    """
-    if batch_size <= 0:
-        msg = f"batch_size must be positive, got {batch_size}"
-        raise ValueError(msg)
-    starts = range(0, num_samples, batch_size)
-    return [jnp.arange(start, start + batch_size) % num_samples for start in starts]
-
-
 def _chunked_draws(
     rng_key: Array,
     predict_fn: Callable[[Array, Mapping[str, Array | np.ndarray]], Array],
     posterior: Mapping[str, ArrayLike],
     batch_size: int | None,
-    device: _ResolvedDevice = None,
+    device: ResolvedDevice = None,
 ) -> Array | np.ndarray:
     """Run ``predict_fn`` over fixed-size posterior chunks and stitch the draws.
 
@@ -312,21 +300,21 @@ def _chunked_draws(
     With ``batch_size`` ``None`` (or at least the sample count) ``predict_fn``
     is called once on the full posterior with ``rng_key`` itself. Otherwise the
     posterior is gathered into wrapped index blocks of exactly ``batch_size``
-    rows (`_chunk_indices()`) so every chunk shares one shape and the
+    rows (`chunk_indices()`) so every chunk shares one shape and the
     jitted ``predict_fn`` compiles exactly once; one subkey is split per chunk,
     and the wrapped draws are discarded by a final slice (skipped when the
     sample count is an exact multiple of ``batch_size``, since JAX slices copy
     and nothing wrapped). Every leaf of ``posterior`` is first normalized with
-    `~~numpyro_forecast._offload._leaf_view()`, so a
+    `~~numpyro_forecast.offload.leaf_view()`, so a
     host-committed posterior (the output of a previous ``device="host"`` stage)
     is gathered on the host and only the chunk reaches the accelerator. When
-    ``device`` is given, every chunk is moved there (`_transfer()`) before
+    ``device`` is given, every chunk is moved there (`transfer()`) before
     the next one is drawn and the stitched result lives on ``device``, bounding
     accelerator memory by a single chunk; every host target (the CPU device,
     the ``"numpy"`` sentinel, and the ``"pinned_host"`` sentinel) stitches
     through NumPy so the result never touches an accelerator. ``device`` is the
     *resolved* value: the public drivers run ``"host"`` through
-    `~~numpyro_forecast._offload._resolve_device()` first.
+    `~~numpyro_forecast.offload.resolve_device()` first.
 
     Parameters
     ----------
@@ -348,46 +336,169 @@ def _chunked_draws(
         The stitched draws for the original sample count (committed to
         ``device`` when one is given; NumPy for ``"numpy"``).
     """
+    # Before `leaf_view()`: a Python scalar leaf would fail its type check unnamed.
+    require_sample_axis(posterior)
     staged = {
-        name: _leaf_view(cast("Array | np.ndarray", leaf)) for name, leaf in posterior.items()
+        name: leaf_view(cast("Array | np.ndarray", leaf)) for name, leaf in posterior.items()
     }
     num = _sample_axis_size(staged)
     if batch_size is None or batch_size >= num:
-        with _oom_advice("predictive sampling", batch_size):
-            return _transfer(predict_fn(rng_key, staged), device)
-    indices = _chunk_indices(num, batch_size)
+        with oom_advice("predictive sampling", batch_size):
+            return transfer(predict_fn(rng_key, staged), device)
+    indices = chunk_indices(num, batch_size)
     keys = random.split(rng_key, len(indices))
-    with _oom_advice("predictive sampling", batch_size):
+    with oom_advice("predictive sampling", batch_size):
         chunks = [
-            _transfer(predict_fn(keys[i], _index_tree(staged, idx)), device)
+            transfer(predict_fn(keys[i], _index_tree(staged, idx)), device)
             for i, idx in enumerate(indices)
         ]
-        return _stitch_chunks(chunks, num, device)
+        return stitch_chunks(chunks, num, device)
 
 
-@partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
-def _predict(
-    rng_key: Array,
-    model: ForecastModel,
-    posterior: Mapping[str, Array | np.ndarray],
-    data: Array,
-    covariates: Array,
-    *,
-    parallel: bool = True,
-) -> Array:
-    """Run ``Predictive`` over the full horizon and return the ``forecast`` site.
+def _compiled_predictive(
+    model: ForecastModel, site: str, *, parallel: bool
+) -> Callable[..., Array]:
+    """Return a freshly jitted ``Predictive`` of ``model`` that returns the ``site`` draws.
 
-    Jitted with ``model`` (and ``parallel``) static: each
-    ``(model, parallel, shape)`` combination compiles once and is reused, which
-    is what makes the chunked `forecast()` loop cheap (the per-call
-    ``Predictive`` tracing cost is paid a single time). ``parallel`` selects
-    ``Predictive``'s sample-axis mapping (``vmap`` when ``True``, serial
-    ``lax.map`` when ``False``).
+    The returned callable takes ``(rng_key, posterior, *model_args)`` and returns
+    ``Predictive(model, ...)(rng_key, *model_args)[site]``. `forecast()` and
+    `predict_in_sample()` build it once per call and reuse it for every
+    ``batch_size`` chunk, so a call compiles a single program whatever the
+    number of chunks.
+
+    ``model`` is closed over, not a static ``jax.jit`` argument: it is never
+    hashed (any callable model works, for example a plain ``@dataclass`` with
+    ``__call__``), and no compiled program outlives the driver call. A
+    module-level jit with a static model would key its cache on the model
+    object and replay the first trace, so a model that reads a global, a
+    closure cell or a mutable attribute would silently return stale draws after
+    that value changes (issue #167). The model arguments (``data``,
+    ``covariates``) stay traced jit arguments rather than closed-over constants.
+
+    Parameters
+    ----------
+    model
+        The forecasting model callable.
+    site
+        Name of the site to return (``"forecast"`` or ``"obs"``).
+    parallel
+        ``Predictive``'s sample-axis mapping (``vmap`` when ``True``, serial
+        ``lax.map`` when ``False``).
+
+    Returns
+    -------
+    Callable[..., Array]
+        The jitted ``(rng_key, posterior, *model_args) -> draws`` function.
     """
-    predictive = Predictive(
-        model, posterior_samples=dict(posterior), return_sites=["forecast"], parallel=parallel
+
+    def run(
+        rng_key: Array, posterior: Mapping[str, Array | np.ndarray], *model_args: Array
+    ) -> Array:
+        predictive = Predictive(
+            model, posterior_samples=dict(posterior), return_sites=[site], parallel=parallel
+        )
+        return predictive(rng_key, *model_args)[site]
+
+    return jax.jit(run)
+
+
+def _require_time_steps(
+    shape: tuple[int, ...], *, driver: str, site: str, steps: int, rule: str, train_rows: int
+) -> None:
+    """Raise unless every draw of ``site`` has ``steps`` rows at axis ``-2``.
+
+    The drivers pass the shape from ``jax.eval_shape`` of the jitted
+    predictive, which shares its trace with the call that follows, so a
+    mismatch raises before anything is compiled or drawn. A model that writes
+    its own sites, or keeps time latents outside
+    `~~numpyro_forecast.models.innovations()` (which checks its own sites),
+    can otherwise return draws of the wrong length without an error (issue
+    #168).
+
+    Parameters
+    ----------
+    shape
+        The shape of the draws of ``site``, sample axis leading.
+    driver
+        Name of the calling driver, for the message.
+    site
+        Name of the site the draws come from (``"forecast"`` or ``"obs"``).
+    steps
+        The required number of time steps at axis ``-2``.
+    rule
+        How ``steps`` follows from the driver's arguments, for the message.
+    train_rows
+        The training length the posterior must come from, for the message.
+
+    Raises
+    ------
+    ValueError
+        If a draw has fewer than two axes or not ``steps`` rows at axis ``-2``.
+    """
+    per_draw = tuple(shape[1:])
+    if len(per_draw) < 2:
+        msg = (
+            f"{driver} expects each draw of the model's {site!r} site to have shape (..., time, "
+            "obs), with time at axis -2 and the observation axis at -1, but it has shape "
+            f"{per_draw} per draw. A univariate series keeps a size-1 observation axis: "
+            "(time, 1), not (time,)."
+        )
+        raise ValueError(msg)
+    if per_draw[-2] != steps:
+        msg = (
+            f"{driver} expects the model's {site!r} site to have {steps} time steps at axis -2 "
+            f"({rule}), but it has shape {per_draw} per draw. Check that time is at axis -2, "
+            "that the model slices the correct rows, and that each exogenous input spans the "
+            "covariates. A posterior drawn for a different training length also causes this "
+            f"when its time latents are not innovations() sites: they must have {train_rows} "
+            "rows."
+        )
+        raise ValueError(msg)
+
+
+def _require_data_axes(shape: tuple[int, ...], data_shape: tuple[int, ...], steps: int) -> None:
+    """Raise unless every forecast draw ends in the ``(*batch, steps, obs)`` axes of ``data``.
+
+    Runs after `_require_time_steps()`, so only the axes other than time can
+    differ. The ``"obs"`` log density broadcasts the observation distribution
+    against ``data``, so a model whose predictor lacks the series axis (a
+    ``(duration, 1)`` predictor over ``(time, n)`` data, without a series
+    plate) or a batch axis of ``data`` scores every series in training but
+    draws one forecast for all of them (issue #259). The draw includes the axes
+    of the plates around the site, so a ``(duration, 1)`` predictor inside a
+    size-``n`` plate at ``dim=-1`` passes. Extra leading axes pass too, for
+    example a scenario axis that batched covariates add over unbatched data.
+
+    Parameters
+    ----------
+    shape
+        The shape of the ``"forecast"`` draws, sample axis leading.
+    data_shape
+        The shape of the observed data.
+    steps
+        The number of forecast steps.
+
+    Raises
+    ------
+    ValueError
+        If a draw does not end in the axes
+        ``(*data_shape[:-2], steps, data_shape[-1])``.
+    """
+    per_draw = tuple(shape[1:])
+    expected = (*data_shape[:-2], steps, data_shape[-1])
+    if per_draw[-len(expected) :] == expected:
+        return
+    msg = (
+        f"forecast expects the model's 'forecast' site to end in the axes {expected} per draw, "
+        f"the axes of data (shape {tuple(data_shape)}) over {steps} steps, but it has shape "
+        f"{per_draw}. The usual cause is a predictor shared by the n series of data without "
+        "the series axis, which draws one forecast for all of them: call predict inside a "
+        "size-n plate at dim=-1, numpyro.plate('series', n, dim=-1), or give the predictor "
+        "shape (duration, n), for example jnp.broadcast_to(prediction, (h.duration, n)). A "
+        "batch axis of data needs a plate at its dim or that axis on the predictor, and a "
+        "size-1 batch axis that the model does not use can be removed from data."
     )
-    return predictive(rng_key, covariates, data)["forecast"]
+    raise ValueError(msg)
 
 
 def forecast(
@@ -416,11 +527,24 @@ def forecast(
     model
         The forecasting model callable (the same one that produced ``posterior``).
     posterior
-        Posterior samples of the latent sites, sample axis leading. The output
-        of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
-        is accepted directly.
+        Posterior samples of the latent sites of the training run, sample axis
+        leading (``mcmc.get_samples()`` of the fit, or `draw_posterior()`). The
+        output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
+        leaves) is accepted directly. A forecast-horizon key with values (one
+        that ends in ``"_future"`` or contains ``"_future_"``, or
+        ``"forecast"``) raises ``ValueError``: it comes from a
+        ``numpyro.infer.Predictive`` call over a horizon, whose sample sites
+        would pin the horizon instead of drawing it from the prior, since the
+        driver substitutes every posterior sample site by name. Such a key with
+        an empty leaf (a site that the model registers on every call, recorded
+        by the training run with a size-0 time axis) is dropped, so the model
+        draws or computes the site as if the key were absent.
     data
-        Observed data with time at axis ``-2`` and length ``t``.
+        Observed data with time at axis ``-2`` and length ``t``. When
+        ``posterior`` holds in-sample time latents, ``t`` must be the training
+        length that ``posterior`` was drawn for; a
+        `~~numpyro_forecast.models.innovations()` site of another length
+        raises ``ValueError``.
     covariates
         Covariates with time at axis ``-2`` and length ``duration > t``.
     batch_size
@@ -462,14 +586,27 @@ def forecast(
     Raises
     ------
     ValueError
-        If ``covariates`` does not extend beyond ``data`` along the time axis.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
+        extend beyond ``data`` along the time axis, if ``posterior`` is
+        empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
+        on the sample-axis length, if a forecast-horizon key of ``posterior``
+        (one that ends in ``"_future"`` or contains ``"_future_"``, or
+        ``"forecast"``) has a non-empty leaf, if a ``posterior`` value of an
+        `~~numpyro_forecast.models.innovations()` site does not have ``t``
+        steps (a posterior drawn for a different training length), if the
+        ``"forecast"`` draws do not have time at axis ``-2`` with
+        ``duration - t`` steps, or if they do not have the other axes of
+        ``data`` (a predictor shared by the ``n`` series of ``data`` needs a
+        size-``n`` plate at ``dim=-1`` or shape ``(duration, n)``; without
+        either, the model draws one forecast for all series).
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        `~~numpyro_forecast._offload._host_memory_kind()`).
+        `~~numpyro_forecast.offload._host_memory_kind()`).
     DevicePlatformError
         If ``device`` names a platform whose backend is not initialized (see
-        `~~numpyro_forecast._offload._resolve_device()`).
+        `~~numpyro_forecast.offload.resolve_device()`).
 
     Warns
     -----
@@ -482,37 +619,38 @@ def forecast(
     Chunking is a memory knob, not a reproducibility knob: reproducibility is
     per ``(rng_key, batch_size)``. Every chunk shares the exact ``batch_size``
     shape (the final chunk wraps around to re-used draws that are discarded),
-    so the underlying ``_predict`` compiles exactly once for a fixed shape, but
-    changing ``batch_size`` changes the PRNG stream layout and therefore the
-    exact draws. ``device`` never changes the draws, only where they live.
+    so each call compiles the predictive exactly once, but changing
+    ``batch_size`` changes the PRNG stream layout and therefore the exact
+    draws. ``device`` never changes the draws, only where they live.
+
+    Each call traces and compiles the model once and keeps no compiled program
+    afterwards. In exchange, like a plain ``numpyro.infer.Predictive`` call
+    (which re-runs the model every time), the draws always reflect the model
+    as it is at call time (a changed global, closure value or attribute it
+    reads takes effect on the next call), and ``model`` can be any callable,
+    hashable or not. A repeated call with the same model and shapes, for
+    example in a scenario loop, therefore compiles again; so does
+    `~~numpyro_forecast.convert.to_datatree()`, which runs the drivers itself.
     """
-    _require_covariates_extend_data(data, covariates)
+    require_covariates_extend_data(data, covariates)
+    posterior = drop_empty_horizon_sites(posterior)
+    steps = covariates.shape[-2] - data.shape[-2]
+    predictive = _compiled_predictive(model, "forecast", parallel=parallel)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
-        return _predict(key, model, post, data, covariates, parallel=parallel)
+        shape = jax.eval_shape(predictive, key, post, covariates, data).shape
+        _require_time_steps(
+            shape,
+            driver="forecast",
+            site="forecast",
+            steps=steps,
+            rule="covariates.shape[-2] - data.shape[-2]",
+            train_rows=data.shape[-2],
+        )
+        _require_data_axes(shape, data.shape, steps)
+        return predictive(key, post, covariates, data)
 
-    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))
-
-
-@partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
-def _predict_obs(
-    rng_key: Array,
-    model: ForecastModel,
-    posterior: Mapping[str, Array | np.ndarray],
-    covariates: Array,
-    *,
-    parallel: bool = True,
-) -> Array:
-    """Run ``Predictive`` over the observed window and return the ``obs`` site.
-
-    Jitted with ``model`` (and ``parallel``) static (see `_predict()`): each
-    ``(model, parallel, shape)`` combination compiles once and is reused, keeping
-    the chunked `predict_in_sample()` loop cheap.
-    """
-    predictive = Predictive(
-        model, posterior_samples=dict(posterior), return_sites=["obs"], parallel=parallel
-    )
-    return predictive(rng_key, covariates)["obs"]
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, resolve_device(device))
 
 
 def predict_in_sample(
@@ -532,6 +670,11 @@ def predict_in_sample(
     span only the observed window, so the model's ``obs`` site is sampled at every
     step. The number of predictive samples equals the leading (sample) axis of
     ``posterior`` (see `~~numpyro_forecast.predictive.draw_posterior()`).
+    The model gets ``data=None``, so the draws have the axes that the model
+    gives ``obs``, and the driver has no data to check them against: a
+    predictor shared by ``n`` series without a size-``n`` plate at ``dim=-1``
+    draws one column. `forecast()` and `~~numpyro_forecast.convert.to_datatree()`
+    get ``data`` and raise ``ValueError`` in that case.
 
     Parameters
     ----------
@@ -540,13 +683,29 @@ def predict_in_sample(
     model
         The forecasting model callable (the same one that produced ``posterior``).
     posterior
-        Posterior samples of the latent sites, sample axis leading. The output
-        of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
-        is accepted directly.
+        Posterior samples of the latent sites of the training run, sample axis
+        leading (``mcmc.get_samples()`` of the fit, or `draw_posterior()`). The
+        output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
+        leaves) is accepted directly. Forecast-horizon keys follow the rule of
+        `forecast()`: one with values raises ``ValueError``, because it marks
+        the output of a ``numpyro.infer.Predictive`` call over a horizon, and
+        one with an empty leaf is dropped. An ``"obs"`` key is dropped too, so
+        the draws come from the latent sites: ``Predictive`` substitutes every
+        posterior sample site by name, and an ``"obs"`` key (the output of a
+        ``Predictive`` call with ``data``, or of a prior predictive call) would
+        make every draw equal to it. Only ``"obs"`` is dropped: keep the other
+        sites that the model observes when it gets ``data`` (a second
+        likelihood) out of ``posterior``, or they are substituted.
     covariates
         Covariates with time at axis ``-2`` spanning the observed window. Its time
         length must match the data the ``posterior`` was fit on, since the in-sample
-        latent sites are sized to that window.
+        latent sites are sized to that window. An
+        `~~numpyro_forecast.models.innovations()` site of another length raises
+        ``ValueError`` however the model slices its ``"obs"`` site. For other
+        latents the driver checks only that the ``"obs"`` draws have one step
+        per row, and a `~~numpyro_forecast.models.markov_series()` latent
+        replays a shorter posterior as a prefix and draws the remaining steps
+        from the prior (a longer one raises NumPyro's ``RuntimeError``).
     batch_size
         Optional chunk size for sampling (caps peak memory).
     parallel
@@ -581,22 +740,53 @@ def predict_in_sample(
 
     Raises
     ------
+    ValueError
+        If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
+        the leaves disagree on the sample-axis length, if a forecast-horizon
+        key of ``posterior`` (one that ends in ``"_future"`` or contains
+        ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if ``"obs"``
+        is the only key of ``posterior``, if
+        ``covariates`` has fewer than two axes (time must be at axis ``-2``)
+        or no time steps, if a ``posterior`` value of an
+        `~~numpyro_forecast.models.innovations()` site does not have one step
+        per ``covariates`` row (a posterior drawn for a different training
+        length), or if the ``"obs"`` draws do not have time at axis ``-2`` with
+        one step per ``covariates`` row.
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        `~~numpyro_forecast._offload._host_memory_kind()`).
+        `~~numpyro_forecast.offload._host_memory_kind()`).
     DevicePlatformError
         If ``device`` names a platform whose backend is not initialized (see
-        `~~numpyro_forecast._offload._resolve_device()`).
+        `~~numpyro_forecast.offload.resolve_device()`).
 
     Warns
     -----
     UserWarning
         If ``device="cpu"`` is requested and the JAX CPU backend is not
         initialized, so the draws take the NumPy path of ``"host"`` instead.
+
+    Notes
+    -----
+    Like `forecast()`, each call compiles the predictive once (shared by every
+    ``batch_size`` chunk) and keeps no compiled program afterwards, so the draws
+    reflect the model as it is at call time and ``model`` need not be hashable.
     """
+    require_time_axis("covariates", covariates)
+    posterior = drop_obs_site(drop_empty_horizon_sites(posterior))
+    steps = covariates.shape[-2]
+    # No data argument: the model must see ``data=None`` to sample ``obs``.
+    predictive = _compiled_predictive(model, "obs", parallel=parallel)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
-        return _predict_obs(key, model, post, covariates, parallel=parallel)
+        _require_time_steps(
+            jax.eval_shape(predictive, key, post, covariates).shape,
+            driver="predict_in_sample",
+            site="obs",
+            steps=steps,
+            rule="one per row of the in-sample covariates",
+            train_rows=steps,
+        )
+        return predictive(key, post, covariates)
 
-    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, resolve_device(device))

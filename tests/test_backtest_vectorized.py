@@ -7,31 +7,49 @@ and the I6 acceptance check that a subsequent eager plain-NumPyro SVI fit with a
 fresh guide runs without an ``UnexpectedTracerError``.
 """
 
+import threading
 import types
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from functools import partial
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import rw_model, svi_forecast_fn
+from conftest import poisson_counts, poisson_model, rw_model, svi_forecast_fn
 from jax import Array, random
+from jax.core import Tracer
+from numpyro import handlers
 from numpyro.infer import SVI, Trace_ELBO
-from numpyro.infer.autoguide import AutoNormal
+from numpyro.infer.autoguide import (
+    AutoGuide,
+    AutoGuideList,
+    AutoIAFNormal,
+    AutoLaplaceApproximation,
+    AutoMultivariateNormal,
+    AutoNormal,
+)
+from numpyro.infer.initialization import init_to_value
 
+from numpyro_forecast import Horizon, predict
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     VectorizedBacktestResult,
+    _require_scorable_metrics,
     _window_key_streams,
     backtest,
     backtest_vectorized,
     eval_coverage,
     eval_crps,
+    results_to_dataframe,
 )
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
+from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.predictive import draw_posterior, forecast
+from numpyro_forecast.typing import Guide
 
 TRAIN, TEST = 30, 5
 
@@ -77,40 +95,74 @@ def test_window_indices_match_loop_backtest() -> None:
     assert [int(x) for x in vec.t2] == [r.t2 for r in loop]
 
 
+def _trend_model(covariates: Array, data: Array | None = None) -> None:
+    """A linear trend in the time covariate, with only global latents.
+
+    The data determine the three parameters well, so a converged SVI fit gives
+    almost the same forecast for every seed. The forecast of ``rw_model``
+    depends on the fitted level of every training step, so its MAE over a
+    5-step window changes by a factor of up to 10 with the seed.
+    """
+    h = Horizon.from_data(covariates, data)
+    level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+    slope = jnp.asarray(numpyro.sample("slope", dist.Normal(0.0, 1.0)))
+    sigma = jnp.asarray(numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0)))
+    predict(h, dist.Normal(0.0, sigma), level + slope * covariates)
+
+
 def test_metrics_statistically_close_to_loop() -> None:
-    """Per-window MAE/CRPS match the loop path within a generous tolerance."""
+    """Per-window MAE and CRPS of the two backtests agree, averaged over seeds.
+
+    The two estimators use different PRNG layouts, so one seed compares two
+    random draws. Both start each window from its own ``init_to_uniform``
+    point. From a far start the fit can need about 4,000 steps of
+    ``Adam(0.01)`` to converge (2,000 steps left some windows of both
+    estimators at a 3 to 8 times larger MAE), so the fits run 5,000 steps. The
+    mean over a few seeds of a well-determined model then removes most of the
+    noise: over 6 seeds and all 20 triples of them, the largest per-window
+    relative difference of the 3-seed mean MAE was about 0.35, so a tolerance
+    of 0.5 checks agreement and does not depend on the seeds.
+    """
     duration = 50
-    data, cov = _series(duration)
-    loop = backtest(
-        random.PRNGKey(3),
-        lambda: rw_model,
-        data,
-        cov,
-        forecast_fn=svi_forecast_fn(num_steps=800),
-        train_window=TRAIN,
-        test_window=TEST,
-        stride=5,
-        num_samples=200,
-    )
-    model = rw_model
-    vec = backtest_vectorized(
-        random.PRNGKey(3),
-        lambda: model,
-        data,
-        cov,
-        train_window=TRAIN,
-        test_window=TEST,
-        guide=AutoNormal(model),
-        stride=5,
-        num_steps=800,
-        num_samples=200,
-    )
-    loop_mae = jnp.array([r.metrics["mae"] for r in loop])
-    # Estimators differ in PRNG layout; check coarse agreement on MAE only.
-    assert jnp.all(jnp.isfinite(vec.metrics["mae"]))
-    assert jnp.all(jnp.isfinite(loop_mae))
-    rel_err = jnp.abs(vec.metrics["mae"] - loop_mae) / jnp.maximum(loop_mae, 1e-6)
-    assert float(rel_err.mean()) < 1.5
+    time = jnp.linspace(0.0, 1.0, duration)[:, None]
+    data = 0.5 + 2.0 * time + 0.1 * random.normal(random.PRNGKey(0), (duration, 1))
+    model = _trend_model
+    loop_metrics: dict[str, list[Array]] = {"mae": [], "crps": []}
+    vec_metrics: dict[str, list[Array]] = {"mae": [], "crps": []}
+    for seed in range(3):
+        loop = backtest(
+            random.PRNGKey(seed),
+            lambda: model,
+            data,
+            time,
+            forecast_fn=svi_forecast_fn(num_steps=5_000),
+            train_window=TRAIN,
+            test_window=TEST,
+            stride=5,
+            num_samples=200,
+        )
+        vec = backtest_vectorized(
+            random.PRNGKey(seed),
+            lambda: model,
+            data,
+            time,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(model),
+            stride=5,
+            num_steps=5_000,
+            num_samples=200,
+        )
+        for name in loop_metrics:
+            loop_metrics[name].append(jnp.array([r.metrics[name] for r in loop]))
+            vec_metrics[name].append(jnp.asarray(vec.metrics[name]))
+    for name in loop_metrics:
+        loop_mean = jnp.stack(loop_metrics[name]).mean(axis=0)
+        vec_mean = jnp.stack(vec_metrics[name]).mean(axis=0)
+        assert bool(jnp.all(jnp.isfinite(loop_mean)))
+        assert bool(jnp.all(jnp.isfinite(vec_mean)))
+        rel_err = jnp.abs(vec_mean - loop_mean) / loop_mean
+        assert float(rel_err.max()) < 0.5, (name, loop_mean, vec_mean)
 
 
 @pytest.mark.parametrize(
@@ -225,6 +277,21 @@ def test_duration_too_short_rejected() -> None:
         )
 
 
+def test_covariates_without_time_axis_rejected() -> None:
+    """1-D covariates name the ``(time, k)`` layout instead of an ``IndexError``."""
+    data, _ = _series(50)
+    with pytest.raises(ValueError, match=r"covariates must have time at axis -2"):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: rw_model,
+            data,
+            jnp.zeros(50),
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(rw_model),
+        )
+
+
 def test_covariate_length_mismatch_rejected() -> None:
     """Mismatched data/covariate durations raise ``ValueError``."""
     data, _ = _series(50)
@@ -240,6 +307,40 @@ def test_covariate_length_mismatch_rejected() -> None:
             test_window=TEST,
             guide=AutoNormal(model),
             num_steps=10,
+        )
+
+
+def _never_called_guide(*_args: object, **_kwargs: object) -> None:
+    """A guide that fails the test if ``backtest_vectorized`` ever fits or samples it."""
+    pytest.fail("the guide should never have been called")
+
+
+@pytest.mark.parametrize(
+    ("num_samples", "metrics", "match"),
+    [
+        (0, None, "num_samples must be positive"),
+        (0, {}, "num_samples must be positive"),
+        (1, None, r"num_samples=1 is too small for the metrics \['crps'\]"),
+        (1, {"crps_half": partial(eval_crps, batch_size=2)}, "num_samples=1 is too small"),
+    ],
+)
+def test_too_few_samples_rejected_before_any_fit(
+    num_samples: int, metrics: dict[str, Callable[..., Array]] | None, match: str
+) -> None:
+    """A ``num_samples`` the metrics cannot score raises before the SVI fit."""
+    data, cov = _series(50)
+    with pytest.raises(ValueError, match=match):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: rw_model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=_never_called_guide,
+            num_steps=10,
+            num_samples=num_samples,
+            metrics=metrics,
         )
 
 
@@ -295,9 +396,7 @@ def test_single_svi_compilation(
     first to prime those caches; only the *counted* calls below measure this
     call's own (repeat) compilation behavior, which is what I3 actually claims.
     """
-    import jax
-
-    duration = TRAIN + TEST + 9  # exactly 10 windows at stride 1
+    duration = TRAIN + TEST + 9
     data, cov = _series(duration)
     model = rw_model
 
@@ -316,55 +415,49 @@ def test_single_svi_compilation(
         )
         jax.block_until_ready(result.losses)
 
-    # Untracked warm-up: absorbs the cold-process, order-dependent compilation
-    # cost described above so the counted calls below isolate the invariant.
     run()
 
     with count_compilations() as tally:
         run()
     first = int(tally.count)
-    # Warmed, a repeat call with identical shapes measured a stable 3 backend
-    # compiles across repeated fresh-process runs (a fresh AutoNormal instance
-    # each call misses the per-guide draw_posterior jit cache, plus a couple of
-    # residual traces); this is a generous margin above that, and nowhere near
-    # the 75-132+ a cold process pays.
     assert first < 10
 
     with count_compilations() as tally:
         run()
-    # A further identical call should not compile more than the previous one.
     assert tally.count <= max(first, 1)
 
 
-def test_no_tracer_leak_on_subsequent_eager_fit() -> None:
-    """I6 acceptance: a fresh eager plain-NumPyro SVI fit after a vectorized run is clean.
+def test_guide_instance_stays_fresh_for_later_calls_and_eager_fits() -> None:
+    """I6 acceptance: the guide passed in is left unset and usable afterwards.
 
-    The mandatory eager warm-up keeps the vectorized run's AutoGuide instance
-    uncontaminated, and a subsequent eager fit uses a fresh guide, so no
-    ``UnexpectedTracerError`` escapes into later inference.
+    Each window sets up its own copy of the guide under ``vmap``, so no tracer
+    reaches the caller's instance: it can be passed to a second vectorized run
+    (which rejects an already set-up guide) and then fitted eagerly without an
+    ``UnexpectedTracerError``.
     """
     duration = TRAIN + TEST + 7
     data, cov = _series(duration)
     model = rw_model
-    backtest_vectorized(
-        random.PRNGKey(1),
-        lambda: model,
-        data,
-        cov,
-        train_window=TRAIN,
-        test_window=TEST,
-        guide=AutoNormal(model),
-        num_steps=30,
-        num_samples=10,
-    )
+    guide = AutoNormal(model)
+    for seed in range(2):
+        backtest_vectorized(
+            random.PRNGKey(seed),
+            lambda: model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=guide,
+            num_steps=30,
+            num_samples=10,
+        )
     train_data = data[:TRAIN]
     train_cov = cov[:TRAIN]
     full_cov = cov[: TRAIN + TEST]
     key_fit, key_draw = random.split(random.PRNGKey(2))
-    fresh_guide = AutoNormal(rw_model)
-    svi = SVI(rw_model, fresh_guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    svi = SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
     state = svi.run(key_fit, 30, train_cov, train_data, progress_bar=False)
-    posterior = draw_posterior(key_draw, fresh_guide, state.params, 10)
+    posterior = draw_posterior(key_draw, guide, state.params, 10)
     preds = forecast(random.PRNGKey(4), rw_model, posterior, train_data, full_cov)
     assert preds.shape[0] == 10
     assert jnp.all(jnp.isfinite(preds))
@@ -397,28 +490,121 @@ def test_window_streams_are_disjoint() -> None:
     """Per-window init/posterior/forecast keys are pairwise distinct, never a parent.
 
     Guards the PRNG-hygiene rule from round-1 item 1: ``fold_in(rng_key, i)`` is
-    a split parent only, so no stream may reuse it directly, and none may
-    collide with the eager warm-up key ``fold_in(rng_key, -1)``.
+    a split parent only, so no stream may reuse it directly.
     """
-    import jax
-
     rng_key = random.PRNGKey(0)
     num_windows = 2
     init_keys, post_keys, fc_keys = _window_key_streams(rng_key, num_windows)
     parents = jax.vmap(lambda i: random.fold_in(rng_key, i))(jnp.arange(num_windows))
-    warmup = random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32))
 
-    keys = [warmup]
+    keys = []
     for i in range(num_windows):
         keys += [init_keys[i], post_keys[i], fc_keys[i], parents[i]]
     raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for k in keys]
     assert len(set(raw)) == len(raw)
 
 
+def _level_model(covariates: Array, data: Array | None = None) -> None:
+    """A constant-level model over 2 series whose ``forecast`` is the sampled level ``mu``.
+
+    Two series give a 2-dimensional latent, the minimum for ``AutoIAFNormal``.
+    """
+    h = Horizon.from_data(covariates, data)
+    with numpyro.plate("series", 2, dim=-1):
+        mu = jnp.asarray(numpyro.sample("mu", dist.Normal(0.0, 10.0)))
+        with numpyro.plate("time", h.t_obs, dim=-2):
+            numpyro.sample("obs", dist.Normal(mu, 1.0), obs=data)
+    if h.future:
+        numpyro.deterministic("forecast", jnp.broadcast_to(mu, (h.future, 2)))
+
+
+def _keyed_level_guide(covariates: Array, data: Array | None = None) -> None:
+    """A hand-written guide whose initial ``loc`` is drawn from the SVI-init key."""
+    loc = numpyro.param("loc", lambda key: random.normal(key, (2,)))
+    with numpyro.plate("series", 2, dim=-1):
+        numpyro.sample("mu", dist.Normal(loc, 1e-6))
+
+
+def _starting_points(monkeypatch: pytest.MonkeyPatch, rng_key: Array, guide: Guide) -> Array:
+    """Each window's forecast of the first ``mu`` after ``num_steps=0``.
+
+    Every window has the same (all-zero) data, and the posterior and forecast
+    keys of window 0 are reused for all windows, so the forecasts differ
+    across windows only if the SVI starting points differ.
+    """
+
+    def shared_draw_keys(key: Array, num_windows: int) -> tuple[Array, Array, Array]:
+        init_keys, post_keys, fc_keys = _window_key_streams(key, num_windows)
+        post_keys = jnp.broadcast_to(post_keys[0], post_keys.shape)
+        fc_keys = jnp.broadcast_to(fc_keys[0], fc_keys.shape)
+        return init_keys, post_keys, fc_keys
+
+    monkeypatch.setattr("numpyro_forecast.evaluate._window_key_streams", shared_draw_keys)
+    data, cov = jnp.zeros((30, 2)), jnp.zeros((30, 0))
+    result = backtest_vectorized(
+        rng_key,
+        lambda: _level_model,
+        data,
+        cov,
+        train_window=10,
+        test_window=2,
+        stride=5,
+        guide=guide,
+        num_steps=0,
+        num_samples=2,
+        metrics={},
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    return result.predictions[:, 0, 0, 0]
+
+
+@pytest.mark.parametrize(
+    "make_guide",
+    [
+        pytest.param(lambda: AutoNormal(_level_model), id="AutoNormal"),
+        pytest.param(lambda: AutoMultivariateNormal(_level_model), id="AutoMultivariateNormal"),
+        pytest.param(lambda: AutoIAFNormal(_level_model), id="AutoIAFNormal"),
+    ],
+)
+def test_autoguide_windows_start_where_a_fresh_guide_starts(
+    monkeypatch: pytest.MonkeyPatch, make_guide: Callable[[], AutoGuide]
+) -> None:
+    """Each window starts where a fresh guide initialized with its SVI-init key starts.
+
+    The guide copy of each window runs its setup (``init_loc_fn``, here the
+    default ``init_to_uniform``, and the network weights of a flow) with that
+    window's SVI-init key, as a fresh guide per window in `backtest()` does, so
+    the windows start from different points. With ``num_steps=0`` and the shared
+    posterior key, each window's first draw equals the first draw of a fresh
+    guide initialized with that window's key.
+    """
+    rng_key = random.PRNGKey(0)
+    starts = _starting_points(monkeypatch, rng_key, make_guide())
+    init_keys, post_keys, _ = _window_key_streams(rng_key, starts.shape[0])
+    expected = []
+    for key in init_keys:
+        guide = make_guide()
+        svi = SVI(_level_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+        state = svi.init(key, jnp.zeros((10, 0)), jnp.zeros((10, 2)))
+        params = svi.get_params(state)
+        expected.append(
+            guide.sample_posterior(post_keys[0], params, sample_shape=(2,))["mu"][0, 0]
+        )
+    assert jnp.allclose(starts, jnp.stack(expected), atol=1e-4)
+    assert len({round(float(x), 4) for x in starts}) == starts.shape[0]
+
+
+def test_keyed_param_initializer_uses_the_per_window_init_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A callable ``numpyro.param`` initializer starts each window differently."""
+    starts = _starting_points(monkeypatch, random.PRNGKey(0), _keyed_level_guide)
+    assert len({round(float(x), 4) for x in starts}) == starts.shape[0]
+
+
 def test_result_schema_and_dataframe_row_shape() -> None:
     """Result fields are per-window and results_to_dataframe is one row per window."""
-    from numpyro_forecast.evaluate import results_to_dataframe
-
     duration = TRAIN + TEST + 8
     data, cov = _series(duration)
     model = rw_model
@@ -435,7 +621,6 @@ def test_result_schema_and_dataframe_row_shape() -> None:
         num_samples=15,
     )
     num_windows = result.t0.shape[0]
-    # Every per-window field has a leading window axis.
     assert result.t0.shape == (num_windows,)
     assert result.t1.shape == (num_windows,)
     assert result.t2.shape == (num_windows,)
@@ -445,9 +630,8 @@ def test_result_schema_and_dataframe_row_shape() -> None:
     df = results_to_dataframe(result)
     assert len(df) == num_windows
     metric_cols = [c for c in df.columns if c.startswith("metric_")]
-    assert metric_cols  # at least one metric column
+    assert metric_cols
     assert {"t0", "t1", "t2", "num_samples"}.issubset(df.columns)
-    # A vectorized run has no per-window walltimes or train_metrics.
     assert not any(c.startswith("train_metric_") or c.startswith("param_") for c in df.columns)
     assert "walltime" not in df.columns
 
@@ -492,12 +676,9 @@ def test_custom_coverage_alpha_stays_vectorized() -> None:
         metrics=metrics_50,
         keep_predictions=True,
     )
-    # Same key, same fits: everything but the coverage level is identical.
     for name in ("mae", "rmse", "crps"):
         assert jnp.array_equal(vec_50.metrics[name], vec_default.metrics[name])
-    # Central quantile intervals are nested, so coverage is monotone in alpha.
     assert bool(jnp.all(vec_50.metrics["coverage"] <= vec_default.metrics["coverage"]))
-    # The vectorized values match scoring each window's kept predictions directly.
     assert vec_50.predictions is not None
     for i in range(int(vec_50.t0.shape[0])):
         t1, t2 = int(vec_50.t1[i]), int(vec_50.t2[i])
@@ -511,9 +692,9 @@ def test_chunked_metric_raises_actionable_error() -> None:
     ``eval_crps(..., batch_size=n)`` runs the host-staging chunk loop
     (``_chunked_cell_metric``), which cannot work on a traced window axis. The
     failure must surface as ``VectorizedMetricError`` and not as a raw
-    ``AttributeError`` from ``_leaf_view`` reaching for ``sharding`` on a
+    ``AttributeError`` from ``leaf_view`` reaching for ``sharding`` on a
     tracer: that regression is exactly what the tracer passthrough in
-    ``_leaf_view`` guards.
+    ``leaf_view`` guards.
     """
     duration = TRAIN + TEST + 2
     data, cov = _series(duration)
@@ -534,13 +715,41 @@ def test_chunked_metric_raises_actionable_error() -> None:
         )
 
 
-def test_host_metric_raises_actionable_error() -> None:
-    """A metric that forces a host conversion raises ``VectorizedMetricError``."""
+def _host_float_mae(pred: Array, truth: Array) -> Array:
+    """Convert a traced value with ``float(...)`` (``ConcretizationTypeError``)."""
+    return jnp.asarray(float(jnp.abs(pred - truth).mean()))
+
+
+def _host_range_count(pred: Array, truth: Array) -> Array:
+    """Convert a traced value with ``range(...)`` (``TracerIntegerConversionError``)."""
+    return jnp.asarray(len(range(jnp.sum(truth > 0))), jnp.float32) + 0.0 * pred.mean()
+
+
+def _host_list_index(pred: Array, truth: Array) -> Array:
+    """Index a Python list with a traced value (``TracerIntegerConversionError``)."""
+    return jnp.asarray([0.0, 1.0][jnp.argmax(truth.ravel()) % 2]) + 0.0 * pred.mean()
+
+
+def _host_boolean_mask(pred: Array, truth: Array) -> Array:
+    """Index with a traced boolean mask (``NonConcreteBooleanIndexError``)."""
+    return pred[pred > truth].mean()
+
+
+@pytest.mark.parametrize(
+    "host_mae",
+    [_host_float_mae, _host_range_count, _host_list_index, _host_boolean_mask],
+    ids=["float", "range", "list_index", "boolean_mask"],
+)
+def test_host_metric_raises_actionable_error(host_mae: Callable[[Array, Array], Array]) -> None:
+    """A host conversion or a value-dependent shape in a metric raises ``VectorizedMetricError``.
+
+    The ``range`` and ``list_index`` cases raise
+    `jax.errors.TracerIntegerConversionError` and the ``boolean_mask`` case raises
+    `jax.errors.NonConcreteBooleanIndexError` (a ``JAXIndexError``); neither is a
+    ``ConcretizationTypeError``, so each needs its own entry in the ``except`` tuple.
+    """
     duration = TRAIN + TEST + 2
     data, cov = _series(duration)
-
-    def host_mae(pred: Array, truth: Array) -> Array:
-        return jnp.asarray(float(jnp.abs(pred - truth).mean()))
 
     model = rw_model
     with pytest.raises(VectorizedMetricError):
@@ -558,12 +767,199 @@ def test_host_metric_raises_actionable_error() -> None:
         )
 
 
+def _count_inside(pred: Array, truth: Array) -> Array:
+    """An integer-valued metric: the number of cells inside the range of the samples."""
+    return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).sum()
+
+
+def _float8_mae(pred: Array, truth: Array) -> Array:
+    """A float8-valued metric: the mean absolute error in ``float8_e4m3fn``."""
+    return jnp.abs(pred - truth).mean().astype(jnp.float8_e4m3fn)
+
+
+def _all_inside(pred: Array, truth: Array) -> Array:
+    """A boolean-valued metric: whether every cell is inside the range of the samples."""
+    return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).all()
+
+
+def _complex_mae(pred: Array, truth: Array) -> Array:
+    """A 0-d metric with a complex dtype, which is not a real score."""
+    return jnp.abs(pred - truth).mean() + 0j
+
+
+def _two_statistics(pred: Array, truth: Array) -> tuple[Array, Array]:
+    """A metric that returns two values instead of one 0-d array."""
+    return jnp.abs(pred - truth).mean(), jnp.abs(pred - truth).max()
+
+
+def _trimmed_mae(pred: Array, truth: Array) -> Array:
+    """A metric that is vmap-compatible but not jit-compatible: ``int()`` of a ``jnp`` value.
+
+    The trim count depends only on the static sample count, so an eager ``vmap``
+    accepts it, but the ``jit``-style pre-fit trace makes every ``jnp`` value a
+    tracer; the ``Metric`` contract asks for ``jit`` compatibility.
+    """
+    k = int(jnp.ceil(pred.shape[0] * 0.1))
+    return jnp.abs(jnp.sort(pred, axis=0)[k:-k].mean(0) - truth).mean()
+
+
+@pytest.mark.parametrize(
+    ("metrics", "num_samples", "error", "match"),
+    [
+        (
+            {"bad": crps_empirical},
+            10,
+            ValueError,
+            rf"metric 'bad' returned shape \(5, 1\) and dtype {jnp.result_type(float)}",
+        ),
+        (
+            {**DEFAULT_METRICS, "bad": crps_empirical},
+            10,
+            ValueError,
+            rf"metric 'bad' returned shape \(5, 1\) and dtype {jnp.result_type(float)}",
+        ),
+        ({"bad": _complex_mae}, 10, ValueError, r"metric 'bad' returned shape \(\) and dtype "),
+        ({"two": _two_statistics}, 10, ValueError, r"metric 'two' returned a tuple of 2 values"),
+        ({"host_mae": _host_float_mae}, 10, VectorizedMetricError, "pure JAX functions"),
+        ({"trim": _trimmed_mae}, 10, VectorizedMetricError, "pure JAX functions"),
+        (
+            {"crps": jax.jit(lambda p, t: eval_crps(p, t))},
+            1,
+            ValueError,
+            "crps_empirical needs at least 2 samples, got 1",
+        ),
+    ],
+    ids=[
+        "per_cell",
+        "per_cell_with_defaults",
+        "complex",
+        "tuple",
+        "host_float",
+        "jit_incompatible_constant",
+        "jit_wrapped_crps",
+    ],
+)
+def test_metric_errors_raise_before_the_fit(
+    metrics: dict[str, Callable[..., Array]],
+    num_samples: int,
+    error: type[Exception],
+    match: str,
+) -> None:
+    """A metric that breaks the ``Metric`` contract fails from the trace, before any fit.
+
+    The guide fails the test if it is called, so the error must come before
+    the eager init and the vmapped SVI fit. The shape in the message is the
+    shape of one window, ``(test_window, obs)``, which is what the metric
+    returns.
+    """
+    data, cov = _series(TRAIN + TEST + 4)
+    with pytest.raises(error, match=match):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: rw_model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=_never_called_guide,
+            num_steps=10,
+            num_samples=num_samples,
+            metrics=metrics,
+        )
+
+
+def test_metric_trace_before_the_fit_compiles_nothing(
+    count_compilations: Callable[[], AbstractContextManager[types.SimpleNamespace]],
+) -> None:
+    """``_require_scorable_metrics`` runs ``jax.eval_shape``: tracers in, no compile.
+
+    The compile count alone cannot tell an abstract trace from eager scoring on
+    warm shapes (a cached compile counts zero), and under an eager ``vmap`` the
+    operands are tracers too, so the metric records whether a constant it builds
+    itself is a tracer (true only in a ``jit``-style trace) and the dtype of the
+    draws: the default float dtype, which the scoring after the fit sees
+    through ``float_view``.
+    """
+    seen: list[tuple[bool, jnp.dtype]] = []
+
+    def recording_mae(pred: Array, truth: Array) -> Array:
+        seen.append((isinstance(jnp.zeros(()), Tracer), pred.dtype))
+        return jnp.abs(pred - truth).mean()
+
+    truth = jnp.zeros((4, TEST, 1), jnp.float16)
+    with count_compilations() as tally:
+        _require_scorable_metrics({**DEFAULT_METRICS, "mae": recording_mae}, 10, truth)
+    assert tally.count == 0
+    assert seen == [(True, jnp.result_type(float))]
+
+
+def test_bool_integer_and_float8_metrics_are_cast_to_float() -> None:
+    """A bool, integer or float8 metric gives a float ``(num_windows,)`` array that matches each window."""
+    data, cov = _series(TRAIN + TEST + 4)
+    model = rw_model
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        lambda: model,
+        data,
+        cov,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(model),
+        stride=2,
+        num_steps=5,
+        num_samples=10,
+        metrics={
+            **DEFAULT_METRICS,
+            "count_inside": _count_inside,
+            "all_inside": _all_inside,
+            "float8_mae": _float8_mae,
+        },
+        keep_predictions=True,
+    )
+    num_windows = int(result.t0.shape[0])
+    assert result.predictions is not None
+    for name, values in result.metrics.items():
+        assert values.shape == (num_windows,), name
+        assert jnp.issubdtype(values.dtype, jnp.floating), name
+    for i in range(num_windows):
+        truth = data[int(result.t1[i]) : int(result.t2[i])]
+        pred = result.predictions[i]
+        assert float(result.metrics["count_inside"][i]) == float(_count_inside(pred, truth))
+        assert float(result.metrics["all_inside"][i]) == float(_all_inside(pred, truth))
+        assert float(result.metrics["float8_mae"][i]) == float(_float8_mae(pred, truth))
+    df = results_to_dataframe(result)
+    assert len(df) == num_windows
+    assert df["metric_count_inside"].dtype == np.float64
+    assert df["metric_all_inside"].dtype == np.float64
+    assert result.metrics["float8_mae"].dtype == jnp.result_type(float)
+
+
+def test_vectorized_result_to_dict_does_not_copy_predictions() -> None:
+    """``to_dict()`` is a view: the kept predictions are the result's own object (#199)."""
+    predictions = jnp.ones((2, 10, TEST, 1))
+    result = VectorizedBacktestResult(
+        t0=jnp.zeros(2, dtype=jnp.int32),
+        t1=jnp.full(2, TRAIN),
+        t2=jnp.full(2, TRAIN + TEST),
+        num_samples=10,
+        losses=jnp.zeros((2, 5)),
+        metrics={"mae": jnp.ones(2)},
+        predictions=predictions,
+    )
+    flat = result.to_dict()
+    assert set(flat) == {"t0", "t1", "t2", "num_samples", "losses", "metrics", "predictions"}
+    assert flat["predictions"] is predictions
+    assert flat["losses"] is result.losses
+    flat["metrics"]["rmse"] = jnp.zeros(2)
+    assert set(result.metrics) == {"mae"}
+
+
 def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An explicit ``optim`` is the exact instance ``SVI`` is constructed with.
+    """An explicit ``optim`` is the exact instance every ``SVI`` is constructed with.
 
     ``backtest_vectorized`` resolves ``resolved_optim = Adam(0.01) if optim is None
-    else optim`` and builds ``SVI(model, guide, resolved_optim, Trace_ELBO())``.
-    Monkeypatching `numpyro_forecast.evaluate.SVI` with a thin recording
+    else optim`` and builds each ``SVI(model, guide, resolved_optim, Trace_ELBO())``
+    from it. Monkeypatching `numpyro_forecast.evaluate.SVI` with a thin recording
     subclass pins both branches: an explicit ``optim`` is forwarded unchanged, and
     ``optim=None`` falls back to a fresh ``Adam`` instance rather than the one we
     passed in a previous call.
@@ -605,8 +1001,8 @@ def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> 
         num_steps=10,
         num_samples=5,
     )
-    assert len(recorded_optims) == 1
-    assert recorded_optims[0] is explicit_optim
+    assert recorded_optims
+    assert all(optim is explicit_optim for optim in recorded_optims)
     assert result.t0.shape[0] == expected_windows
     assert bool(jnp.all(jnp.isfinite(result.metrics["crps"])))
 
@@ -624,6 +1020,397 @@ def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> 
         num_steps=10,
         num_samples=5,
     )
-    assert len(recorded_optims) == 1
-    assert isinstance(recorded_optims[0], numpyro.optim.Adam)
-    assert recorded_optims[0] is not explicit_optim
+    assert recorded_optims
+    assert all(isinstance(optim, numpyro.optim.Adam) for optim in recorded_optims)
+    assert all(optim is not explicit_optim for optim in recorded_optims)
+
+
+def _squeezed_forecast_model(covariates: Array, data: Array | None = None) -> None:
+    """A model whose ``"forecast"`` site drops the obs axis: ``(future,)``, not ``(future, 1)``."""
+    h = Horizon.from_data(covariates, data)
+    loc = numpyro.sample("loc", dist.Normal(0.0, 1.0))
+    if h.data is not None:
+        numpyro.sample("obs", dist.Normal(loc, 1.0).expand(h.data.shape).to_event(2), obs=h.data)
+    numpyro.deterministic("forecast", jnp.full((h.future,), loc))
+
+
+def test_forecast_shape_mismatch_raises_before_scoring() -> None:
+    """A forecast site that does not match the test window raises ``ValueError`` (#196).
+
+    A custom metric such as ``(pred.mean(0) - truth).mean()`` broadcasts a
+    ``(test,)`` forecast against a ``(test, 1)`` truth into a ``(test, test)``
+    grid without error, so the check runs once on the stacked windows before
+    the metrics are vmapped.
+    """
+    duration = TRAIN + TEST + 2
+    data, cov = _series(duration)
+
+    def bias(pred: Array, truth: Array) -> Array:
+        return (pred.mean(axis=0) - truth).mean()
+
+    model = _squeezed_forecast_model
+    with pytest.raises(ValueError, match=r"'forecast' site has shape \(5,\) per draw"):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(model),
+            num_steps=1,
+            num_samples=10,
+            metrics={"bias": bias},
+        )
+
+
+def test_forecast_shape_check_is_skipped_without_metrics() -> None:
+    """With ``metrics={}`` nothing is scored, so a mismatched forecast site still returns.
+
+    A predictions-only run does not compare the shapes: the shape guard
+    exists to protect the metrics, not to validate the model.
+    """
+    duration = TRAIN + TEST + 2
+    data, cov = _series(duration)
+    model = _squeezed_forecast_model
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        lambda: model,
+        data,
+        cov,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(model),
+        num_steps=1,
+        num_samples=10,
+        metrics={},
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    assert result.predictions.shape == (3, 10, TEST)
+    assert result.metrics == {}
+
+
+def _noise_model(covariates: Array, data: Array | None = None) -> None:
+    """A constant level ``mu`` with an unknown noise scale; the forecast is ``mu`` itself."""
+    h = Horizon.from_data(covariates, data)
+    mu = jnp.asarray(numpyro.sample("mu", dist.Normal(0.0, 10.0)))
+    log_sigma = jnp.asarray(numpyro.sample("log_sigma", dist.Normal(0.0, 3.0)))
+    with numpyro.plate("time", h.t_obs, dim=-2):
+        numpyro.sample("obs", dist.Normal(mu, jnp.exp(log_sigma)), obs=data)
+    if h.future:
+        numpyro.deterministic("forecast", jnp.full((h.future, 1), mu))
+
+
+def test_laplace_covariance_comes_from_each_window() -> None:
+    """Each window's Laplace covariance is the inverse Hessian of its own loss (#185).
+
+    Window 1 has 4 times the noise of window 0. At the MAP point the Laplace
+    posterior sd of ``mu`` is ``sigma_hat / sqrt(n)``, with ``sigma_hat`` the
+    (population) sd of the window's training data. A guide set up on window 0
+    only evaluates the window-0 Hessian at the window-1 MAP point, which gives a
+    wrong (here zero) sd for window 1.
+    """
+    train, test = 16, 2
+    stride = train + test
+    z = random.normal(random.PRNGKey(0), (2 * stride, 1))
+    z = (z - z.mean()) / z.std()
+    data = jnp.where(jnp.arange(2 * stride)[:, None] < stride, z, 4.0 * z)
+    cov = jnp.zeros((2 * stride, 0))
+    result = backtest_vectorized(
+        random.PRNGKey(1),
+        lambda: _noise_model,
+        data,
+        cov,
+        train_window=train,
+        test_window=test,
+        stride=stride,
+        guide=AutoLaplaceApproximation(_noise_model),
+        optim=numpyro.optim.Adam(0.05),
+        num_steps=2_000,
+        num_samples=2_000,
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    for w in range(2):
+        t0 = int(result.t0[w])
+        expected = data[t0 : t0 + train].std() / jnp.sqrt(train)
+        actual = result.predictions[w, :, 0, 0].std()
+        assert float(jnp.abs(actual - expected) / expected) < 0.15, (w, actual, expected)
+
+
+def _bounded_level_model(covariates: Array, data: Array | None = None) -> None:
+    """A level whose support is the observed range of the training data."""
+    assert data is not None, "the support of the level needs the training data"
+    h = Horizon.from_data(covariates, data)
+    level = jnp.asarray(numpyro.sample("level", dist.Uniform(data.min(), data.max())))
+    sigma = jnp.asarray(numpyro.sample("sigma", dist.LogNormal(-1.0, 0.5)))
+    with numpyro.plate("time", h.t_obs, dim=-2):
+        numpyro.sample("obs", dist.Normal(level, sigma), obs=data)
+    if h.future:
+        numpyro.deterministic("forecast", jnp.full((h.future, 1), level))
+
+
+def _bounded_level_guide_list() -> AutoGuide:
+    """An ``AutoGuideList`` with one part per latent of `_bounded_level_model`."""
+    guide = AutoGuideList(_bounded_level_model)
+    for site in ("level", "sigma"):
+        guide.append(AutoNormal(handlers.block(_bounded_level_model, expose=[site])))
+    return guide
+
+
+@pytest.mark.parametrize(
+    "make_guide",
+    [
+        pytest.param(lambda: AutoNormal(_bounded_level_model), id="AutoNormal"),
+        pytest.param(_bounded_level_guide_list, id="AutoGuideList"),
+    ],
+)
+def test_data_dependent_support_comes_from_each_window(
+    make_guide: Callable[[], AutoGuide],
+) -> None:
+    """A latent's support transform comes from each window's own data (#185).
+
+    The level is ``Uniform(min(data), max(data))`` and window 1 lies 10 units
+    above window 0, so every forecast draw of a window must stay inside that
+    window's training range. Each part of an ``AutoGuideList`` caches its own
+    setup, so the parts are set up per window too, and a second call with the
+    same instance gives the same check.
+    """
+    train, test = 12, 2
+    stride = train + test
+    u = random.uniform(random.PRNGKey(0), (2 * stride, 1))
+    data = jnp.where(jnp.arange(2 * stride)[:, None] < stride, u, u + 10.0)
+    cov = jnp.zeros((2 * stride, 0))
+    guide = make_guide()
+    for seed in range(2):
+        result = backtest_vectorized(
+            random.PRNGKey(seed),
+            lambda: _bounded_level_model,
+            data,
+            cov,
+            train_window=train,
+            test_window=test,
+            stride=stride,
+            guide=guide,
+            num_steps=500,
+            num_samples=100,
+            keep_predictions=True,
+        )
+        assert result.predictions is not None
+        for w in range(2):
+            t0 = int(result.t0[w])
+            window = data[t0 : t0 + train]
+            draws = result.predictions[w, :, 0, 0]
+            assert bool(jnp.all((draws >= window.min()) & (draws <= window.max()))), (seed, w)
+
+
+def _fitted_autonormal(data: Array, cov: Array) -> AutoGuide:
+    guide = AutoNormal(rw_model)
+    SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO()).run(
+        random.PRNGKey(0), 5, cov, data, progress_bar=False
+    )
+    return guide
+
+
+def _list_with_fitted_part(data: Array, cov: Array) -> AutoGuide:
+    guide = AutoGuideList(rw_model)
+    guide.append(_fitted_autonormal(data, cov))
+    return guide
+
+
+@pytest.mark.parametrize(
+    "make_guide",
+    [
+        pytest.param(_fitted_autonormal, id="fitted-AutoNormal"),
+        pytest.param(_list_with_fitted_part, id="AutoGuideList-with-fitted-part"),
+    ],
+)
+def test_guide_already_set_up_is_rejected(
+    make_guide: Callable[[Array, Array], AutoGuide],
+) -> None:
+    """An autoguide set up on other data raises an actionable ``ValueError`` (#185).
+
+    Its cached setup (prototype trace, supports, shapes) belongs to the other
+    data, here the full series, so the driver asks for a fresh instance instead
+    of failing later with a shape mismatch deep inside NumPyro. A part of an
+    ``AutoGuideList`` caches its own setup, so a fitted part is rejected too.
+    """
+    data, cov = _series(TRAIN + TEST + 4)
+    with pytest.raises(ValueError, match="fresh"):
+        backtest_vectorized(
+            random.PRNGKey(1),
+            lambda: rw_model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=make_guide(data, cov),
+            num_steps=5,
+            num_samples=4,
+        )
+
+
+class _LockedRandomWalk:
+    """Owns a lock, so it cannot be copied; its bound ``model`` method is the model."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+
+    def model(self, covariates: Array, data: Array | None = None) -> None:
+        """Delegate to ``rw_model``."""
+        rw_model(covariates, data)
+
+
+def test_model_bound_to_an_uncopyable_object_runs() -> None:
+    """The per-window guide copies share the model and never copy what it is bound to.
+
+    ``owner.model`` builds a new bound-method object on each access, so the
+    model of the guide is not the object ``model_fn`` returns. A deep copy of
+    the guide would copy the owner and fail on its lock.
+    """
+    data, cov = _series(TRAIN + TEST + 2)
+    owner = _LockedRandomWalk()
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        lambda: owner.model,
+        data,
+        cov,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(owner.model),
+        num_steps=5,
+        num_samples=4,
+    )
+    assert bool(jnp.all(jnp.isfinite(result.losses)))
+
+
+def _log_normal_model(covariates: Array, data: Array | None = None) -> None:
+    """A log-normal likelihood, which has no finite density at an observed zero."""
+    h = Horizon.from_data(covariates, data)
+    mu = jnp.asarray(numpyro.sample("mu", dist.Normal(0.0, 1.0)))
+    with numpyro.plate("time", h.t_obs, dim=-2):
+        numpyro.sample("obs", dist.LogNormal(mu, 1.0), obs=data)
+    if h.future:
+        numpyro.deterministic("forecast", jnp.full((h.future, 1), jnp.exp(mu)))
+
+
+def test_invalid_start_on_window_zero_raises() -> None:
+    """A start with no finite density raises NumPyro's error before the vmapped fit.
+
+    NumPyro checks the initial point only on concrete values; under ``vmap`` a
+    window without a valid start would give NaN losses and metrics silently.
+    """
+    data, cov = jnp.ones((TRAIN + TEST, 1)).at[0, 0].set(0.0), jnp.zeros((TRAIN + TEST, 0))
+    with (
+        pytest.warns(UserWarning, match="Out-of-support"),
+        pytest.raises(RuntimeError, match="valid initial parameters"),
+    ):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: _log_normal_model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(_log_normal_model),
+            num_steps=5,
+            num_samples=4,
+        )
+
+
+def test_invalid_start_on_a_later_window_raises() -> None:
+    """A start that is valid on window 0 but not on window 1 raises NumPyro's error.
+
+    ``level = 0.5`` is inside the support of window 0 (data in ``[0, 1]``) and
+    outside the support of window 1 (data in ``[10, 11]``), so only the vmapped
+    fit of window 1 starts from an invalid point. Its loss is NaN from the first
+    step, and an eager init of that window raises the cause, as a fresh guide
+    per window in `backtest()` does.
+    """
+    train, test = 12, 2
+    stride = train + test
+    u = random.uniform(random.PRNGKey(0), (2 * stride, 1))
+    data = jnp.where(jnp.arange(2 * stride)[:, None] < stride, u, u + 10.0)
+    guide = AutoNormal(_bounded_level_model, init_loc_fn=init_to_value(values={"level": 0.5}))
+    with pytest.raises(ValueError, match="invalid loc"):
+        backtest_vectorized(
+            random.PRNGKey(1),
+            lambda: _bounded_level_model,
+            data,
+            jnp.zeros((2 * stride, 0)),
+            train_window=train,
+            test_window=test,
+            stride=stride,
+            guide=guide,
+            num_steps=5,
+            num_samples=4,
+        )
+
+
+def test_non_finite_first_loss_raises() -> None:
+    """A window whose loss is not finite at the first step raises ``RuntimeError``.
+
+    The start is valid, so an eager init raises nothing, but ``init_scale=1e25``
+    makes the first ELBO draws of ``mu`` overflow the squared error in float32:
+    the fit would be NaN from there on.
+    """
+    data, cov = jnp.zeros((20, 2)), jnp.zeros((20, 0))
+    with pytest.raises(RuntimeError, match=r"t0 = \[0, 5\] is not finite at the first step"):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: _level_model,
+            data,
+            cov,
+            train_window=10,
+            test_window=2,
+            stride=5,
+            guide=AutoNormal(_level_model, init_scale=1e25),
+            num_steps=5,
+            num_samples=4,
+        )
+
+
+def test_count_model_scores_like_its_float_cast() -> None:
+    """A Poisson ``predict()`` model scores its integer draws like their float cast (#163).
+
+    Before the fix the vmapped ``eval_mae`` raised ``TypeCheckError`` on the
+    ``int32`` forecasts. The oracle vmaps every metric over the kept integer
+    predictions and the integer truth windows cast to float; a custom metric
+    sees floating arrays, and ``predictions`` keeps the integer dtype.
+    """
+    duration, stride = TRAIN + TEST + 6, 3
+    data, cov = poisson_counts(duration)
+    seen: list[jnp.dtype] = []
+
+    def max_abs_error(pred: Array, truth: Array) -> Array:
+        seen.extend((pred.dtype, truth.dtype))
+        return jnp.abs(pred - truth).max()
+
+    metrics = {**DEFAULT_METRICS, "max_abs_error": max_abs_error}
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        lambda: poisson_model,
+        data,
+        cov,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(poisson_model),
+        stride=stride,
+        num_steps=20,
+        num_samples=15,
+        metrics=metrics,
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    assert jnp.issubdtype(result.predictions.dtype, jnp.integer)
+    assert set(seen) == {jnp.result_type(float)}
+
+    truth = jnp.stack(
+        [data[int(t1) : int(t2)] for t1, t2 in zip(result.t1, result.t2, strict=True)]
+    )
+    pred_f, truth_f = result.predictions.astype(jnp.float32), truth.astype(jnp.float32)
+    for name, metric in metrics.items():
+        np.testing.assert_allclose(
+            result.metrics[name], jax.vmap(metric)(pred_f, truth_f), rtol=1e-6, err_msg=name
+        )

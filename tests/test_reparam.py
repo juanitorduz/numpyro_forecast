@@ -1,14 +1,16 @@
 """Behavioral tests for `~~numpyro_forecast.reparam.time_reparam()`.
 
 Grouped by contract: which sites are targeted and what shapes they get, that the
-change of coordinates is exact (transform identity, unit Jacobian), that the
-drivers consume the auxiliary site, and that the reparameterized model runs end
-to end under SVI and NUTS.
+change of coordinates is exact (transform identity, unit Jacobian in the
+unconstrained space, and the value of ``log_density`` of the wrapped model at
+the auxiliary value ``T(u)`` equal to the plain value at ``x`` plus the
+log-Jacobian of ``biject_to(support)`` at ``u``), that the drivers consume the
+auxiliary site, and that the reparameterized model runs end to end under SVI
+and NUTS.
 """
 
 from collections.abc import Callable
-from contextlib import AbstractContextManager
-from types import SimpleNamespace
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -16,11 +18,12 @@ import numpyro
 import numpyro.distributions as dist
 import pytest
 from jax import random
+from numpyro.distributions import biject_to
 from numpyro.distributions.transforms import DiscreteCosineTransform, HaarTransform, Transform
-from numpyro.handlers import scope
+from numpyro.handlers import scope, seed
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
-from numpyro.infer.util import log_density
+from numpyro.infer.util import log_density, potential_energy
 from numpyro.optim import Adam
 
 from numpyro_forecast import draw_posterior, forecast, predict_in_sample, time_reparam
@@ -32,6 +35,7 @@ from tests.example_models import make_hierarchical_model
 
 T_OBS = 6
 FUTURE = 2
+N_SERIES = 10
 TRANSFORMS: dict[TimeTransform, Transform] = {
     "haar": HaarTransform(dim=-2),
     "dct": DiscreteCosineTransform(dim=-2),
@@ -104,6 +108,81 @@ def test_plate_axes_from_time_rightward_join_the_auxiliary_event(
     assert tr["drift_dct"]["fn"].event_shape == event_shape
     assert plate_frames(tr["drift_dct"]) == []
     assert tr["drift"]["value"].shape == shape
+
+
+def _panel_model(plate_dim: int, subsample_size: int | None) -> ForecastModel:
+    """One random walk per series under ``plate("series", N_SERIES, dim=plate_dim)``.
+
+    ``plate_dim=-1`` puts the series right of time (data ``(time, series)``) and
+    ``plate_dim=-3`` left of it (data ``(series, time, 1)``).
+    """
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        with numpyro.plate("series", N_SERIES, subsample_size=subsample_size, dim=plate_dim):
+            y = None if data is None else jnp.asarray(numpyro.subsample(data, event_dim=0))
+            h = Horizon.from_data(covariates, y)
+            drift = innovations(h, "drift", dist.Normal(0.0, 1.0))
+            predict(h, dist.Normal(0.0, 1.0), jnp.cumsum(drift, axis=-2))
+
+    return model
+
+
+def _panel_data(plate_dim: int) -> Array:
+    """Zero data for `_panel_model()`, with the series axis at ``plate_dim``."""
+    return jnp.zeros((T_OBS, N_SERIES) if plate_dim == -1 else (N_SERIES, T_OBS, 1))
+
+
+@pytest.mark.parametrize("plate_dim", [-1, -3], ids=["right-of-time", "left-of-time"])
+def test_subsampled_plate_is_rejected(plate_dim: int) -> None:
+    """A time latent under a subsampled plate raises instead of losing the minibatch scale.
+
+    The auxiliary site is sampled outside the enclosing plates, so under a
+    minibatch it would carry no ``size / subsample_size`` scale while ``obs``
+    keeps it, and an ``AutoGuide`` would size its parameters to the minibatch
+    (issue #175). Both sides of the time axis are affected.
+    """
+    model = time_reparam(_panel_model(plate_dim, subsample_size=2), "haar")
+    with pytest.raises(ValueError, match=r"subsampled plate.*'series'"):
+        get_trace(model, empty_covariates(T_OBS), _panel_data(plate_dim))
+
+
+def test_plate_subsampled_by_the_guide_is_rejected() -> None:
+    """A full model plate that the guide subsamples through ``create_plates`` also raises.
+
+    Under ``replay`` the model's plate takes the guide's indices, so it is
+    subsampled even though the model opens it at full size.
+    """
+    model = time_reparam(_panel_model(-1, subsample_size=None), "haar")
+
+    def create_plates(covariates: Array, data: Array | None = None) -> numpyro.plate:
+        return numpyro.plate("series", N_SERIES, subsample_size=2, dim=-1)
+
+    svi = SVI(model, AutoNormal(model, create_plates=create_plates), Adam(0.01), Trace_ELBO())
+    with pytest.raises(ValueError, match=r"subsampled plate.*'series'"):
+        svi.init(random.PRNGKey(0), empty_covariates(T_OBS), _panel_data(-1))
+
+
+def test_global_time_latent_beside_a_subsampled_plate_is_accepted() -> None:
+    """Only targeted sites are checked: a level shared by all series may sit beside a minibatch.
+
+    The time latent is outside the subsampled plate, so it has no plate scale to
+    lose and is reparameterized as usual; only the per-series sites are scaled.
+    """
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        series = numpyro.plate("series", N_SERIES, subsample_size=2, dim=-1)
+        with series:
+            y = None if data is None else jnp.asarray(numpyro.subsample(data, event_dim=0))
+        h = Horizon.from_data(covariates, y)
+        drift = innovations(h, "drift", dist.Normal(0.0, 1.0))
+        with series:
+            sigma = numpyro.sample("sigma", dist.LogNormal(0.0, 1.0))
+            predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
+
+    tr = get_trace(time_reparam(model, "haar"), empty_covariates(T_OBS), _panel_data(-1))
+
+    assert tr["drift"]["type"] == "deterministic"
+    assert tr["drift_haar"]["scale"] is None
 
 
 def test_composes_with_per_block_loc_scale_reparam() -> None:
@@ -189,6 +268,105 @@ def test_nesting_is_rejected() -> None:
         time_reparam(wrapped, "dct")
 
 
+_HIDING_HANDLERS: dict[str, Callable[[ForecastModel], ForecastModel]] = {
+    "scope": lambda model: scope(model, prefix="a"),
+    "seed": lambda model: seed(model, 0),
+    "scope_of_seed": lambda model: scope(seed(model, 0), prefix="a"),
+}
+
+
+@pytest.mark.parametrize("wrapper", _HIDING_HANDLERS.values(), ids=_HIDING_HANDLERS.keys())
+def test_nesting_through_handlers_is_rejected(
+    wrapper: Callable[[ForecastModel], ForecastModel],
+) -> None:
+    """A NumPyro handler between the two calls does not hide the nesting.
+
+    Without the check the outer ``"dct"`` silently does nothing: the trace keeps
+    only the inner ``drift_haar`` auxiliary site. The check runs when wrapping,
+    before any trace.
+    """
+    inner = wrapper(time_reparam(rw_model, "haar"))
+    with pytest.raises(ValueError, match="cannot be nested"):
+        time_reparam(inner, "dct")
+
+
+def test_composite_with_a_time_reparam_component_is_accepted() -> None:
+    """An outer model with its own time latent may call a ``time_reparam`` component.
+
+    The outer transform targets the outer ``level`` site and the inner one keeps
+    the component's ``drift``, so both auxiliary sites are present. This is valid
+    on ``main`` and must stay accepted by the nesting check.
+    """
+
+    def component(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        scale = numpyro.sample("s", dist.LogNormal(-1.0, 1.0))
+        innovations(h, "drift", dist.Normal(0.0, scale))
+
+    inner = scope(time_reparam(component, "haar"), prefix="seasonal")
+
+    def composite(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        level = jnp.cumsum(innovations(h, "level", dist.Normal(0.0, 0.1)), axis=-2)
+        inner(covariates, data)
+        predict(h, dist.Normal(0.0, 0.1), level)
+
+    model, data, covariates = _split(time_reparam(composite, "dct"))
+    tr = get_trace(model, covariates, data)
+    assert {"level_dct", "seasonal/drift_haar"} <= set(tr)
+    assert tr["level"]["type"] == tr["seasonal/drift"]["type"] == "deterministic"
+
+
+def test_nesting_behind_a_function_is_rejected_when_traced() -> None:
+    """A wrapper function hides the inner model from the handler walk, not from the trace."""
+    inner = time_reparam(rw_model, "haar")
+
+    def wrapper(covariates: Array, data: Array | None = None) -> None:
+        inner(covariates, data)
+
+    model, data, covariates = _split(time_reparam(wrapper, "dct"))
+    with pytest.raises(ValueError, match="no in-sample time latent of its own"):
+        get_trace(model, covariates, data)
+
+
+def test_composite_with_only_untargeted_latents_is_rejected_when_traced() -> None:
+    """A composite whose own time latents are scan sites leaves the outer transform a no-op.
+
+    The ``markov_series`` sites carry no ``time`` plate, so the outer ``"dct"``
+    sees only the component's auxiliary site. The error says that the outer
+    transform found nothing to do, not only that the models are nested.
+    """
+    inner = scope(time_reparam(rw_model, "haar"), prefix="trend")
+
+    def composite(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+
+        def transition(carry: Array, _: object) -> dist.Distribution:
+            return dist.Normal(carry, 1.0).to_event(1)
+
+        markov_series(h, "level", jnp.zeros((1,)), transition)
+        inner(covariates, data)
+
+    model, data, covariates = _split(time_reparam(composite, "dct"))
+    with pytest.raises(ValueError, match="no in-sample time latent of its own"):
+        get_trace(model, covariates, data)
+
+
+def test_side_by_side_time_reparam_models_are_not_nesting() -> None:
+    """Two reparameterized models combined under prefixes are not mistaken for nesting."""
+    left = scope(time_reparam(rw_model, "haar"), prefix="a")
+    right = scope(time_reparam(rw_model, "dct"), prefix="b")
+
+    def combined(covariates: Array, data: Array | None = None) -> None:
+        left(covariates, data)
+        right(covariates, data)
+
+    model, data, covariates = _split(combined)
+    tr = get_trace(model, covariates, data)
+    assert {"a/drift_haar", "b/drift_dct"} <= set(tr)
+    assert tr["a/drift"]["type"] == tr["b/drift"]["type"] == "deterministic"
+
+
 @pytest.mark.parametrize("transform", ["haar", "dct"])
 def test_auxiliary_is_the_transform_of_the_site_along_time(transform: TimeTransform) -> None:
     """``aux == T(drift)`` with ``T`` acting on axis ``-2``, so the time axis is the one rotated."""
@@ -201,7 +379,13 @@ def test_auxiliary_is_the_transform_of_the_site_along_time(transform: TimeTransf
 
 @pytest.mark.parametrize("transform", ["haar", "dct"])
 def test_log_density_is_unchanged(transform: TimeTransform) -> None:
-    """Unit Jacobian: the wrapped model evaluated at ``aux`` equals the original at ``drift``."""
+    """Unit Jacobian on a real site: the wrapped model at ``aux`` equals the original at ``drift``.
+
+    ``drift`` has real support, so its unconstrained value is the value itself.
+    The positive ``drift_scale`` and ``sigma`` are outside the time plate and are
+    not targeted, so they add nothing. Constrained sites are covered by
+    ``test_log_density_gains_the_support_log_jacobian``.
+    """
     wrapped, data, covariates = _split(time_reparam(rw_model, transform))
     train = covariates[:T_OBS]
     tr = get_trace(wrapped, train, data)
@@ -217,6 +401,120 @@ def test_log_density_is_unchanged(transform: TimeTransform) -> None:
         rw_model, (train, data), {}, {**scalars, "drift": tr["drift"]["value"]}
     )
     assert jnp.allclose(wrapped_ld, plain_ld, rtol=1e-6)
+
+
+class _SupportCase(NamedTuple):
+    """An innovation prior and the closed-form log-Jacobian of its ``biject_to`` at ``x``."""
+
+    prior: dist.Distribution
+    log_jacobian: Callable[[Array], Array]
+
+
+_SUPPORT_CASES: dict[str, _SupportCase] = {
+    "real": _SupportCase(dist.Normal(0.0, 0.5), lambda x: jnp.zeros(())),
+    "positive": _SupportCase(dist.LogNormal(0.0, 0.5), lambda x: jnp.log(x).sum()),
+    "unit-interval": _SupportCase(
+        dist.Beta(2.0, 3.0), lambda x: (jnp.log(x) + jnp.log1p(-x)).sum()
+    ),
+    "interval": _SupportCase(
+        dist.Uniform(-1.0, 3.0),
+        lambda x: (jnp.log(x + 1.0) + jnp.log(3.0 - x) - jnp.log(4.0)).sum(),
+    ),
+}
+"""Real, positive and bounded supports: ``exp`` gives ``log(x)``, the (scaled) sigmoid
+``log((x - a)(b - x) / (b - a))``. The formulas are written by hand so a package transform
+that rotates the constrained value, or drops ``biject_to(...).inv``, cannot cancel against
+the expectation; they pin NumPyro's current bijectors (``exp``, ``sigmoid``, ``sigmoid``
+then affine), so a change of ``biject_to`` upstream fails them even if the contract still
+holds. `test_log_density_gains_the_support_log_jacobian()` therefore also compares the gap
+with the contract-level value ``biject_to(support).log_abs_det_jacobian(u, x)``."""
+
+NUM_POINTS = 8
+
+
+def _step_model(prior: dist.Distribution) -> ForecastModel:
+    """One in-sample time latent ``step`` with ``prior``, observed through its cumulative sum."""
+
+    def body(h: Horizon, covariates: Array) -> None:
+        step = innovations(h, "step", prior)
+        predict(h, dist.Normal(0.0, 1.0), jnp.cumsum(step, axis=-2))
+
+    return as_model(body)
+
+
+def _step_model_args() -> tuple[Array, Array]:
+    """In-sample ``(covariates, data)`` for `_step_model()`: no horizon, so no prior draws."""
+    return empty_covariates(T_OBS), jnp.zeros((T_OBS, 1))
+
+
+def _unconstrained_points() -> Array:
+    """``NUM_POINTS`` unconstrained values of ``step``, small enough to keep off the bounds."""
+    return 0.5 * random.normal(random.PRNGKey(3), (NUM_POINTS, T_OBS, 1))
+
+
+@pytest.mark.parametrize("support", _SUPPORT_CASES.values(), ids=_SUPPORT_CASES.keys())
+@pytest.mark.parametrize("transform", ["haar", "dct"])
+def test_potential_energy_is_unchanged_for_every_support(
+    transform: TimeTransform, support: _SupportCase
+) -> None:
+    """Unit Jacobian in the unconstrained space: NUTS and ``AutoNormal`` see the same target.
+
+    The plain model at the unconstrained value ``u`` and the wrapped model at its
+    rotation ``T(u)`` have the same potential energy for every support. One
+    jitted ``vmap`` checks a batch of points.
+    """
+    plain = _step_model(support.prior)
+    wrapped = time_reparam(plain, transform)
+    args = _step_model_args()
+    rotate = TRANSFORMS[transform]
+
+    @jax.jit
+    @jax.vmap
+    def energies(u: Array) -> tuple[Array, Array]:
+        plain_pe = potential_energy(plain, args, {}, {"step": u})
+        wrapped_pe = potential_energy(wrapped, args, {}, {f"step_{transform}": rotate(u)})
+        return plain_pe, wrapped_pe
+
+    plain_pe, wrapped_pe = energies(_unconstrained_points())
+    assert jnp.allclose(wrapped_pe, plain_pe, rtol=1e-5, atol=1e-4)
+
+
+@pytest.mark.parametrize("support", _SUPPORT_CASES.values(), ids=_SUPPORT_CASES.keys())
+@pytest.mark.parametrize("transform", ["haar", "dct"])
+def test_log_density_gains_the_support_log_jacobian(
+    transform: TimeTransform, support: _SupportCase
+) -> None:
+    """The wrapped ``log_density`` is the plain one plus the log-Jacobian of ``biject_to`` (#206).
+
+    The auxiliary site holds the rotated unconstrained value ``T(u)``, so the
+    value of ``log_density`` of the wrapped model there is the plain value at
+    ``x`` plus the log absolute Jacobian determinant of ``biject_to(support)``
+    at ``u``: zero for a real site, ``sum(log(x))`` for a ``LogNormal`` site,
+    and the sigmoid terms for a bounded site. That is why ``log_density``
+    values and ``AutoDelta`` MAP estimates of a constrained site are not
+    comparable between the plain and the wrapped model. The gap is checked
+    against both the closed form and NumPyro's own ``log_abs_det_jacobian``, so
+    a change of bijector upstream is told apart from a package regression. One
+    jitted ``vmap`` checks a batch of points.
+    """
+    plain = _step_model(support.prior)
+    wrapped = time_reparam(plain, transform)
+    args = _step_model_args()
+    rotate = TRANSFORMS[transform]
+    to_support = biject_to(support.prior.support)
+
+    @jax.jit
+    @jax.vmap
+    def gap_and_expected(u: Array) -> tuple[Array, Array, Array]:
+        x = jnp.asarray(to_support(u))
+        plain_ld, _ = log_density(plain, args, {}, {"step": x})
+        wrapped_ld, _ = log_density(wrapped, args, {}, {f"step_{transform}": rotate(u)})
+        contract = jnp.asarray(to_support.log_abs_det_jacobian(u, x)).sum()
+        return wrapped_ld - plain_ld, support.log_jacobian(x), contract
+
+    gap, expected, contract = gap_and_expected(_unconstrained_points())
+    assert jnp.allclose(gap, expected, rtol=1e-5, atol=1e-4)
+    assert jnp.allclose(gap, contract, rtol=1e-5, atol=1e-4)
 
 
 def test_predictive_reads_the_auxiliary_and_ignores_a_stale_deterministic() -> None:
@@ -239,10 +537,12 @@ def test_predictive_reads_the_auxiliary_and_ignores_a_stale_deterministic() -> N
     assert jnp.allclose(predict_in_sample(random.PRNGKey(2), model, stale, train), draws)
 
 
-def test_wrapped_model_is_a_stable_jit_static_argument(
-    count_compilations: Callable[[], AbstractContextManager[SimpleNamespace]],
-) -> None:
-    """One wrapped object compiles ``forecast`` once; rewrapping is a new static arg."""
+def test_forecast_does_not_depend_on_the_wrapper_identity() -> None:
+    """A rewrapped model forecasts the same draws as the original wrapped object.
+
+    The drivers compile per call and key nothing on the model object (issue
+    #167), so wrapping again only costs a compile and never changes the draws.
+    """
     model, data, covariates = _split(time_reparam(rw_model, "dct"))
     num_samples = 2
     posterior = {
@@ -250,16 +550,13 @@ def test_wrapped_model_is_a_stable_jit_static_argument(
         "sigma": jnp.ones((num_samples,)),
         "drift_dct": jnp.zeros((num_samples, T_OBS, 1)),
     }
-    jax.block_until_ready(forecast(random.PRNGKey(0), model, posterior, data, covariates))
-
-    with count_compilations() as tally:
-        jax.block_until_ready(forecast(random.PRNGKey(0), model, posterior, data, covariates))
-    assert tally.count == 0
-
-    with count_compilations() as tally:
-        rewrapped = time_reparam(rw_model, "dct")
-        jax.block_until_ready(forecast(random.PRNGKey(0), rewrapped, posterior, data, covariates))
-    assert tally.count >= 1
+    first = forecast(random.PRNGKey(0), model, posterior, data, covariates)
+    again = forecast(random.PRNGKey(0), model, posterior, data, covariates)
+    rewrapped = forecast(
+        random.PRNGKey(0), time_reparam(rw_model, "dct"), posterior, data, covariates
+    )
+    assert jnp.array_equal(first, again)
+    assert jnp.array_equal(first, rewrapped)
 
 
 @pytest.mark.parametrize("transform", ["haar", "dct"])

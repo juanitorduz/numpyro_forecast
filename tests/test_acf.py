@@ -1,9 +1,13 @@
 """Tests for the batched ACF/PACF diagnostics."""
 
+import contextlib
+from collections.abc import Callable
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from conftest import commit_host
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
@@ -139,24 +143,121 @@ def test_rejects_max_lag_out_of_range(max_lag: int) -> None:
         pacf(y, max_lag=max_lag)
 
 
-def test_constant_series_is_nan_in_eager_mode() -> None:
-    # Under jit the mean rounds (sum * (1/n)), leaving a nonzero constant
-    # residual whose normalized autocorrelation is meaningless but finite; the
-    # documented NaN contract holds for eager execution only.
-    y = jnp.ones((30,))
-    with jax.disable_jit():
-        assert bool(jnp.all(jnp.isnan(acf(y, max_lag=5))))
-        assert bool(jnp.all(jnp.isnan(pacf(y, max_lag=5))))
+@pytest.mark.parametrize("eager", [False, True], ids=["jit", "eager"])
+@pytest.mark.parametrize("time", [10, 30])
+@pytest.mark.parametrize("level", [0.0, 1.0, 3.3, 5.0, -7.25, 10_000.0])
+def test_constant_series_is_nan(level: float, time: int, eager: bool) -> None:
+    y = jnp.full((time,), level)
+    mode = jax.disable_jit() if eager else contextlib.nullcontext()
+    with mode:
+        acf_values = np.asarray(acf(y, max_lag=3))
+        pacf_values = np.asarray(pacf(y, max_lag=3))
+    assert np.isnan(acf_values).all(), acf_values
+    assert np.isnan(pacf_values).all(), pacf_values
+
+
+def test_constant_rows_of_a_panel_are_nan(rng_key: Array) -> None:
+    noise = random.normal(rng_key, (30,))
+    panel = jnp.stack([jnp.zeros(30), jnp.full(30, 1.0), jnp.full(30, 5.0), noise])
+    for fn in (acf, pacf):
+        got = np.asarray(fn(panel, max_lag=2))
+        mapped = np.asarray(jax.vmap(lambda s, fn=fn: fn(s, max_lag=2))(panel))
+        assert np.isnan(got[:3]).all(), got
+        assert np.isnan(mapped[:3]).all(), mapped
+        np.testing.assert_allclose(got[3], np.asarray(fn(noise, max_lag=2)), atol=1e-6)
+        np.testing.assert_allclose(mapped[3], got[3], atol=1e-6)
+
+
+@pytest.mark.parametrize(("level", "bump"), [(0.0, 1.0), (5.0, 1.0), (5.0, 1e-3), (10_000.0, 1.0)])
+def test_near_constant_series_is_finite(level: float, bump: float) -> None:
+    y = jnp.full((30,), level).at[10].add(bump)
+    acf_values = acf(y, max_lag=5)
+    pacf_values = pacf(y, max_lag=5)
+    assert bool(jnp.all(jnp.isfinite(acf_values)))
+    assert bool(jnp.all(jnp.isfinite(pacf_values)))
+    assert jnp.allclose(acf_values, jnp.asarray(_np_acf(np.asarray(y), 5)), atol=1e-3)
+    assert jnp.allclose(pacf_values, jnp.asarray(_np_pacf(np.asarray(y), 5)), atol=1e-3)
 
 
 def test_wrong_input_typecheck_error() -> None:
     with pytest.raises(TypeCheckError):
         acf(jnp.array(1.0), max_lag=1)
     with pytest.raises(TypeCheckError):
-        pacf(jnp.arange(10), max_lag=3)
+        pacf(jnp.arange(10) > 4, max_lag=3)
+
+
+_COUNTS = np.array([200, 3, 0, 2, 5, 1, 0, 4, 2, 1, 3, 7, 0, 2, 6])
+"""A count series whose first sample is far above the rest.
+
+`_acf` shifts the series by its first sample, so in ``uint8`` the shift
+``y - y[..., :1]`` wraps for every later sample.
+"""
+
+
+@pytest.mark.parametrize(
+    ("dtype", "container"),
+    [
+        (np.uint8, "jax"),
+        (np.int16, "jax"),
+        (np.int32, "jax"),
+        (np.uint32, "jax"),
+        (np.int64, "numpy"),
+        (np.float64, "numpy"),
+    ],
+    ids=["uint8", "int16", "int32", "uint32", "numpy-int64", "numpy-float64"],
+)
+@pytest.mark.parametrize(("fn", "oracle"), [(acf, _np_acf), (pacf, _np_pacf)], ids=["acf", "pacf"])
+def test_integer_counts_match_float_oracle(
+    fn: Callable[..., Array],
+    oracle: Callable[[np.ndarray, int], np.ndarray],
+    dtype: type[np.integer] | type[np.floating],
+    container: str,
+) -> None:
+    """Counts (a Poisson ``predict()`` draw) and NumPy floats give the float spectrum (#163)."""
+    counts = _COUNTS.astype(dtype)
+    y = jnp.asarray(counts) if container == "jax" else counts
+    got = fn(y, max_lag=4)
+    assert got.dtype == jnp.result_type(float)
+    expected = fn(jnp.asarray(_COUNTS, jnp.float32), max_lag=4)
+    np.testing.assert_allclose(got, expected, rtol=1e-6)
+    np.testing.assert_allclose(got, oracle(_COUNTS, 4), atol=1e-4)
+
+
+def test_integer_batch_is_vmappable_and_jittable() -> None:
+    panel = jnp.stack([jnp.asarray(_COUNTS, jnp.int32), jnp.asarray(_COUNTS[::-1], jnp.int32)])
+    for fn in (acf, pacf):
+        expected = fn(panel.astype(jnp.float32), max_lag=3)
+        mapped = jax.vmap(lambda s, fn=fn: fn(s, max_lag=3))(panel)
+        jitted = jax.jit(fn, static_argnames=("max_lag",))(panel, max_lag=3)
+        np.testing.assert_allclose(mapped, expected, atol=1e-6)
+        np.testing.assert_allclose(jitted, expected, atol=1e-6)
 
 
 def test_dtype_preserved(rng_key: Array) -> None:
     y = random.normal(rng_key, (50,), dtype=jnp.float32)
     assert acf(y, max_lag=5).dtype == jnp.float32
     assert pacf(y, max_lag=5).dtype == jnp.float32
+
+
+@pytest.mark.parametrize("kind", ["pinned", "cpu"])
+def test_host_committed_series_stays_committed_and_matches_device_series(
+    monkeypatch: pytest.MonkeyPatch, rng_key: Array, kind: str
+) -> None:
+    """A host-committed series (``device="host"`` draws) is scored where it lives.
+
+    The ``cpu`` case simulates an accelerator default backend: the integer
+    cast happens on the CPU and the result stays committed there, so a large
+    host-offloaded panel is never moved to the accelerator.
+    """
+    y = random.normal(rng_key, (2, 40))
+    counts = jnp.asarray(_COUNTS, jnp.int32)
+    y_host, counts_host = commit_host(y, kind), commit_host(counts, kind)
+    if kind == "cpu":
+        monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
+    for fn in (acf, pacf):
+        np.testing.assert_allclose(fn(y_host, max_lag=4), fn(y, max_lag=4))
+        got = fn(counts_host, max_lag=4)
+        np.testing.assert_allclose(got, fn(counts.astype(jnp.float32), max_lag=4))
+        if kind == "cpu":
+            assert got.committed
+            assert got.devices() == {jax.devices("cpu")[0]}

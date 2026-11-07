@@ -5,6 +5,7 @@ These are skip-marked when ``blackjax`` is not installed, so the base CI leg
 """
 
 import dataclasses
+import inspect
 import pickle
 import warnings
 from collections import namedtuple
@@ -18,6 +19,7 @@ import numpyro.distributions as dist
 import pytest
 from conftest import assert_host_resident, assert_numpy_host, fail_devices_for, rw_model
 from jax import Array, random
+from jaxtyping import TypeCheckError
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
@@ -82,7 +84,6 @@ def test_blackjax_nuts_recovers_normal_normal_posterior() -> None:
     )
     mcmc.run(random.PRNGKey(1), covariates, data)
     posterior_mean = float(mcmc.get_samples()["mu"].mean())
-    # Posterior mean ~ sample mean with the near-flat prior; loose MC tolerance.
     assert abs(posterior_mean - float(data.mean())) < 0.1
 
 
@@ -129,9 +130,6 @@ def test_blackjax_mclmc_forecast_finite_and_competitive() -> None:
     mclmc_mcmc.run(random.PRNGKey(1), train_covariates, data)
     mclmc_post = mclmc_mcmc.get_samples()
 
-    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
-    # no draw_posterior step (that's guide-based only); both fits already hold
-    # exactly the 200 draws requested above.
     nuts_fc = forecast(random.PRNGKey(3), model, nuts_post, data, forecast_covariates)
     mclmc_fc = forecast(random.PRNGKey(3), model, mclmc_post, data, forecast_covariates)
 
@@ -142,21 +140,38 @@ def test_blackjax_mclmc_forecast_finite_and_competitive() -> None:
     assert mclmc_crps <= 2.0 * nuts_crps
 
 
+_MAX_NUM_DOUBLINGS = 6
+
+
 def _nuts_build_fn(rng_key, logdensity_fn, position, num_warmup):  # type: ignore[no-untyped-def]
-    """A minimal custom build_fn wrapping BlackJAX window-adapted NUTS."""
+    """The documented custom build_fn: NUTS window adaptation with a static setting.
+
+    ``window_adaptation`` copies ``max_num_doublings`` into ``result.parameters``; it
+    is a static setting, so it is removed from ``params`` and bound in the step.
+    """
     import blackjax
 
-    adapt = blackjax.window_adaptation(blackjax.nuts, logdensity_fn)
+    adapt = blackjax.window_adaptation(
+        blackjax.nuts, logdensity_fn, max_num_doublings=_MAX_NUM_DOUBLINGS
+    )
     result, _info = adapt.run(rng_key, position, num_steps=200)  # ty: ignore[unknown-argument]
-    kernel = blackjax.nuts(logdensity_fn, **result.parameters)
-    return result.state, kernel.step
+    params = {k: v for k, v in result.parameters.items() if k != "max_num_doublings"}
+    return result.state, params
+
+
+def _nuts_step_fn(rng_key, inner_state, logdensity_fn, params):  # type: ignore[no-untyped-def]
+    """The matching custom step_fn: one BlackJAX NUTS step with the tuned parameters."""
+    import blackjax
+
+    nuts = blackjax.nuts(logdensity_fn, max_num_doublings=_MAX_NUM_DOUBLINGS, **params)
+    return nuts.step(rng_key, inner_state)
 
 
 def test_blackjax_custom_kernel_happy_path() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (25, 1)), axis=-2)
     covariates = _empty_covariates(25)
     mcmc = MCMC(
-        BlackjaxCustomKernel(rw_model, build_fn=_nuts_build_fn),
+        BlackjaxCustomKernel(rw_model, build_fn=_nuts_build_fn, step_fn=_nuts_step_fn),
         num_warmup=0,
         num_samples=100,
         chain_method="sequential",
@@ -169,18 +184,24 @@ def test_blackjax_custom_kernel_happy_path() -> None:
 
 
 _BadState = namedtuple("_BadState", ["position"])
+_State = namedtuple("_State", ["position"])
+
+
+def _identity_step_fn(rng_key, inner_state, logdensity_fn, params):  # type: ignore[no-untyped-def]
+    """A step_fn that leaves the state unchanged."""
+    return inner_state, None
 
 
 def _malformed_build_fn(rng_key, logdensity_fn, position, num_warmup):  # type: ignore[no-untyped-def]
     """Return a state whose position keys do not match the model's sites."""
-    return _BadState(position={"not_a_real_site": jnp.zeros(())}), (lambda k, s: (s, None))
+    return _BadState(position={"not_a_real_site": jnp.zeros(())}), None
 
 
 def test_blackjax_custom_kernel_malformed_state_raises() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (25, 1)), axis=-2)
     covariates = _empty_covariates(25)
     mcmc = MCMC(
-        BlackjaxCustomKernel(rw_model, build_fn=_malformed_build_fn),
+        BlackjaxCustomKernel(rw_model, build_fn=_malformed_build_fn, step_fn=_identity_step_fn),
         num_warmup=0,
         num_samples=10,
         chain_method="sequential",
@@ -190,7 +211,141 @@ def test_blackjax_custom_kernel_malformed_state_raises() -> None:
         mcmc.run(random.PRNGKey(1), covariates, data)
 
 
-# --- Spec-required failure-mode pins (replacing the old fit_mcmc-level checks) ----
+@pytest.mark.parametrize(
+    "params",
+    [
+        pytest.param(lambda key, state: (state, None), id="step-function"),
+        pytest.param({"step_size": 0.1, "max_num_doublings": 6}, id="python-int"),
+        pytest.param({"max_num_doublings": np.int64(6)}, id="numpy-int"),
+        pytest.param({"label": np.asarray(["a"])}, id="string-array"),
+    ],
+)
+def test_blackjax_custom_kernel_untraceable_params_raise(params: object) -> None:
+    """``params`` the sampling loop cannot trace fail at init with a clear message.
+
+    A step function in place of the tuned parameters is the old ``build_fn``
+    contract; a Python or NumPy integer such as ``max_num_doublings`` is a static
+    blackjax setting that would fail as a traced shape deep inside the loop.
+    """
+
+    def build_fn(
+        rng_key: Array, logdensity_fn: object, position: dict[str, Array], num_warmup: int
+    ) -> tuple[_State, object]:
+        return _State(position=position), params
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (25, 1)), axis=-2)
+    mcmc = MCMC(
+        BlackjaxCustomKernel(rw_model, build_fn=build_fn, step_fn=_identity_step_fn),
+        num_warmup=0,
+        num_samples=10,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    with pytest.raises(TypeError, match="pytree of numeric arrays"):
+        mcmc.run(random.PRNGKey(1), _empty_covariates(25), data)
+
+
+def test_blackjax_custom_kernel_chains_step_with_their_own_params() -> None:
+    """Each sequential chain receives the ``params`` of its own ``build_fn`` call (#170).
+
+    The first ``build_fn`` call tunes an increment of ``1.0`` and the second one of
+    ``100.0``; a step adds the increment to every site, so the draws of each chain
+    move by the increment of that chain.
+    """
+    increments = iter([1.0, 100.0])
+
+    def build_fn(
+        rng_key: Array,
+        logdensity_fn: object,
+        position: dict[str, Array],
+        num_warmup: int,
+    ) -> tuple[_State, dict[str, Array]]:
+        return _State(position=position), {"increment": jnp.asarray(next(increments))}
+
+    def step_fn(
+        rng_key: Array,
+        inner_state: _State,
+        logdensity_fn: object,
+        params: dict[str, Array],
+    ) -> tuple[_State, None]:
+        moved = {k: v + params["increment"] for k, v in inner_state.position.items()}
+        return _State(position=moved), None
+
+    data = random.normal(random.PRNGKey(0), (20, 1))
+    mcmc = MCMC(
+        BlackjaxCustomKernel(mean_model, build_fn=build_fn, step_fn=step_fn),
+        num_warmup=0,
+        num_samples=3,
+        num_chains=2,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    mcmc.run(random.PRNGKey(1), _empty_covariates(20), data)
+    steps = jnp.diff(mcmc.get_samples(group_by_chain=True)["mu"], axis=1)
+    np.testing.assert_allclose(steps, [[1.0, 1.0], [100.0, 100.0]], rtol=1e-5)
+
+
+def mean_scale_model(covariates: Array, data: Array | None = None) -> None:
+    """Constant-level model with an unknown noise scale (two sites, as MCLMC needs)."""
+    h = Horizon.from_data(covariates, data)
+    mu = numpyro.sample("mu", dist.Normal(0.0, 10.0))
+    log_sigma = jnp.asarray(numpyro.sample("log_sigma", dist.Normal(0.0, 1.0)))
+    predict(h, dist.Normal(0.0, jnp.exp(log_sigma)), jnp.full((h.duration, 1), mu))
+
+
+_BUILTIN_KERNELS = {
+    "nuts": lambda: BlackjaxNUTSKernel(mean_scale_model, num_adaptation_steps=50),
+    "mclmc": lambda: BlackjaxMCLMCKernel(mean_scale_model, num_tuning_steps=100),
+}
+
+
+@pytest.mark.parametrize("kernel_name", sorted(_BUILTIN_KERNELS))
+def test_blackjax_sequential_chains_equal_solo_runs(kernel_name: str) -> None:
+    """Each sequential chain samples with its own tuning, not with that of chain 0.
+
+    NumPyro splits the run key into one key per chain, so a two-chain run must
+    give, chain by chain, the draws of two one-chain runs with those keys.
+    """
+    make_kernel = _BUILTIN_KERNELS[kernel_name]
+    data = random.normal(random.PRNGKey(0), (20, 1))
+    cov = _empty_covariates(20)
+    joint = MCMC(
+        make_kernel(),
+        num_warmup=0,
+        num_samples=30,
+        num_chains=2,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    joint.run(random.PRNGKey(2), cov, data)
+    joint_mu = joint.get_samples(group_by_chain=True)["mu"]
+    for chain, chain_key in enumerate(random.split(random.PRNGKey(2), 2)):
+        solo = MCMC(make_kernel(), num_warmup=0, num_samples=30, progress_bar=False)
+        solo.run(chain_key, cov, data)
+        np.testing.assert_allclose(joint_mu[chain], solo.get_samples()["mu"], rtol=1e-5)
+
+
+@pytest.mark.parametrize("kernel_name", sorted(_BUILTIN_KERNELS))
+def test_blackjax_jit_model_args_rerun_samples_new_data(kernel_name: str) -> None:
+    """A second ``mcmc.run`` on new data with ``jit_model_args=True`` samples the new posterior.
+
+    The re-run reuses the compiled sampling loop of the first run, so it must give
+    the draws of a new ``MCMC`` object run on the new data with the same key.
+    """
+    make_kernel = _BUILTIN_KERNELS[kernel_name]
+    data_a = random.normal(random.PRNGKey(0), (20, 1))
+    data_b = 5.0 + data_a
+    cov = _empty_covariates(20)
+    mcmc = MCMC(
+        make_kernel(), num_warmup=0, num_samples=50, progress_bar=False, jit_model_args=True
+    )
+    mcmc.run(random.PRNGKey(1), cov, data_a)
+    mcmc.run(random.PRNGKey(2), cov, data_b)
+    fresh = MCMC(
+        make_kernel(), num_warmup=0, num_samples=50, progress_bar=False, jit_model_args=True
+    )
+    fresh.run(random.PRNGKey(2), cov, data_b)
+    np.testing.assert_allclose(mcmc.get_samples()["mu"], fresh.get_samples()["mu"], rtol=1e-5)
 
 
 def test_blackjax_kernel_vectorized_chain_method_raises_under_batched_rng() -> None:
@@ -263,7 +418,6 @@ def test_blackjax_api_canaries() -> None:
     """Pin the exact BlackJAX symbols the adapters rely on (risk K1)."""
     _api_canary("blackjax", ["nuts", "window_adaptation", "mclmc", "mclmc_find_L_and_step_size"])
     _api_canary("blackjax.mcmc.mclmc", ["init", "build_kernel"])
-    # The stable-sampler patch replaces this exact symbol in both namespaces.
     _api_canary("blackjax.optimizers.lbfgs", ["bfgs_sample", "minimize_lbfgs"])
     _api_canary("blackjax.vi.pathfinder", ["bfgs_sample"])
 
@@ -292,9 +446,6 @@ def test_blackjax_mclmc_tuning_signature_canary() -> None:
     assert "mclmc_kernel" in tune_params
 
 
-# --- Pathfinder (P11) --------------------------------------------------------
-
-
 def test_pathfinder_approximate_return_structure_canary() -> None:
     """Pin the ``approximate`` ELBO path and ``sample`` arity (risk K1)."""
     import blackjax
@@ -310,7 +461,7 @@ def test_pathfinder_approximate_return_structure_canary() -> None:
     )
     out = blackjax.vi.pathfinder.sample(random.PRNGKey(1), state, 5)
     assert isinstance(out, tuple)
-    assert len(out) == 2  # (samples, log_weights)
+    assert len(out) == 2
 
 
 def test_pathfinder_constrained_support() -> None:
@@ -427,7 +578,6 @@ def test_pathfinder_fit_pickle_round_trip() -> None:
     restored = pickle.loads(pickle.dumps(fit))  # noqa: S301 - round-trip of our own data
     assert isinstance(restored, PathfinderFit)
     assert restored.elbo == fit.elbo
-    # The restored fit still draws a valid constrained posterior.
     post = pathfinder_samples(random.PRNGKey(2), restored, 50)
     assert bool(jnp.all(post["sigma"] > 0.0))
 
@@ -449,7 +599,7 @@ def test_stable_bfgs_sample_matches_dense_gaussian_low_dim() -> None:
     alpha = random.uniform(k1, (dim,), minval=0.5, maxval=1.5)
     beta = 0.3 * random.normal(k2, (dim, rank))
     core = 0.3 * random.normal(k3, (rank, rank))
-    gamma = core @ core.T  # PSD keeps both Sigma and I + R @ gamma @ R.T valid
+    gamma = core @ core.T
     position = random.normal(k4, (dim,))
     grad_position = jnp.zeros(dim)
 
@@ -472,7 +622,7 @@ def test_stable_bfgs_sample_finite_beyond_float_underflow() -> None:
     alpha = jnp.full((dim,), 1e-3)
     beta = 1e-3 * random.normal(random.PRNGKey(0), (dim, rank))
     gamma = 0.1 * jnp.eye(rank)
-    assert bool(jnp.isneginf(jnp.log(jnp.prod(alpha))))  # the upstream failure mode
+    assert bool(jnp.isneginf(jnp.log(jnp.prod(alpha))))
 
     _phi, logq = _stable_bfgs_sample(
         random.PRNGKey(1), 20, jnp.zeros(dim), jnp.zeros(dim), alpha, beta, gamma
@@ -536,10 +686,6 @@ def test_fit_pathfinder_maxiter_passthrough(monkeypatch: pytest.MonkeyPatch) -> 
     assert captured["maxiter"] == 17
 
 
-# --- Multi-path Pathfinder ------------------------------------------------
-
-# Shared cheap settings for the multipath tests below: a short random walk and
-# the smallest num_paths/num_elbo_samples/maxiter that still exercise the API.
 _MULTIPATH_T = 24
 _MULTIPATH_NUM_PATHS = 2
 _MULTIPATH_NUM_ELBO_SAMPLES = 50
@@ -685,7 +831,6 @@ def test_multipathfinder_samples_elbo_exceeds_pool_size(
     assert bool(jnp.all(post["drift_scale"] > 0.0))
     for leaf in post.values():
         assert bool(jnp.all(jnp.isfinite(leaf)))
-    # Fresh draws: every one of the 500 is distinct, unlike pool resampling.
     assert len(np.unique(np.asarray(post["drift"]), axis=0)) == num_samples
 
 
@@ -706,6 +851,28 @@ def test_multipathfinder_samples_psis_reproducible_per_key(
     assert bool(jnp.all(first["sigma"] > 0.0))
     for name in first:
         assert bool(jnp.array_equal(first[name], second[name]))
+
+
+@pytest.mark.parametrize("batch_size", [None, 1])
+def test_multipathfinder_samples_psis_warns_once_at_the_caller(
+    multipathfinder_fit: MultiPathfinderFit, batch_size: int | None
+) -> None:
+    """The sampling-time ``pareto_k`` warning fires once per call, at the caller.
+
+    With ``batch_size`` the draw runs in chunks and the warning still fires once.
+    """
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        multipathfinder_samples(
+            random.PRNGKey(4), multipathfinder_fit, 4, resample="psis", batch_size=batch_size
+        )
+    pareto = [w for w in record if "pareto_k" in str(w.message)]
+    assert len(pareto) == 1
+    assert pareto[0].filename == __file__
+    if batch_size is not None:
+        message = str(pareto[0].message)
+        assert "of 4 chunks" in message
+        assert "larger batch_size" in message
 
 
 def test_multipathfinder_samples_auto_follows_pareto_k(
@@ -732,13 +899,17 @@ def test_multipathfinder_samples_auto_follows_pareto_k(
 def test_multipathfinder_samples_invalid_resample_raises(
     multipathfinder_fit: MultiPathfinderFit,
 ) -> None:
-    with pytest.raises(ValueError, match="resample must be one of"):
+    """An unknown ``resample`` is a type error under the runtime type checks."""
+    with pytest.raises(TypeCheckError):
         multipathfinder_samples(
             random.PRNGKey(2),
             multipathfinder_fit,
             10,
             resample="nope",  # ty: ignore[invalid-argument-type]
         )
+    unchecked = inspect.unwrap(multipathfinder_samples)
+    with pytest.raises(ValueError, match="resample must be one of"):
+        unchecked(random.PRNGKey(2), multipathfinder_fit, 10, resample="nope")
 
 
 def test_multipathfinder_forecast_composes(multipathfinder_fit: MultiPathfinderFit) -> None:
@@ -757,7 +928,6 @@ def test_multipathfinder_forecast_composes(multipathfinder_fit: MultiPathfinderF
 def test_multipathfinder_fit_pickle_round_trip(multipathfinder_fit: MultiPathfinderFit) -> None:
     restored = pickle.loads(pickle.dumps(multipathfinder_fit))  # noqa: S301 - our own data
     assert isinstance(restored, MultiPathfinderFit)
-    # The restored fit still resamples a valid constrained posterior.
     post = multipathfinder_samples(random.PRNGKey(5), restored, 50)
     assert bool(jnp.all(post["sigma"] > 0.0))
     assert bool(jnp.all(post["drift_scale"] > 0.0))
@@ -895,7 +1065,8 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
     the first path's ELBO with ``nan`` (``MultipathfinderState``/``PathfinderState``
     are NamedTuples); ``psis_weights`` reads ``logp``/``logq``, so the PSIS
     diagnostics are unaffected. The cheap-settings ``pareto_k`` warning fires
-    too and is captured by the same ``pytest.warns`` block.
+    too and is captured by the same ``pytest.warns`` block. Both are attributed to
+    this test file, the caller.
     """
     import blackjax.vi.multipathfinder as multipathfinder_module
 
@@ -909,7 +1080,7 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
     monkeypatch.setattr(multipathfinder_module, "multi_approximate", nan_first_path)
 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
-    with pytest.warns(UserWarning, match=r"1 of 2 path\(s\) failed \(non-finite ELBO\)"):
+    with pytest.warns(UserWarning, match=r"1 of 2 path\(s\) failed \(non-finite ELBO\)") as record:
         fit = fit_multipathfinder(
             random.PRNGKey(1),
             rw_model,
@@ -919,6 +1090,14 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
             num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
             maxiter=_MULTIPATH_MAXITER,
         )
+    fit_warnings = [
+        w
+        for w in record
+        if issubclass(w.category, UserWarning)
+        and ("path(s) failed" in str(w.message) or "pareto_k=" in str(w.message))
+    ]
+    assert len(fit_warnings) == 2
+    assert {w.filename for w in fit_warnings} == {__file__}
     assert len(fit.elbos) == 2
     assert not np.isfinite(fit.elbos[0])
     assert np.isfinite(fit.elbos[1])
@@ -999,6 +1178,49 @@ def test_fit_multipathfinder_uses_supplied_init_params(
         jax.tree.map(lambda a, b: bool(jnp.array_equal(a, b)), captured[0], stacked)
     )
     assert len(fit.elbos) == 2
+
+
+def test_fits_accept_numpy_init_params() -> None:
+    """Both Pathfinder fits accept a NumPy start point, as the host contract allows.
+
+    A start point taken from draws made with ``device="host"`` holds NumPy leaves
+    when no CPU backend is initialized, so the runtime type checks must not
+    narrow ``init_params`` to jax arrays.
+    """
+    from numpyro.infer.util import initialize_model
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    covariates = _empty_covariates(_MULTIPATH_T)
+    positions = [
+        initialize_model(key, rw_model, dynamic_args=True, model_args=(covariates, data))[0].z
+        for key in random.split(random.PRNGKey(7), 2)
+    ]
+    single = {name: np.asarray(value) for name, value in positions[0].items()}
+    stacked = {name: np.stack([np.asarray(p[name]) for p in positions]) for name in single}
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        fit = fit_pathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            covariates,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+            init_params=single,
+        )
+        multi = fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            covariates,
+            num_paths=2,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+            init_params=stacked,
+        )
+    assert np.isfinite(fit.elbo)
+    assert len(multi.elbos) == 2
 
 
 def test_fit_multipathfinder_empty_init_params_raises() -> None:

@@ -15,6 +15,7 @@ The recursive blocks take plain per-step functions: `markov_series()` a
 sample site.
 """
 
+import math
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
 from enum import StrEnum
@@ -30,9 +31,10 @@ from numpyro.contrib.control_flow import scan
 from numpyro.infer.reparam import Reparam
 from numpyro.primitives import _PYRO_STACK
 
-from numpyro_forecast.arrays import _zeros_like_data, concat_future
+from numpyro_forecast.arrays import concat_future
 from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
 from numpyro_forecast.typing import Array
+from numpyro_forecast.validation import require_time_axis
 
 
 class PlateName(StrEnum):
@@ -103,7 +105,8 @@ class Horizon(eqx.Module):
         """
         if self.data is None:
             return None
-        return _zeros_like_data(self.data, self.duration)
+        shape = (*self.data.shape[:-2], self.duration, self.data.shape[-1])
+        return jnp.zeros(shape, dtype=self.data.dtype)
 
     @classmethod
     def from_data(cls, covariates: Array, data: Array | None) -> "Horizon":
@@ -128,10 +131,34 @@ class Horizon(eqx.Module):
         Raises
         ------
         ValueError
-            If ``data`` is longer than ``covariates`` along the time axis.
+            If ``covariates`` or ``data`` has fewer than two axes (time must be
+            at axis ``-2``), if ``data`` has no time steps (for a series with
+            no history, call the model with ``data=None``), if ``covariates``
+            has no time steps, or if ``data`` is longer than ``covariates``
+            along the time axis.
         """
+        require_time_axis("covariates", covariates)
         duration = covariates.shape[-2]
-        t_obs = duration if data is None else data.shape[-2]
+        t_obs = duration
+        if data is not None:
+            require_time_axis("data", data)
+            t_obs = data.shape[-2]
+            if t_obs == 0:
+                msg = (
+                    f"data has no observed time steps (shape {tuple(data.shape)}); a model "
+                    "needs at least one in-sample step. For a series with no history, call the "
+                    "model with data=None: predict_in_sample(rng_key, model, posterior, "
+                    "covariates) with only the global sites in posterior, or "
+                    "numpyro.infer.Predictive(model, num_samples=...)(rng_key, covariates) "
+                    "for the prior"
+                )
+                raise ValueError(msg)
+        if duration == 0:
+            msg = (
+                f"covariates has no time steps (shape {tuple(covariates.shape)}); the horizon "
+                "needs at least one time step at axis -2"
+            )
+            raise ValueError(msg)
         if t_obs > duration:
             msg = "data must not be longer than covariates along the time axis"
             raise ValueError(msg)
@@ -150,7 +177,54 @@ def _sample_time_block(
         if reparam is not None:
             stack.enter_context(numpyro.handlers.reparam(config={site: reparam}))
         stack.enter_context(numpyro.plate(plate_name, size, dim=-2))
-        return jnp.asarray(numpyro.sample(site, prior))
+        value = jnp.asarray(numpyro.sample(site, prior))
+    _require_block_steps(site, size, plate_name, len(prior.event_shape), value)
+    return value
+
+
+def _require_block_steps(
+    site: str, size: int, plate_name: str, event_rank: int, value: Array
+) -> None:
+    """Require the value of a time block to have ``size`` steps on its plate axis.
+
+    The plate draws ``size`` steps, but NumPyro substitutes a given value (a
+    ``Predictive`` posterior, ``substitute``, ``condition``, ``init_to_value``)
+    without checking it against the plate. A posterior drawn for another
+    training length would otherwise change the length of the series silently,
+    which a model that slices its own sites can hide from the drivers (issue
+    #168). The plate axis is ``-2`` counted left of the ``event_rank`` event axes.
+    """
+    # An enumerated discrete site (``infer={"enumerate": "parallel"}``) holds its
+    # support as ``(K, 1, ..., 1)``, not the plate length, so it fails this check;
+    # supporting enumeration would mean skipping the check for such sites.
+    axis = -2 - event_rank
+    shape = tuple(value.shape)
+    if value.ndim < -axis:
+        msg = (
+            f"innovations expects the value of site {site!r} to have at least {-axis} axes, "
+            f"with time at axis {axis} (the {size} steps of the '{plate_name}' plate), but it "
+            f"has shape {shape}. A univariate series keeps a size-1 observation axis: "
+            "(time, 1), not (time,); do not squeeze the posterior leaf."
+        )
+        raise ValueError(msg)
+    if shape[axis] == size:
+        return
+    if plate_name == PlateName.TIME:
+        cause = (
+            f"a posterior drawn for a different training length: fit it on data with {size} "
+            "rows, or pass the data and covariates of the window it was fit on"
+        )
+    else:
+        cause = (
+            "a posterior that holds the forecast-horizon site: pass the posterior of the "
+            "training run, which holds no values for the _future sites"
+        )
+    msg = (
+        f"innovations expects site {site!r} to have {size} time steps at axis {axis} (the "
+        f"size of the '{plate_name}' plate), but its value has shape {shape}. "
+        f"The usual cause is {cause}."
+    )
+    raise ValueError(msg)
 
 
 def innovations(
@@ -191,6 +265,14 @@ def innovations(
     -------
     Array
         The latent over the full horizon with time at axis ``-2``.
+
+    Raises
+    ------
+    ValueError
+        If a given value of the ``name`` or ``f"{name}_future"`` site (for
+        example a posterior that ``Predictive`` substitutes) does not have
+        ``h.t_obs`` or ``h.future`` steps on its time plate: the usual cause is
+        a posterior drawn for a different training length.
     """
     prefix = _sample_time_block(name, h.t_obs, PlateName.TIME, prior, reparam)
     if h.future <= 0:
@@ -301,9 +383,12 @@ def markov_series[Carry](
         ``numpyro.sample`` statement.
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays
-        with time at axis ``-2`` (a single array, a tuple, a dict, ...), moved
-        leaf by leaf into scan layout internally; ``None`` for autonomous
-        dynamics.
+        with time at axis ``-2`` and ``duration`` rows (a single array, a
+        tuple, a dict, ...), moved leaf by leaf into scan layout internally;
+        ``None`` for autonomous dynamics. Slice each leaf from ``covariates``,
+        which has ``duration`` rows in every model call (training included),
+        or extend an in-sample input with
+        `~~numpyro_forecast.arrays.pad_future()`.
     advance
         Optional ``(carry, z_t, x_t) -> carry`` (see `Advance`) that builds the
         next carry from the sampled latent; ``None`` means the carry *is* the
@@ -328,14 +413,24 @@ def markov_series[Carry](
     ValueError
         If forecasting without observed data (only reachable with a hand-built
         `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
-        data), if the per-step shape lacks the observation dimension, if an
-        enclosing plate is detected, or if ``advance`` is omitted and
-        ``init_carry`` is not a single array with the shape and dtype of a draw.
+        data), if an ``xs`` leaf lacks the time or observation axis or does
+        not span ``h.duration`` rows, if the per-step shape lacks the
+        observation dimension, if an enclosing plate is detected, or if
+        ``advance`` is omitted and ``init_carry`` is not a single array with
+        the shape and dtype of a draw.
     """
     if h.future > 0 and h.data is None:
         msg = "markov_series requires observed data when forecasting"
         raise ValueError(msg)
     _reject_enclosing_plates()
+    _validate_xs_leaves(
+        h,
+        xs,
+        "markov_series",
+        "Slice each xs leaf from covariates (h.duration rows in every model call, training "
+        "too) or extend an in-sample input with pad_future(x, h.future); do not pass the "
+        "observed window alone or a longer array.",
+    )
 
     def _body(site_name: str) -> Callable[[Carry, PyTree[Array] | None], tuple[Carry, Array]]:
         def body(carry: Carry, x_t: PyTree[Array] | None) -> tuple[Carry, Array]:
@@ -416,6 +511,33 @@ class SSOEResult(NamedTuple):
     y_future: Float[Array, " *batch future obs"]
 
 
+def _validate_xs_leaves(h: Horizon, xs: PyTree[Array] | None, block: str, hint: str) -> None:
+    """Require every ``xs`` leaf to carry time at axis ``-2`` and span ``h.duration`` rows.
+
+    Shared by `markov_series()` and `ssoe()`, which both split ``xs`` at
+    ``h.t_obs``; in `markov_series()` a leaf of another length silently changes
+    the number of forecast steps. ``block`` names the caller in the message and
+    ``hint`` ends it.
+    """
+    if xs is None:
+        return
+    for path, leaf in jax.tree_util.tree_leaves_with_path(xs):
+        leaf_name = jax.tree_util.keystr(path) or "<root>"
+        if leaf.ndim < 2:
+            msg = (
+                f"{block} expects every xs leaf to carry time at axis -2 and a trailing "
+                f"observation axis; leaf {leaf_name} has shape {leaf.shape}. Add the axis "
+                "with [..., None]."
+            )
+            raise ValueError(msg)
+        if leaf.shape[-2] != h.duration:
+            msg = (
+                f"{block} expects every xs leaf to span the full horizon (duration = "
+                f"{h.duration} rows at axis -2); leaf {leaf_name} has {leaf.shape[-2]}. {hint}"
+            )
+            raise ValueError(msg)
+
+
 def _validate_ssoe_inputs(h: Horizon, y: Array | None, xs: PyTree[Array] | None) -> Array:
     """Check the driving series and the ``xs`` leaves against the horizon."""
     if y is None:
@@ -438,23 +560,9 @@ def _validate_ssoe_inputs(h: Horizon, y: Array | None, xs: PyTree[Array] | None)
             f"but h.t_obs = {h.t_obs}. Slice the driving series as covariates[..., :h.t_obs, :]."
         )
         raise ValueError(msg)
-    if xs is not None:
-        for path, leaf in jax.tree_util.tree_leaves_with_path(xs):
-            leaf_name = jax.tree_util.keystr(path) or "<root>"
-            if leaf.ndim < 2:
-                msg = (
-                    "ssoe expects every xs leaf to carry time at axis -2 and a trailing "
-                    f"observation axis; leaf {leaf_name} has shape {leaf.shape}. Add the axis "
-                    "with [..., None]."
-                )
-                raise ValueError(msg)
-            if leaf.shape[-2] != h.duration:
-                msg = (
-                    "ssoe expects every xs leaf to span the full horizon (duration = "
-                    f"{h.duration} rows at axis -2); leaf {leaf_name} has {leaf.shape[-2]}. "
-                    "Freeze an in-sample gate over the horizon with pad_future(gate, h.future)."
-                )
-                raise ValueError(msg)
+    _validate_xs_leaves(
+        h, xs, "ssoe", "Freeze an in-sample gate over the horizon with pad_future(gate, h.future)."
+    )
     return y
 
 
@@ -622,7 +730,10 @@ def ssoe[Carry](
     **Composition.** Two channels are two calls sharing the same ``Horizon``;
     each opens its own ``time_future`` plate. Scoping a helper that contains the
     call is fine (``handlers.scope`` prefixes the error site and the plate; use
-    ``name="eps"`` inside a scoped helper so the site reads ``z_eps_future``);
+    ``name="eps"`` inside a scoped helper so the site reads ``z/eps_future``,
+    or ``z_eps_future`` with ``divider="_"``, which
+    `~~numpyro_forecast.convert.to_datatree()` needs because `xarray.DataTree`
+    rejects ``"/"`` in a variable name);
     register ``"obs"`` and ``"forecast"`` outside any scope and build the
     forecast from the channels' ``y_future``.
 
@@ -652,7 +763,7 @@ def ssoe[Carry](
         ``eps_t`` (not a recomputed ``y_t - mu_t``, which can differ by an ulp);
         when the update needs the mean, call ``mean(carry, x_t)`` inside it.
     noise_dist
-        Zero-centered per-step error distribution, either an elementwise family
+        Per-step error distribution with location ``0``, either an elementwise family
         (event rank 0) or a multivariate family over the observation axis (event
         rank 1, e.g. ``dist.MultivariateNormal(jnp.zeros(obs), scale_tril=L)``
         for shocks correlated across series, the VAR case). For a
@@ -662,7 +773,14 @@ def ssoe[Carry](
         ``(B, 1, obs)`` and ``(B, 1)`` respectively. Either way the draw under
         the time plate (``dim=-2`` for event rank 0, ``dim=-1`` for event rank 1)
         is exactly ``(*batch, future, obs)`` with the dtype of the means; event
-        rank 2 or higher is rejected.
+        rank 2 or higher is rejected. Over the horizon ``y_t = mu_t + eps_t``,
+        so ``mu_t`` is the mean of ``y_t`` only when the errors have mean zero:
+        ``Gumbel`` errors with ``loc = 0`` have a nonzero mean, and
+        ``AsymmetricLaplace`` errors with ``loc = 0`` have a nonzero mean unless
+        ``asymmetry = 1`` (see `~~numpyro_forecast.surgery.shift_loc()` for the
+        offsets). That mean shifts each ``y_t`` away from ``mu_t``, and ``update``
+        carries the shift into the later means, so the forecast bias can grow
+        with the horizon. ``Cauchy`` errors have no mean.
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays with
         time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a
@@ -777,6 +895,131 @@ def _has_discrete_support(d: dist.Distribution) -> bool:
         return False
 
 
+def _require_predictor_axes(h: Horizon, prediction: Array) -> None:
+    """Reject a 1-D predictor of ``h.duration`` steps: time without the observation axis.
+
+    Distributions broadcast from the right, so the ``(duration,)`` result of
+    ``covariates @ beta`` puts its time steps on the observation axis of the
+    data: ``(time, 1)`` data is scored on a ``(time, time)`` grid and a square
+    panel gets a per-series effect, both without an error (issue #166). It is
+    checked on the predictor because a ``(duration, 1)`` noise scale gives the
+    distribution a valid-looking ``(duration, duration)`` shape and ``data=None``
+    leaves nothing to compare against. Every other shape is checked on the
+    distribution by `_require_obs_layout()`: a 0-d or per-series predictor is
+    fine when a noise parameter carries the time axis.
+    """
+    shape = tuple(prediction.shape)
+    if shape != (h.duration,):
+        return
+    msg = (
+        "predict expects prediction to have shape (*batch, duration, obs), with time at axis "
+        f"-2 and the observation axis at -1, but it has shape {shape}: its time steps would "
+        "broadcast onto the observation axis of the data. Add the observation axis with "
+        "prediction[..., None]: a univariate predictor has shape (duration, 1) and a panel "
+        "predictor (duration, n)."
+    )
+    raise ValueError(msg)
+
+
+def _broadcast_or_none(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...] | None:
+    """Broadcast two shapes, or return ``None`` when they do not broadcast."""
+    try:
+        return tuple(jnp.broadcast_shapes(a, b))
+    except ValueError:
+        return None
+
+
+def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
+    """Require ``(time, obs)`` axes on ``full_dist`` and no repeated observation of ``h.data``.
+
+    The ``"obs"`` site scores ``h.data`` against ``full_dist`` (its first
+    ``h.t_obs`` rows while forecasting, as `~~numpyro_forecast.surgery.slice_time()`
+    takes them), and the log density broadcasts the two shapes. A shape that
+    grows the data counts each observation more than once: a ``(duration,)``
+    term added to a ``(duration, 1)`` predictor or used as a noise scale gives a
+    ``(time, time)`` grid, a second ``[..., None]`` a ``(time, time, 1)`` one,
+    and a predictor with more rows than a single observed step repeats it
+    (issue #166). A size-1 axis that the data does not have repeats nothing, so
+    it passes. A bare ``MultivariateNormal`` has the time axis as its
+    ``(time,)`` event and no observation axis, so it fails: `shift_loc()` gives
+    MVN noise the ``(time, 1)`` event for a ``(duration, 1)`` predictor (issue
+    #160). When only the number of rows is wrong, the message also names a
+    posterior drawn for another training length: this check fires before the
+    driver check of issue #168 when such a posterior is shorter than the
+    observed data. Shapes alone cannot tell a ``(duration,)`` term from a
+    per-series one when the data has ``h.duration`` series, and the axes of
+    enumerated discrete latents, left of the data axes, count as repeated
+    observations.
+    """
+    shape = (*full_dist.batch_shape, *full_dist.event_shape)
+    data = h.data
+    width = None if data is None else data.shape[-1]
+    wrong_rows = False
+    if len(shape) < 2:
+        problem = "has fewer than two axes, so it has no time axis at -2"
+    elif data is None:
+        return
+    else:
+        data_shape = tuple(data.shape)
+        rows = min(shape[-2], h.t_obs) if h.future > 0 else shape[-2]
+        grid = _broadcast_or_none((*shape[:-2], rows, shape[-1]), data_shape)
+        # Equal sizes: every axis that the broadcast adds or widens has size 1.
+        if grid is not None and math.prod(grid) == math.prod(data_shape):
+            return
+        problem = f"does not match the data (shape {data_shape}): " + (
+            "the two do not broadcast"
+            if grid is None
+            else f"the obs site would score a {grid} grid, counting each observation more "
+            "than once"
+        )
+        # Only the number of rows is wrong when h.t_obs rows would score each observation once.
+        t_obs_grid = _broadcast_or_none((*shape[:-2], h.t_obs, shape[-1]), data_shape)
+        wrong_rows = t_obs_grid is not None and math.prod(t_obs_grid) == math.prod(data_shape)
+    base = full_dist.base_dist if isinstance(full_dist, dist.Independent) else full_dist
+    if isinstance(base, dist.MultivariateNormal):
+        hint = (
+            "A MultivariateNormal over time has the (time,) event and no observation axis: "
+            "pass MultivariateNormal noise with a (duration, 1) predictor (for example "
+            "jnp.full((h.duration, 1), value) for a constant mean), or return "
+            "numpyro_forecast.surgery.shift_loc(noise, mu) from a link, which gives it the "
+            "(time, 1) event."
+        )
+    elif shape and shape[-1] == h.duration and shape[-1] not in (1, width):
+        hint = (
+            f"Its last axis has the h.duration = {h.duration} time steps: give a (duration,) "
+            "term (for example covariates @ beta in level + covariates @ beta, or a "
+            "time-varying scale) the observation axis with [..., None], and transpose a "
+            "(series, time) predictor to (time, series)."
+        )
+    elif wrong_rows:
+        hint = (
+            f"Its time axis has {shape[-2]} rows for h.duration = {h.duration}: build the "
+            "predictor over the full-horizon covariates. A posterior drawn for a different "
+            "training length also causes this when its time latents are not innovations() "
+            f"sites: they must have {h.t_obs} rows."
+        )
+    elif len(shape) < 2:
+        hint = (
+            "Give the predictor or a parameter of obs_dist the time axis at -2 over the full "
+            f"horizon (h.duration = {h.duration}), for example "
+            f"jnp.broadcast_to(prediction, ({h.duration}, {'obs' if width is None else width})) "
+            "for a constant or per-series predictor."
+        )
+    else:
+        allowed = "1" if width == 1 else f"1 or {width}"
+        hint = (
+            "The predictor and every parameter of obs_dist need the time axis at -2 over the "
+            f"full horizon (h.duration = {h.duration}), an observation axis of size {allowed} "
+            "at -1, and no axis above size 1 that the data does not have (such as a second "
+            "[..., None])."
+        )
+    msg = (
+        "predict expects the observation distribution to have shape (*batch, duration, obs), "
+        f"but its batch_shape + event_shape {shape} {problem}. {hint}"
+    )
+    raise ValueError(msg)
+
+
 def predict(
     h: Horizon,
     obs_dist: dist.Distribution | Callable[[Array], dist.Distribution],
@@ -786,10 +1029,19 @@ def predict(
 
     ``prediction`` is the deterministic predictor over the full horizon (time at
     axis ``-2``, shape ``(*batch, duration, obs)``). ``obs_dist`` takes one of
-    two forms. A `numpyro.distributions.Distribution` is zero-centered
-    observation noise (e.g. ``dist.StudentT(nu, 0.0, sigma)``) shifted onto the
-    predictor with `~~numpyro_forecast.surgery.shift_loc()`, which also owns
-    the multivariate-normal layout check. A callable is a link mapping the
+    two forms. A `numpyro.distributions.Distribution` is observation noise with
+    location ``0`` (e.g. ``dist.StudentT(nu, 0.0, sigma)``) whose location is
+    shifted onto the predictor with `~~numpyro_forecast.surgery.shift_loc()`,
+    which also owns the multivariate-normal layout: noise correlated over time,
+    ``dist.MultivariateNormal(jnp.zeros(h.duration), cov)``, gets the event shape
+    ``(time, 1)``, so ``"obs"`` scores each series jointly and the forecast
+    keeps the observation axis. The predictor is then
+    the location of the observation distribution: the mean for ``Normal``,
+    ``StudentT`` (``df > 1``), ``Laplace`` and ``MultivariateNormal`` noise,
+    but the mode for ``Gumbel`` and ``AsymmetricLaplace`` noise, whose mean is
+    offset from it (for ``AsymmetricLaplace`` unless ``asymmetry = 1``), and for
+    ``Cauchy`` noise, which has no mean (see
+    `~~numpyro_forecast.surgery.shift_loc()`). A callable is a link mapping the
     predictor to the observation distribution directly (the GLM form, e.g.
     ``lambda eta: dist.Poisson(jnp.exp(eta))``). Either way, while training the
     observation site ``"obs"`` is observed; while forecasting the in-sample
@@ -799,18 +1051,27 @@ def predict(
     distribution must support time-axis surgery
     (`~~numpyro_forecast.surgery.slice_time()` /
     `~~numpyro_forecast.surgery.prefix_condition()`), i.e. an elementwise
-    family or a registered one.
+    family or a registered one. This also holds for a distribution wrapped in
+    ``Independent`` (e.g. by ``.to_event(1)``).
 
     Parameters
     ----------
     h
         The horizon for the current model call (see `Horizon`).
     obs_dist
-        Zero-centered noise distribution (shifted onto ``prediction``) or a
-        link callable from the full-horizon predictor to the observation
-        distribution.
+        Noise distribution with location ``0`` (its location is shifted onto
+        ``prediction``) or a link callable from the full-horizon predictor to
+        the observation distribution.
     prediction
-        The deterministic predictor over the full horizon, time at axis ``-2``.
+        The deterministic predictor over the full horizon, shape
+        ``(*batch, duration, obs)``: ``h.duration`` steps at axis ``-2`` and the
+        observation axis at ``-1``, so ``(duration, 1)`` for a univariate series
+        and ``(duration, n)`` for a panel of ``n`` series (or ``(duration, 1)``
+        inside a size-``n`` plate at ``dim=-1``). A 0-d or per-series
+        predictor also works when a parameter of an elementwise ``obs_dist``
+        carries the time axis, for example a constant mean with a
+        ``(duration, 1)`` noise scale; ``MultivariateNormal`` noise over time
+        needs the ``(duration, 1)`` predictor.
 
     Raises
     ------
@@ -820,9 +1081,24 @@ def predict(
     RuntimeError
         If forecasting (``future > 0``) but no observed data is available.
     ValueError
-        If the observation distribution has discrete support but ``h.data`` is
-        not integer-dtyped (the usual mistake for count models).
+        If ``prediction`` has shape ``(duration,)`` (for example
+        ``covariates @ beta``, which needs ``[..., None]``); if the observation
+        distribution has fewer than two axes (as a bare ``MultivariateNormal``
+        over time does: its ``(time,)`` event has no observation axis); if
+        ``h.data`` is given and the observation distribution does not broadcast
+        against it or would score each observation more than once (for example
+        a ``(duration,)`` term added to a ``(duration, 1)`` predictor, a
+        ``(duration,)`` noise scale, a second ``[..., None]``, or a predictor
+        built from a posterior drawn for a shorter training window); or if the
+        observation distribution has discrete support but ``h.data`` is not
+        integer-dtyped (the usual mistake for count models). The shape checks
+        cannot tell a ``(duration,)`` term from a per-series one when ``h.data``
+        has ``h.duration`` series (a square panel in training), and they reject
+        a model whose discrete latents are enumerated (for example ``NUTS`` with
+        funsor installed), because the enumeration axes look like repeated
+        observations.
     """
+    _require_predictor_axes(h, prediction)
     full_dist = (
         shift_loc(obs_dist, prediction)
         if isinstance(obs_dist, dist.Distribution)
@@ -830,12 +1106,13 @@ def predict(
     )
     if not isinstance(full_dist, dist.Distribution):
         msg = (
-            "obs_dist must be a zero-centered noise Distribution or a link callable that "
+            "obs_dist must be a noise Distribution with location 0 or a link callable that "
             f"returns a Distribution, got {type(full_dist).__name__} from the link; e.g. "
             "predict(h, dist.Normal(0.0, sigma), mu) or "
             "predict(h, lambda mu: dist.Normal(mu, sigma), mu)."
         )
         raise TypeError(msg)
+    _require_obs_layout(h, full_dist)
     if h.data is not None and _has_discrete_support(full_dist):
         if not jnp.issubdtype(h.data.dtype, jnp.integer):
             msg = (

@@ -8,8 +8,9 @@ a user-supplied fit/forecast closure (see `~~numpyro_forecast.typing.ForecastFn`
 ``"rolling"`` window (see `WindowType`), selected via ``window_type``.
 """
 
+import copy
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 from functools import partial
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -19,16 +20,15 @@ import jax.numpy as jnp
 import numpy as np
 from jax import lax, random
 from jax.typing import ArrayLike
-from jaxtyping import Float
+from jaxtyping import Float, Real
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
-from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
+from numpyro_forecast.offload import chunk_indices, float_view, leaf_view, oom_advice
 from numpyro_forecast.optional import require
-from numpyro_forecast.predictive import _chunk_indices
 from numpyro_forecast.typing import (
     Array,
     ForecastFn,
@@ -37,6 +37,12 @@ from numpyro_forecast.typing import (
     InSampleFn,
     Metric,
     ModelFactory,
+)
+from numpyro_forecast.validation import (
+    require_positive_num_samples,
+    require_pred_truth_shapes,
+    require_time_axis,
+    scalar_metric_value,
 )
 
 if TYPE_CHECKING:
@@ -50,19 +56,19 @@ _DEFAULT_COVERAGE_ALPHA = 0.9
 
 @jax.jit
 def _eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
-    """Jitted MAE core; the host-committed-input handling lives in `eval_mae()`."""
+    """Jitted MAE core; `eval_mae()` places and casts the operands."""
     return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
 
 
-def eval_mae(
-    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
-) -> Array:
+def eval_mae(pred: Real[ArrayLike, " sample *batch"], truth: Real[ArrayLike, " *batch"]) -> Array:
     """Mean absolute error using the forecast sample median as point estimate.
 
     A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast._offload._device_view()`), so either (or
+    (`~~numpyro_forecast.offload.float_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
+    An integer operand (the draws of a count model) is cast to the default
+    float dtype in the same step.
 
     Parameters
     ----------
@@ -75,25 +81,31 @@ def eval_mae(
     -------
     Array
         The mean absolute error as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
-    return _eval_mae(_device_view(pred), _device_view(truth))
+    require_pred_truth_shapes(pred, truth)
+    return _eval_mae(float_view(pred), float_view(truth))
 
 
 @jax.jit
 def _eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
-    """Jitted RMSE core; the host-committed-input handling lives in `eval_rmse()`."""
+    """Jitted RMSE core; `eval_rmse()` places and casts the operands."""
     return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
 
 
-def eval_rmse(
-    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
-) -> Array:
+def eval_rmse(pred: Real[ArrayLike, " sample *batch"], truth: Real[ArrayLike, " *batch"]) -> Array:
     """Root mean squared error using the forecast sample mean as point estimate.
 
     A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast._offload._device_view()`), so either (or
+    (`~~numpyro_forecast.offload.float_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
+    An integer operand (the draws of a count model) is cast to the default
+    float dtype in the same step.
 
     Parameters
     ----------
@@ -106,8 +118,14 @@ def eval_rmse(
     -------
     Array
         The root mean squared error as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
-    return _eval_rmse(_device_view(pred), _device_view(truth))
+    require_pred_truth_shapes(pred, truth)
+    return _eval_rmse(float_view(pred), float_view(truth))
 
 
 _crps_cells = jax.jit(crps_empirical)
@@ -124,22 +142,26 @@ def _eval_crps_single_pass(
 
 def _chunked_cell_metric(
     kernel: Callable[..., Array],
-    pred: "Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch']",
-    truth: "Float[Array, ' *batch'] | Float[np.ndarray, ' *batch']",
+    pred: "Real[Array, ' sample *batch'] | Real[np.ndarray, ' sample *batch']",
+    truth: "Real[Array, ' *batch'] | Real[np.ndarray, ' *batch']",
     batch_size: int,
 ) -> Array:
     """Average a per-cell metric kernel over fixed-size cell chunks.
 
     The batch shape is flattened to ``n_cells`` data cells and evaluated in
     wrapped index blocks of exactly ``batch_size`` cells
-    (`~~numpyro_forecast.predictive._chunk_indices()`), so the
+    (`~~numpyro_forecast.offload.chunk_indices()`), so the
     jitted ``kernel`` compiles once; each block's per-cell values are staged on
     the host before the next block runs, bounding accelerator memory by
     ``sample * batch_size`` values plus the kernel workspace. The sample axis
     is never chunked. Inputs are normalized with
-    `~~numpyro_forecast._offload._leaf_view()` so a host-committed
+    `~~numpyro_forecast.offload.leaf_view()` so a host-committed
     panel is sliced on the host instead of raising when a device-resident
-    index array gathers against it.
+    index array gathers against it. When called directly, each block goes
+    through `~~numpyro_forecast.offload.float_view()` on its way to the
+    kernel, so an integer panel is cast one block at a time; inside
+    `evaluate_forecast()` (and with it `backtest()`) the whole panel is cast
+    once up front, before any metric runs.
 
     Parameters
     ----------
@@ -158,28 +180,34 @@ def _chunked_cell_metric(
     Array
         The mean of the per-cell metric values, as a scalar array.
     """
-    pred_view = _leaf_view(pred)
-    truth_view = _leaf_view(truth)
+    pred_view = leaf_view(pred)
+    truth_view = leaf_view(truth)
     sample = pred_view.shape[0]
     pred_flat = pred_view.reshape(sample, -1)
     truth_flat = truth_view.reshape(-1)
     n_cells = truth_flat.shape[0]
-    indices = _chunk_indices(n_cells, batch_size)
-    with _oom_advice("metric evaluation", batch_size):
-        chunks = [np.asarray(kernel(pred_flat[:, idx], truth_flat[idx])) for idx in indices]
+    indices = chunk_indices(n_cells, batch_size)
+    with oom_advice("metric evaluation", batch_size):
+        chunks = [
+            np.asarray(kernel(float_view(pred_flat[:, idx]), float_view(truth_flat[idx])))
+            for idx in indices
+        ]
     values = np.concatenate(chunks, axis=0)[:n_cells]
     return jnp.asarray(values.mean())
 
 
 def eval_crps(
-    pred: Float[ArrayLike, " sample *batch"],
-    truth: Float[ArrayLike, " *batch"],
+    pred: Real[ArrayLike, " sample *batch"],
+    truth: Real[ArrayLike, " *batch"],
     *,
     batch_size: int | None = None,
 ) -> Array:
     """Empirical CRPS averaged over all data elements.
 
-    A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
+    A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`). An
+    integer ``pred`` or ``truth`` (the draws of a count model) is cast to the
+    default float dtype (`~~numpyro_forecast.offload.float_view()`), one
+    ``batch_size`` block at a time on the chunked path.
 
     Parameters
     ----------
@@ -199,7 +227,7 @@ def eval_crps(
         to float tolerance, not bitwise); at or above the cell count the
         single-pass path runs instead, which moves any host-committed operand
         back to device memory first
-        (`~~numpyro_forecast._offload._device_view()`) so either
+        (`~~numpyro_forecast.offload.float_view()`) so either
         ``pred`` or ``truth`` (or both) may be host-committed regardless of
         ``batch_size``. ``None`` (default) evaluates in one pass.
 
@@ -207,9 +235,15 @@ def eval_crps(
     -------
     Array
         The mean empirical CRPS as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if batch_size is None or batch_size >= np.size(truth):
-        return _eval_crps_single_pass(_device_view(pred), _device_view(truth))
+        return _eval_crps_single_pass(float_view(pred), float_view(truth))
     return _chunked_cell_metric(
         _crps_cells,
         cast("Array | np.ndarray", pred),
@@ -228,8 +262,8 @@ def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
 
 
 def eval_coverage(
-    pred: Float[ArrayLike, " sample *batch"],
-    truth: Float[ArrayLike, " *batch"],
+    pred: Real[ArrayLike, " sample *batch"],
+    truth: Real[ArrayLike, " *batch"],
     *,
     alpha: float = _DEFAULT_COVERAGE_ALPHA,
     batch_size: int | None = None,
@@ -241,7 +275,10 @@ def eval_coverage(
     fraction of ground-truth values that fall inside it. A well-calibrated
     forecast has coverage close to ``alpha``. A pure JAX scalar kernel (see
     `~~numpyro_forecast.typing.Metric`); bind a non-default level with
-    ``functools.partial(eval_coverage, alpha=...)``.
+    ``functools.partial(eval_coverage, alpha=...)``. An integer ``pred`` or
+    ``truth`` (the draws of a count model) is cast to the default float dtype
+    (`~~numpyro_forecast.offload.float_view()`), one ``batch_size`` block at a
+    time on the chunked path.
 
     Parameters
     ----------
@@ -258,7 +295,7 @@ def eval_coverage(
         the identical count; only the precision of the final division differs
         from the single pass. Either path accepts a host-committed ``pred``
         or ``truth`` (or both); the single pass moves them to device memory
-        first (`~~numpyro_forecast._offload._device_view()`).
+        first (`~~numpyro_forecast.offload.float_view()`).
         ``None`` (default) evaluates in one pass.
 
     Returns
@@ -270,13 +307,15 @@ def eval_coverage(
     Raises
     ------
     ValueError
-        If ``alpha`` is not strictly inside ``(0, 1)``.
+        If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+        ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
     if batch_size is None or batch_size >= np.size(truth):
-        return _coverage_indicator(_device_view(pred), _device_view(truth), alpha=alpha).mean()
+        return _coverage_indicator(float_view(pred), float_view(truth), alpha=alpha).mean()
     kernel = partial(_coverage_indicator, alpha=alpha)
     return _chunked_cell_metric(
         kernel, cast("Array | np.ndarray", pred), cast("Array | np.ndarray", truth), batch_size
@@ -293,8 +332,8 @@ DEFAULT_METRICS: dict[str, Metric] = {
 
 
 def evaluate_forecast(
-    pred: Float[ArrayLike, " sample *batch"],
-    truth: Float[ArrayLike, " *batch"],
+    pred: Real[ArrayLike, " sample *batch"],
+    truth: Real[ArrayLike, " *batch"],
     *,
     metrics: Mapping[str, Metric] | None = None,
 ) -> dict[str, float]:
@@ -320,20 +359,37 @@ def evaluate_forecast(
     ----------
     pred
         Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+        Integer draws (a count model) are accepted.
     truth
-        Ground-truth values with shape ``(*batch)``.
+        Ground-truth values with shape ``(*batch)``. Integer values are accepted.
     metrics
         Mapping of metric name to function; when ``None`` defaults to
         `DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
-        Each function takes ``(pred, truth)`` and returns a scalar array (see
+        Each function takes ``(pred, truth)`` and returns a 0-d array (see
         `~~numpyro_forecast.typing.Metric`); bind any extra parameters
-        with `functools.partial()` (see above).
+        with `functools.partial()` (see above). Each function receives
+        floating arrays: an integer ``pred`` or ``truth`` is cast to the
+        default float dtype once, before the first metric runs. A per-cell
+        function such as `~~numpyro_forecast.metrics.crps_empirical()` is not
+        a metric: use `eval_crps()`, its mean over the cells.
 
     Returns
     -------
     dict[str, float]
-        Each metric name mapped to its value.
+        Each metric name mapped to its value. A bool, integer, ``float8`` or
+        ``float4`` metric result is converted to ``float``, whatever the other
+        metrics are (a ``float6`` result keeps its dtype: XLA on CPU cannot
+        convert it).
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
+        check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair. Also
+        if a metric returns a value that is not 0-d or does not have a bool, integer or floating
+        dtype; the message names the metric and gives the shape and dtype it returned.
     """
+    require_pred_truth_shapes(pred, truth)
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}
@@ -341,12 +397,18 @@ def evaluate_forecast(
     # host-committed jax.Array input (e.g. draws sampled with device="host")
     # is moved to device memory so the jitted metric kernels below never see a
     # host/device memory-kind mismatch, whichever of pred/truth (or both) was
-    # host-committed.
-    pred_arr, truth_arr = _device_view(pred), _device_view(truth)
-    # Evaluate every metric kernel, then pull the whole batch across the device
-    # boundary in a single host transfer instead of one sync per metric.
-    stacked = jnp.stack([fn(pred_arr, truth_arr) for fn in metrics.values()])
-    return dict(zip(metrics, stacked.tolist(), strict=True))
+    # host-committed. Integer counts are cast to float here once, so every
+    # metric (custom ones included) gets floating arrays and the built-in
+    # metrics' own float_view() is a no-op.
+    pred_arr, truth_arr = float_view(pred), float_view(truth)
+    # Check each result on its own (shape and dtype are static, so no device sync), so
+    # the outcome for one metric never depends on the others, then pull the whole batch
+    # across the device boundary in a single host transfer instead of one per metric.
+    # The stack uses the join of the result dtypes: jnp.stack alone would demote a
+    # weak float32 result (jnp.asarray(0.1)) to bfloat16 next to a bfloat16 metric.
+    values = [scalar_metric_value(name, fn(pred_arr, truth_arr)) for name, fn in metrics.items()]
+    dtype = jnp.result_type(*(value.dtype for value in values))
+    return dict(zip(metrics, jnp.stack(values, dtype=dtype).tolist(), strict=True))
 
 
 @dataclass(frozen=True)
@@ -383,12 +445,36 @@ class BacktestResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view (Pyro-style access).
 
+        The view does not copy the arrays: ``prediction`` is the same object as
+        ``self.prediction``, so an in-place write to a NumPy ``prediction``
+        changes the result. The ``metrics`` and ``train_metrics`` mappings are
+        shallow copies, so adding or replacing entries of the returned
+        dictionary (or of those mappings) never changes the result. Use
+        ``copy.deepcopy(result.to_dict())`` for an independent copy of the
+        arrays.
+
         Returns
         -------
         dict[str, Any]
             All fields as a plain dictionary.
         """
-        return asdict(self)
+        return _fields_view(self)
+
+
+def _fields_view(result: "BacktestResult | VectorizedBacktestResult") -> dict[str, Any]:
+    """Map each field of a backtest result to its value without copying the arrays.
+
+    Unlike ``dataclasses.asdict``, which deep-copies every array (the full
+    forecast draws with ``keep_predictions=True``), this returns the arrays as
+    they are. Only the dict-valued fields (the small metric mappings) are
+    shallow-copied, so a caller who adds or replaces entries never changes the
+    frozen result (an in-place write to a NumPy array field still does).
+    """
+    view: dict[str, Any] = {}
+    for result_field in fields(result):
+        value = getattr(result, result_field.name)
+        view[result_field.name] = dict(value) if isinstance(value, dict) else value
+    return view
 
 
 def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
@@ -592,6 +678,39 @@ def _slice_window(
     return train_data, train_covariates, full_covariates, truth
 
 
+_TWO_SAMPLE_METRICS: tuple[Callable[..., Array], ...] = (eval_crps, crps_empirical)
+"""Metric kernels that need at least 2 forecast samples (the empirical CRPS)."""
+
+
+def _require_num_samples_for_metrics(num_samples: int, metrics: Mapping[str, Metric]) -> None:
+    """Raise ``ValueError`` before any fit if ``num_samples`` is too small for ``metrics``.
+
+    ``num_samples`` must be positive, and at least 2 when a metric is (or is a
+    `functools.partial()` of) one of `_TWO_SAMPLE_METRICS`. Without this
+    check the error comes from the metric itself: in `backtest()` after the
+    first window has been fitted and forecast, and in `backtest_vectorized()`
+    from the trace of its scoring (see `_require_scorable_metrics()`), with a
+    message that does not name ``num_samples``.
+    """
+    require_positive_num_samples(num_samples)
+    if num_samples >= 2:
+        return
+    needs_two: list[str] = []
+    for name, fn in metrics.items():
+        kernel: object = fn
+        while isinstance(kernel, partial):
+            kernel = kernel.func
+        if kernel in _TWO_SAMPLE_METRICS:
+            needs_two.append(name)
+    if needs_two:
+        msg = (
+            f"num_samples={num_samples} is too small for the metrics {needs_two}: the "
+            "empirical CRPS needs at least 2 forecast samples per window. Pass "
+            "num_samples >= 2, or remove those entries from the metrics mapping"
+        )
+        raise ValueError(msg)
+
+
 def _eval_train_window(
     rng_key: Array,
     in_sample_fn: InSampleFn,
@@ -648,9 +767,14 @@ def _run_window(
         metrics = {**metrics, **per_window_metrics(t0, t1, t2)}
 
     model = shared_model if shared_model is not None else model_fn()
+    # One unconditional split gives each closure its own child key. Two keys from one
+    # split are independent, so nothing forecast_fn derives from its key reaches
+    # train_key, and the split does not depend on eval_train, so enabling in-sample
+    # scoring never changes the out-of-sample draws.
+    forecast_key, train_key = random.split(rng_key)
     pred, walltime = _timed(
         lambda: forecast_fn(
-            rng_key,
+            forecast_key,
             model,
             train_data,
             train_covariates,
@@ -667,11 +791,8 @@ def _run_window(
     if eval_train:
         # in_sample_fn is guaranteed non-None here: backtest's entry check raises
         # before any window runs when eval_train=True and in_sample_fn is None.
-        # In-sample scoring is an optional diagnostic: derive its key as an
-        # independent substream via fold_in so enabling it never shifts the key
-        # passed to forecast_fn above.
         train_metrics = _eval_train_window(
-            random.fold_in(rng_key, 2),
+            train_key,
             cast("InSampleFn", in_sample_fn),
             model,
             train_data,
@@ -788,7 +909,11 @@ def backtest(
     Parameters
     ----------
     rng_key
-        Base PRNG key (used for every window, matching Pyro).
+        Base PRNG key, used for every window (matching Pyro). Each window
+        splits it once, ``forecast_key, train_key = random.split(rng_key)``:
+        ``forecast_fn`` receives ``forecast_key`` and ``in_sample_fn`` receives
+        ``train_key``. The split does not depend on ``eval_train``, so turning
+        in-sample scoring on does not change the out-of-sample draws.
     model_fn
         Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
     data
@@ -802,13 +927,19 @@ def backtest(
     in_sample_fn
         Optional closure that fits ``model`` on the training window and scores
         its in-sample fit (see `~~numpyro_forecast.typing.InSampleFn` and
-        the contract above). Required when ``eval_train=True``.
+        the contract above). Required when ``eval_train=True``. It receives
+        its own child of ``rng_key`` (see ``rng_key``), never a key that
+        ``forecast_fn`` can derive from its own.
     metrics
         Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each function takes ``(pred, truth)`` and returns a scalar array (see
         `~~numpyro_forecast.typing.Metric`); bind any metric-specific
         parameters with `functools.partial()`, e.g.
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
+        Each window is scored through `evaluate_forecast()`, so the integer
+        draws of a count model need no cast and every metric receives
+        floating arrays. ``transform`` receives the draws as ``forecast_fn``
+        returned them; ``keep_predictions`` stores them after ``transform``.
     per_window_metrics
         Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
         extra metrics merged over ``metrics`` for each window. Use it for
@@ -842,7 +973,13 @@ def backtest(
     stride
         Step between successive train/test splits.
     num_samples
-        Number of forecast samples per window.
+        Number of forecast samples per window. Must be positive, and at least
+        2 when ``metrics`` contains `eval_crps()` (as `DEFAULT_METRICS`
+        does) or a `functools.partial()` of it. Both rules are checked before
+        the first window is fitted. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) or added by
+        ``per_window_metrics`` is not checked up front: it fails only when it
+        runs.
     batch_size
         Optional chunk size forwarded to ``forecast_fn`` and ``in_sample_fn``
         (see the contract above).
@@ -857,10 +994,14 @@ def backtest(
     reuse_model
         When ``True`` (default) and the windowing strategy is rolling, the model
         instance returned by the first ``model_fn()`` call is reused for every
-        window so forecast/predict kernels can cache across windows. SVI still
-        recompiles per window; for a single fused fit over all windows use
-        `backtest_vectorized()`. Ignored for expanding windows and when
-        ``False``.
+        window, so ``model_fn`` runs once. Ignored for expanding windows and when
+        ``False`` (``model_fn`` then runs once per window). It does not cache
+        compiled programs: each `~~numpyro_forecast.predictive.forecast()` or
+        `~~numpyro_forecast.predictive.predict_in_sample()` call that
+        ``forecast_fn`` or ``in_sample_fn`` makes compiles once per window, and
+        so does an SVI fit; for a single fused fit and forecast over all
+        windows use `backtest_vectorized()`. Kept for API stability: it only
+        matters for a ``model_fn`` that is expensive or stateful.
 
     Returns
     -------
@@ -870,8 +1011,14 @@ def backtest(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
-        but ``in_sample_fn`` is ``None``.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if their durations differ, if ``eval_train=True`` but
+        ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small (see
+        ``num_samples``). Also if a metric returns a value that is not 0-d or
+        does not have a bool, integer or floating dtype (see
+        `evaluate_forecast()`): the error names the metric and comes when the
+        first window is scored, after its fit, because a metric may run on the
+        host here and so is not traced before the fit.
     BacktestWindowError
         If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
         ``train_window``, or ``"expanding"`` with one).
@@ -879,11 +1026,14 @@ def backtest(
     if eval_train and in_sample_fn is None:
         msg = "eval_train=True requires in_sample_fn to be set"
         raise ValueError(msg)
+    require_time_axis("data", data)
+    require_time_axis("covariates", covariates)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
     window_type = _resolve_window_type(window_type, train_window)
     metrics = DEFAULT_METRICS if metrics is None else metrics
+    _require_num_samples_for_metrics(num_samples, metrics)
     duration = data.shape[-2]
 
     shared_model: ForecastModel | None = None
@@ -963,12 +1113,24 @@ class VectorizedBacktestResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view.
 
+        The view does not copy the arrays: ``predictions``, ``losses`` and the
+        window indices are the same objects as on the result. The ``metrics``
+        mapping is a shallow copy, so adding or replacing entries of the
+        returned dictionary (or of that mapping) never changes the result. Use
+        ``copy.deepcopy(result.to_dict())`` for an independent copy of the
+        arrays.
+
         Returns
         -------
         dict[str, Any]
             All fields as a plain dictionary.
         """
-        return asdict(self)
+        return _fields_view(self)
+
+
+def _checked_metric(name: str, fn: Metric, pred: Array, truth: Array) -> Array:
+    """Score one window with ``fn`` and check the result (see `scalar_metric_value()`)."""
+    return scalar_metric_value(name, fn(pred, truth))
 
 
 def _vmapped_metrics(
@@ -979,12 +1141,139 @@ def _vmapped_metrics(
     Metrics are pure JAX scalar kernels (see
     `~~numpyro_forecast.typing.Metric`), so any mapping, default or
     custom, is scored by one ``vmap`` per metric over the leading window axis;
-    the single device-to-host transfer is deferred to the caller.
+    the single device-to-host transfer is deferred to the caller. Integer
+    forecasts and truth (a count model) are cast to the default float dtype
+    once for all windows and metrics, so every metric sees floating arrays;
+    an empty mapping returns before the cast allocates anything. The result
+    of each metric is checked inside the ``vmap``, where it is the value of one
+    window, so a metric that does not return a 0-d value raises a
+    ``ValueError`` that names it, and a bool, integer, ``float8`` or
+    ``float4`` result is cast to float inside the vmapped computation (a
+    ``float6`` result keeps its dtype: XLA on CPU cannot convert it).
     """
+    if not metrics:
+        return {}
+    predictions, truth = float_view(predictions), float_view(truth)
     try:
-        return {name: jax.vmap(fn)(predictions, truth) for name, fn in metrics.items()}
-    except (jax.errors.ConcretizationTypeError, jax.errors.TracerArrayConversionError) as err:
+        return {
+            name: jax.vmap(partial(_checked_metric, name, fn))(predictions, truth)
+            for name, fn in metrics.items()
+        }
+    except (
+        jax.errors.ConcretizationTypeError,
+        jax.errors.TracerArrayConversionError,
+        jax.errors.TracerIntegerConversionError,
+        jax.errors.NonConcreteBooleanIndexError,
+    ) as err:
         raise VectorizedMetricError() from err
+
+
+def _require_scorable_metrics(
+    metrics: Mapping[str, Metric], num_samples: int, truth: Array
+) -> None:
+    """Trace the vectorized scoring of ``metrics`` on the window shapes, before any fit.
+
+    ``jax.eval_shape`` runs `_vmapped_metrics()` on abstract values only: it
+    does no computation and no backend compile, so a metric that would fail
+    the scoring after the fit (a result that is not 0-d or not real, a host
+    conversion, a CRPS wrapped in a ``lambda`` with ``num_samples=1``) fails
+    here first, with the same error. The trace is a ``jit``-style trace, so
+    it is stricter than the eager ``vmap`` of the scoring after the fit:
+    every value the metric builds is a tracer, constants included, and a
+    host conversion of a ``jnp`` value computed from shapes or constants
+    (``int(jnp.ceil(p.shape[0] * 0.1))``) raises `VectorizedMetricError`
+    here although an eager ``vmap`` would accept it. That is the
+    `~~numpyro_forecast.typing.Metric` contract (``jit``- and
+    ``vmap``-compatible); compute static values with Python or ``math``. The
+    forecast dtype is known only after the fit, so the draws are traced in
+    the default float dtype. That is the dtype `_vmapped_metrics()` sees after
+    its `float_view()` cast when the model draws integers (a count model) or
+    the default float dtype; any other floating draws keep their dtype through
+    `float_view()` (a ``float16`` forecast, or a ``float32`` one under x64),
+    so the trace can differ from the scoring after the fit in the dtype only.
+    The scoring after the fit checks the real forecasts again through the
+    same `_vmapped_metrics()`. The trace calls each metric
+    once more, on tracers, before the fit: a metric with a side effect (a
+    counter, a log line) sees two calls per `backtest_vectorized()` run.
+
+    Parameters
+    ----------
+    metrics
+        Mapping of metric name to function.
+    num_samples
+        Number of forecast samples drawn per window.
+    truth
+        Stacked test windows of ``data``, shape ``(num_windows, *batch, test_window, obs)``.
+
+    Raises
+    ------
+    ValueError
+        If a metric result is not 0-d or does not have a real dtype (see
+        `scalar_metric_value()`), or a metric raises it for these shapes.
+    VectorizedMetricError
+        If a metric is not a pure JAX function under a ``jit``-style trace
+        (a host conversion, including one of a ``jnp`` value computed from
+        shapes or constants).
+    """
+    pred_spec = jax.ShapeDtypeStruct(
+        (truth.shape[0], num_samples, *truth.shape[1:]), jnp.result_type(float)
+    )
+    jax.eval_shape(partial(_vmapped_metrics, metrics), pred_spec, truth)
+
+
+def _held_autoguides(value: object) -> Iterator[AutoGuide]:
+    """Yield the autoguides an attribute value is or holds in a list or dict."""
+    if isinstance(value, AutoGuide):
+        yield value
+    elif isinstance(value, list):
+        yield from (v for v in value if isinstance(v, AutoGuide))
+    elif isinstance(value, dict):
+        yield from (v for v in value.values() if isinstance(v, AutoGuide))
+
+
+def _nested_autoguides(guide: AutoGuide) -> Iterator[AutoGuide]:
+    """Yield ``guide`` and every autoguide it holds, recursively.
+
+    Covers the parts of an ``AutoGuideList`` and the global and local guides of
+    an ``AutoSemiDAIS``: each one sets itself up and caches its own state.
+    """
+    yield guide
+    for value in vars(guide).values():
+        for held in _held_autoguides(value):
+            yield from _nested_autoguides(held)
+
+
+def _fresh_copy(guide: AutoGuide) -> AutoGuide:
+    """Copy a fresh autoguide so that setting the copy up leaves ``guide`` unchanged.
+
+    The setup of an autoguide assigns attributes and writes into containers
+    that its ``__init__`` created (``_prototype_frame_full_sizes``, the parts
+    list of an ``AutoGuideList``). So the copy gets its own attribute dict and
+    its own copy of every list, dict and set attribute, and each autoguide it
+    holds is copied in the same way. All other attributes, the model first of
+    all, are shared: a deep copy would also copy whatever object the model is
+    bound to, which can fail (an object that holds a lock, or a PRNG key
+    under ``jit``).
+
+    This relies on NumPyro (0.22) writing in place only into top-level
+    containers of the guide: a setup that wrote into a nested container would
+    leak traced values into ``guide``.
+    """
+    clone = copy.copy(guide)
+    for name, value in list(vars(clone).items()):
+        if isinstance(value, AutoGuide):
+            setattr(clone, name, _fresh_copy(value))
+        elif isinstance(value, list | dict | set):
+            # A shallow copy keeps the container type (an OrderedDict stays one).
+            fresh = copy.copy(value)
+            if isinstance(fresh, list):
+                fresh[:] = [_fresh_copy(v) if isinstance(v, AutoGuide) else v for v in fresh]
+            elif isinstance(fresh, dict):
+                for key, item in fresh.items():
+                    if isinstance(item, AutoGuide):
+                        fresh[key] = _fresh_copy(item)
+            setattr(clone, name, fresh)
+    return clone
 
 
 def _window_key_streams(rng_key: Array, num_windows: int) -> tuple[Array, Array, Array]:
@@ -1030,16 +1319,30 @@ def backtest_vectorized(
 ) -> VectorizedBacktestResult:
     """Rolling-window backtest with all windows fitted in one vmapped SVI run.
 
-    Estimator-equivalent to `backtest()` with rolling windows; it differs
-    only in PRNG stream layout and float reduction order, so the equivalence is
-    statistical, not bitwise. Model, guide, and SVI compile once regardless of
-    the number of windows, giving order-of-magnitude wall-clock wins for tens
-    of windows on small models.
+    Estimator-equivalent to `backtest()` with rolling windows and a fresh
+    guide fitted on each window; it differs only in PRNG stream layout and
+    float reduction order, so the equivalence is statistical, not bitwise.
+    Model, guide, and SVI compile once regardless of the number of windows,
+    giving order-of-magnitude wall-clock wins for tens of windows on small
+    models.
 
-    PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
-    ``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
-    posterior-draw, and forecast subkeys (the parent itself is never consumed;
-    see `_window_key_streams()`).
+    Each window fits its own copy of ``guide``. An autoguide sets itself up
+    at its first init and keeps state that depends on the data of that init:
+    the support transform of every latent site, the deterministic sites, and
+    for ``AutoLaplaceApproximation`` the loss whose Hessian gives the
+    covariance. The copy of each window sets up on that window's training
+    data, so all of this state comes from the window, as with a fresh guide
+    per window in `backtest()`.
+
+    PRNG: ``fold_in(rng_key, i)`` is the window-``i`` parent, split into
+    SVI-init, posterior-draw, and forecast subkeys (the parent itself is
+    never consumed; see `_window_key_streams()`). The SVI-init subkey keys
+    the setup of the window's guide copy, so a random ``init_loc_fn`` (such
+    as the default ``init_to_uniform``) starts each window from its own
+    point, and so does a callable initializer in a hand-written guide, such
+    as ``numpyro.param("loc", lambda key: random.normal(key))``. It also
+    seeds the Monte Carlo ELBO estimate of every SVI step of the window
+    (``svi.init`` keeps a key split from it in the SVI state).
 
     Parameters
     ----------
@@ -1063,13 +1366,23 @@ def backtest_vectorized(
         same object, sampled through its ``sample_posterior``, or a hand-written
         guide function with the model's signature, sampled through
         ``numpyro.infer.Predictive(guide, params=...)`` on each window's
-        training data. Either way one guide is shared by every window:
+        training data:
 
         ```python
         model = make_model()
         backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
         backtest_vectorized(..., model_fn=lambda: model, guide=my_guide_fn)
         ```
+
+        An autoguide must be a fresh instance that was never run or fitted:
+        each window fits its own copy of it, and the instance you pass is left
+        unchanged, so it can be passed again to a later call. Its
+        ``init_loc_fn`` runs inside the vmapped fit, so it must be traceable
+        by JAX (no NumPy conversion of the values it receives). The copy per
+        window applies only when ``guide`` itself is an autoguide: an autoguide
+        behind a handler (``handlers.scale(AutoNormal(model), ...)``) or called
+        from a guide function is shared by all windows and set up once, on
+        window 0, so its supports and Laplace covariance come from window 0.
 
     optim
         NumPyro optimizer; ``None`` uses ``numpyro.optim.Adam(0.01)``. For an
@@ -1079,7 +1392,13 @@ def backtest_vectorized(
     num_steps
         Number of SVI steps per window.
     num_samples
-        Number of forecast samples drawn per window.
+        Number of forecast samples drawn per window. Must be positive, and at
+        least 2 when ``metrics`` contains `eval_crps()` (as
+        `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
+        are checked before the fit. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) raises the error of
+        `~~numpyro_forecast.metrics.crps_empirical()` instead, also before the
+        fit (see ``metrics``).
     metrics
         Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each metric is vmapped over the window axis, so any pure-JAX mapping,
@@ -1087,7 +1406,25 @@ def backtest_vectorized(
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}``,
         is scored inside the single fused computation. Host-side metrics are
         unsupported here; use `backtest()`, or ``keep_predictions=True``
-        and score on the host.
+        and score on the host. The integer draws of a count model need no
+        cast: the forecasts and the truth windows are cast to the default
+        float dtype once before scoring, so every metric (a custom one
+        included) receives floating arrays, while ``predictions`` keeps the
+        dtype of the draws. A custom metric that needs the integer draws must
+        read them from ``predictions`` (``keep_predictions=True``) or cast
+        back inside the metric. Before the fit, the scoring is traced with
+        ``jax.eval_shape`` on the shapes of the windows (no computation), so a
+        metric that breaks the `~~numpyro_forecast.typing.Metric` contract
+        fails before any window is fitted; that trace calls each metric once
+        more, on tracers. It is a ``jit``-style trace, so a metric must be
+        ``jit``-compatible as `~~numpyro_forecast.typing.Metric` says: a host
+        conversion of a ``jnp`` value, even one computed from shapes or
+        constants (``int(jnp.ceil(p.shape[0] * 0.1))``), raises
+        `VectorizedMetricError`; compute static values with Python or
+        ``math`` instead. A bool, integer, ``float8`` or ``float4`` metric
+        result is cast to float (a ``float6`` one keeps its dtype: XLA on CPU
+        cannot convert it), so every entry of
+        ``VectorizedBacktestResult.metrics`` has a floating dtype.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
 
@@ -1099,14 +1436,34 @@ def backtest_vectorized(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if their durations differ, if ``num_samples`` is too
+        small (see ``num_samples``), if ``guide`` is an autoguide that is
+        already set up (see ``guide``), or if ``metrics`` is not empty and the
+        model's ``"forecast"`` site does not have the shape of ``data`` over
+        the test window. Also, before the fit, if a metric returns a value that
+        is not 0-d or does not have a bool, integer or floating dtype for one
+        window: the message names the metric and gives the shape and dtype it
+        returned for one window.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
+    RuntimeError
+        If the SVI loss of a window is not finite at the first step (no valid
+        start on that window), after the fit and before the forecasts. When an
+        eager init of the first such window gives NumPyro's own error (for
+        example no valid initial parameters), that error is raised instead;
+        an eager init of window 0 before the fit raises it for window 0.
     VectorizedMetricError
-        If a metric forces a host conversion under ``vmap`` (it is not a pure
-        JAX function).
+        If a metric is not a pure JAX function under a ``jit``-style trace: it
+        forces a host conversion (``float(...)``, ``int(...)``, ``range(...)``,
+        Python list indexing or a NumPy call on a traced value, including a
+        ``jnp`` value computed only from shapes or constants) or builds a
+        value-dependent shape (a boolean mask index such as ``x[x > 0]``).
+        Raised before the fit, from the trace of the scoring (see ``metrics``).
     """
+    require_time_axis("data", data)
+    require_time_axis("covariates", covariates)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
@@ -1116,6 +1473,19 @@ def backtest_vectorized(
         raise BacktestWindowError("test_window must be >= 1")
     if stride < 1:
         raise BacktestWindowError("stride must be >= 1")
+    resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
+    _require_num_samples_for_metrics(num_samples, resolved_metrics)
+    if isinstance(guide, AutoGuide) and any(
+        g.prototype_trace is not None for g in _nested_autoguides(guide)
+    ):
+        msg = (
+            f"backtest_vectorized needs a fresh guide, but the {type(guide).__name__} passed "
+            "(or an autoguide it holds) was already run or fitted, so it keeps the shapes, "
+            "supports and data of that earlier call; pass a fresh instance built the same "
+            "way, for example guide=AutoNormal(model). Each window fits its own copy of the "
+            "guide and the instance you pass stays unchanged"
+        )
+        raise ValueError(msg)
 
     duration = data.shape[-2]
     last_start = duration - train_window - test_window
@@ -1132,40 +1502,66 @@ def backtest_vectorized(
         return train_d, train_c, hor_c, truth
 
     train_d, train_c, hor_c, truth = jax.vmap(slice_one)(starts)
+    # The fit is the expensive part, so a metric that breaks the Metric contract fails
+    # here, from a trace of the scoring on the window shapes (no compute, no compile).
+    _require_scorable_metrics(resolved_metrics, num_samples, truth)
 
     model = model_fn()
     resolved_optim = Adam(0.01) if optim is None else optim
-    svi = SVI(model, guide, resolved_optim, Trace_ELBO())
 
-    # This eager warm-up on concrete window-0 arrays is mandatory: AutoGuide
-    # caches its prototype trace on the instance at first init, so if that
-    # first init happens under vmap tracing the instance retains tracers and
-    # any later eager use raises UnexpectedTracerError.
-    # (fold_in requires a non-negative uint32 index on this JAX version, so
-    # the ``-1`` warm-up sentinel is passed as an int32 array.)
-    svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), train_c[0], train_d[0])
+    def window_svi() -> SVI:
+        # An autoguide sets itself up at its first init and caches the
+        # data-dependent state of that init on the instance (support transforms,
+        # deterministic sites, the Laplace loss). Each window therefore sets up
+        # its own copy, and the caller's guide is never set up, so no tracer of
+        # the vmapped fit leaks into it.
+        window_guide = _fresh_copy(guide) if isinstance(guide, AutoGuide) else guide
+        return SVI(model, window_guide, resolved_optim, Trace_ELBO())
 
-    def fit_one(key: Array, d: Array, c: Array) -> tuple[dict[str, Array], Array]:
-        state = svi.init(key, c, d)
+    def fit_and_draw_one(
+        init_key: Array, post_key: Array, d: Array, c: Array
+    ) -> tuple[dict[str, Array], Array]:
+        svi = window_svi()
+        state = svi.init(init_key, c, d)
 
         def step(carry: object, _: None) -> tuple[object, Array]:
             carry, loss = svi.update(carry, c, d)
             return carry, loss
 
         state, losses = lax.scan(step, state, length=num_steps)
-        return svi.get_params(state), losses
-
-    def sample_one(key: Array, p: dict[str, Array], d: Array, c: Array) -> dict[str, Array]:
+        params = svi.get_params(state)
         # An autoguide samples its own posterior; any other guide is a plain
         # NumPyro program, sampled by replaying it under its learned params on
         # the window's training data (the same args it was fitted with).
-        if isinstance(guide, AutoGuide):
-            return guide.sample_posterior(key, p, sample_shape=(num_samples,))
-        return Predictive(guide, params=p, num_samples=num_samples)(key, c, d)
+        if isinstance(svi.guide, AutoGuide):
+            posterior = svi.guide.sample_posterior(post_key, params, sample_shape=(num_samples,))
+        else:
+            posterior = Predictive(svi.guide, params=params, num_samples=num_samples)(
+                post_key, c, d
+            )
+        return posterior, losses
 
     init_keys, post_keys, fc_keys = _window_key_streams(rng_key, int(starts.shape[0]))
-    params, losses = jax.jit(jax.vmap(fit_one))(init_keys, train_d, train_c)
-    posterior = jax.jit(jax.vmap(sample_one))(post_keys, params, train_d, train_c)
+    # NumPyro raises its errors for a bad model or start (no valid initial point,
+    # an unsupported site) only on concrete values; under vmap the fit returns NaN
+    # silently. So one eager init of a throwaway copy on window 0, with the key of
+    # window 0, runs first, and fails fast.
+    window_svi().init(init_keys[0], train_c[0], train_d[0])
+    posterior, losses = jax.jit(jax.vmap(fit_and_draw_one))(init_keys, post_keys, train_d, train_c)
+    # A start can be valid on window 0 and not on a later window (init_loc_fn and
+    # the supports use each window's data). Such a window has a non-finite loss
+    # from the first step on, so its fit and forecasts are NaN.
+    bad = np.flatnonzero(~np.isfinite(np.asarray(losses[:, 0]))) if num_steps > 0 else []
+    if len(bad):
+        # Same key as the vmapped init, so the same start: NumPyro names the cause.
+        window_svi().init(init_keys[bad[0]], train_c[bad[0]], train_d[bad[0]])
+        msg = (
+            f"the SVI loss of the windows with t0 = {[int(starts[w]) for w in bad]} is not "
+            "finite at the first step, so their fits and forecasts are NaN; check the model "
+            "and the guide's init_loc_fn on those windows, or fit them one at a time with "
+            "backtest() to see the error"
+        )
+        raise RuntimeError(msg)
 
     def forecast_one(key: Array, post_w: dict[str, Array], d: Array, hc: Array) -> Array:
         pred = Predictive(model, posterior_samples=post_w, return_sites=["forecast"])
@@ -1173,7 +1569,15 @@ def backtest_vectorized(
 
     predictions = jax.jit(jax.vmap(forecast_one))(fc_keys, posterior, train_d, hor_c)
 
-    resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
+    # Every window shares the forecast and truth shapes, so one comparison covers all of
+    # them. A custom metric would otherwise broadcast a mismatched forecast silently.
+    if resolved_metrics and predictions.shape[2:] != truth.shape[1:]:
+        msg = (
+            f"the model's 'forecast' site has shape {predictions.shape[2:]} per draw, but "
+            f"each test window of data has shape {truth.shape[1:]}; the forecast site must "
+            "have the shape of data over the test window, (..., test_window, obs)"
+        )
+        raise ValueError(msg)
     metric_values = _vmapped_metrics(resolved_metrics, predictions, truth)
 
     return VectorizedBacktestResult(

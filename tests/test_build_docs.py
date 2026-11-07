@@ -9,6 +9,7 @@ falling back to the first figure). These tests pin that derivation logic.
 
 import base64
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -19,7 +20,6 @@ import yaml
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "build_docs.py"
 
-# A valid 1x1 PNG, used as a stand-in for a stored matplotlib figure.
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQAB"
     "h6FO1AAAAABJRU5ErkJggg=="
@@ -114,6 +114,51 @@ class TestExtractThumbnail:
         dest = tmp_path / "thumb.png"
         assert not build_docs.extract_thumbnail(notebook, dest)
         assert not dest.exists()
+
+
+_EXAMPLES = sorted((Path(__file__).resolve().parent.parent / "docs" / "examples").glob("*.ipynb"))
+_MIN_THUMBNAIL_ASPECT = 1.25
+
+
+def _png_size(png: bytes) -> tuple[int, int]:
+    """Return ``(width, height)`` from the IHDR chunk of a PNG."""
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    return int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")
+
+
+@pytest.mark.parametrize("path", _EXAMPLES, ids=[path.stem for path in _EXAMPLES])
+def test_committed_thumbnails_are_landscape(
+    build_docs: ModuleType, tmp_path: Path, path: Path
+) -> None:
+    """Every notebook's card thumbnail is a landscape figure, not a tall or square grid."""
+    notebook = json.loads(path.read_text())
+    dest = tmp_path / f"{path.stem}.png"
+    assert build_docs.extract_thumbnail(notebook, dest), f"{path.name} has no figure"
+    width, height = _png_size(dest.read_bytes())
+    assert width / height >= _MIN_THUMBNAIL_ASPECT, (
+        f"{path.name}: thumbnail is {width}x{height}; tag a single landscape panel "
+        "(see 'Developing example notebooks' in AGENTS.md)"
+    )
+
+
+def test_wrappers_disable_the_notebook_preview_pages(
+    build_docs: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The wrappers set ``notebook-view: false``: no ``_src/<name>-preview.html`` copies.
+
+    Quarto renders those copies one directory deeper than the example pages, where the
+    notebooks' relative links to other examples and to the reference do not resolve.
+    """
+    monkeypatch.setattr(build_docs, "EXAMPLES_DIR", tmp_path)
+    monkeypatch.setattr(build_docs, "EMBED_DIR", tmp_path / "_src")
+    monkeypatch.setattr(build_docs, "THUMBNAILS_DIR", tmp_path / "thumbnails")
+    notebook = {"metadata": {}, "cells": [_markdown_cell("# Toy with `numpyro_forecast`")]}
+    (tmp_path / "toy.ipynb").write_text(json.dumps(notebook))
+    (wrapper,) = build_docs.generate_pages()
+    front_matter = yaml.safe_load(wrapper.read_text().split("---\n")[1])
+    assert front_matter["notebook-view"] is False
+    assert front_matter["title"] == "Toy"
+    assert "{{< embed _src/toy.ipynb echo=true >}}" in wrapper.read_text()
 
 
 class TestNewestSemver:

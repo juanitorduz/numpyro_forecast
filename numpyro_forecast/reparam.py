@@ -5,16 +5,26 @@ is a long thin ellipse that a mean-field guide cannot represent and a diagonal
 mass matrix explores slowly. `time_reparam()` rotates the time axis of every
 in-sample latent into a wavelet (`numpyro.distributions.transforms.HaarTransform`)
 or frequency (`numpyro.distributions.transforms.DiscreteCosineTransform`) basis
-where that posterior is closer to diagonal. The rotation is orthonormal, so the
-model's log density is unchanged: only the coordinates the guide or sampler sees
-change.
+where that posterior is closer to diagonal. The rotation ``T`` acts on the
+unconstrained value ``u = biject_to(support).inv(x)`` of each site and is
+orthonormal, so it has unit Jacobian in the unconstrained space. The posterior
+is unchanged, and the potential energy that NUTS and the guides that work in
+the unconstrained space see is the same function of the rotated coordinates:
+only the coordinates change. The value of `numpyro.infer.util.log_density` is
+unchanged only for a site with real support. For a site with a constrained
+support (a ``LogNormal`` growth factor, a ``Beta`` share), the wrapped model's
+value at the auxiliary value ``T(u)`` is the plain model's value at ``x`` plus
+the log absolute Jacobian determinant of ``biject_to(support)`` at ``u``, so
+`numpyro.infer.util.log_density` values and ``AutoDelta`` MAP estimates differ
+from those of the plain model (see the Notes of `time_reparam()`). Pyro's and
+NumPyro's ``UnitJacobianReparam`` behave the same way.
 
 This is the port of the ``time_reparam`` option of Pyro's ``Forecaster`` and
 ``HMCForecaster``, which wrap the model with ``poutine.reparam`` and a config
 that returns a ``HaarReparam`` / ``DiscreteCosineReparam`` for every non-observed
 site inside the ``time`` plate
 ([source](https://github.com/pyro-ppl/pyro/blob/dev/pyro/contrib/forecast/util.py)).
-Two deliberate differences:
+Three differences:
 
 - Pyro's string mapping is swapped relative to its documentation (its ``"haar"``
   runs a DCT and its ``"dct"`` a Haar transform). Here ``"haar"`` applies
@@ -23,6 +33,11 @@ Two deliberate differences:
   ``biject_to``. The ``smooth`` (DCT) and ``flip`` (Haar) knobs are not exposed:
   on the white increments `~~numpyro_forecast.models.innovations()` samples they
   create the ill-conditioning the transform is meant to remove.
+- A time latent under a subsampled plate raises ``ValueError``. The auxiliary
+  site is sampled outside every enclosing plate, so it would not get the
+  scale of a subsampled plate. Pyro blocks only the ``time`` plate and the
+  plates to its right, and keeps the plates to its left live with inserted
+  size-1 axes, so a subsampled plate left of time works in Pyro.
 """
 
 from collections.abc import Callable, Mapping
@@ -39,7 +54,7 @@ from numpyro.distributions.transforms import (
     Transform,
 )
 from numpyro.infer.reparam import Reparam, UnitJacobianReparam
-from numpyro.primitives import _PYRO_STACK
+from numpyro.primitives import _PYRO_STACK, Message, Messenger
 
 from numpyro_forecast.models import PlateName
 from numpyro_forecast.typing import Array, ForecastModel
@@ -48,6 +63,15 @@ TimeTransform = Literal["haar", "dct"]
 """The time-axis transform applied by `time_reparam()`: ``"haar"`` or ``"dct"``."""
 
 _AUX_INFER_KEY = "numpyro_forecast_time_reparam_aux"
+_NESTING_MSG = (
+    "time_reparam cannot be nested: `model` already contains a time_reparam model; "
+    "apply time_reparam once, to the innermost model"
+)
+_NO_OP_MSG = (
+    "time_reparam found no in-sample time latent of its own: `model` already contains a "
+    "time_reparam model, so the outer transform does nothing; apply time_reparam once, "
+    "to the innermost model"
+)
 _TRANSFORMS: dict[str, tuple[Callable[[int], Transform], str]] = {
     "haar": (lambda dim: HaarTransform(dim=dim), "haar"),
     "dct": (lambda dim: DiscreteCosineTransform(dim=dim), "dct"),
@@ -66,8 +90,10 @@ class _TimeReparam(UnitJacobianReparam):
     expands the distribution nor pushes its frame), and ``_wrap`` re-expands the
     base distribution to the full plate shape before the time axis and every
     plate axis to its right become event axes. Plate axes to the left of time
-    stay batch axes without a plate frame: the split of Pyro's
-    ``experimental_allow_batch=True``.
+    stay batch axes without a plate frame: the batch/event split of Pyro's
+    ``experimental_allow_batch=True``, but Pyro keeps those plates live. A
+    blocked plate applies no subsampling scale either, so `_TimeReparamConfig`
+    rejects a site under a subsampled plate.
     """
 
     def __init__(self, transform: Transform, suffix: str, plate_names: frozenset[str]) -> None:
@@ -82,6 +108,8 @@ class _TimeReparam(UnitJacobianReparam):
             msg = "time_reparam does not support observed sites"
             raise ValueError(msg)
         fn, expand_shape, event_dim = self._unwrap(fn)
+        # Rotate the unconstrained value: unit Jacobian there, but log_density of the wrapped
+        # model at T(u) is the plain value at x plus log|det J| of biject_to at u (issue #206).
         transform = ComposeTransform([biject_to(fn.support).inv, self.transform])
         base_event_dim = max(event_dim, self.transform.domain.event_dim)
         x = numpyro.sample(
@@ -90,6 +118,11 @@ class _TimeReparam(UnitJacobianReparam):
             infer={"block_plates": self.plate_names, _AUX_INFER_KEY: True},
         )
         return None, cast(Array, transform.inv(x))
+
+
+def _is_time_reparam_aux(msg: Mapping[str, Any]) -> bool:
+    """Return whether ``msg`` is an auxiliary site emitted by a `time_reparam()` handler."""
+    return bool((msg.get("infer") or {}).get(_AUX_INFER_KEY))
 
 
 @dataclass(frozen=True)
@@ -105,7 +138,10 @@ class _TimeReparamConfig:
     reasons: `numpyro.handlers.scope` renames the frames after a plate has pushed
     them while the plate blocks by its own bare name, and the auxiliary site must
     be hidden from every enclosing plate, not only ``time``. The auxiliary sample
-    carries an ``infer`` marker so it is never targeted a second time.
+    carries an ``infer`` marker so it is never targeted a second time. A targeted
+    site under a subsampled plate raises ``ValueError``: blocking that plate would
+    drop its ``size / subsample_size`` scale and hide its full size from an
+    ``AutoGuide``. Sites the config does not target are not checked.
     """
 
     transform: TimeTransform
@@ -114,7 +150,7 @@ class _TimeReparamConfig:
         """Return the reparameterizer for a sample site under the ``time`` plate, else ``None``."""
         if msg["type"] != "sample" or msg["is_observed"]:
             return None
-        if (msg.get("infer") or {}).get(_AUX_INFER_KEY):
+        if _is_time_reparam_aux(msg):
             return None
         fn = msg["fn"]
         if getattr(fn.support, "is_discrete", False):
@@ -123,9 +159,71 @@ class _TimeReparamConfig:
         time_plate = next((plate for plate in plates if plate.name == PlateName.TIME), None)
         if time_plate is None:
             return None
+        subsampled = [plate for plate in plates if plate.subsample_size < plate.size]
+        if subsampled:
+            names = ", ".join(
+                f"'{plate.name}' ({plate.subsample_size} of {plate.size})" for plate in subsampled
+            )
+            raise ValueError(
+                "time_reparam does not support a time latent under a subsampled plate: site "
+                f"{msg['name']!r} is under {names}. The auxiliary site is sampled outside the "
+                "enclosing plates, so it would not get the size / subsample_size scale, and an "
+                "AutoGuide would size its parameters to the minibatch. Remove subsample_size "
+                "from the plate (also from the plate that create_plates returns), or do not "
+                "apply time_reparam to this model"
+            )
         dim = cast(int, time_plate.dim) - fn.event_dim
         make_transform, suffix = _TRANSFORMS[self.transform]
         return _TimeReparam(make_transform(dim), suffix, frozenset(plate.name for plate in plates))
+
+
+def _contains_time_reparam(model: object) -> bool:
+    """Return whether a `time_reparam()` handler sits in the NumPyro handler chain of ``model``.
+
+    Follows ``.fn`` through every `numpyro.primitives.Messenger` (``scope``,
+    ``seed``, ``substitute``, ``condition``, ...). It does not look inside a plain
+    function or a `functools.partial()`; `_TimeReparamHandler` catches a nesting
+    hidden behind one when the model is traced.
+    """
+    while isinstance(model, Messenger):
+        if isinstance(model, _TimeReparamHandler):
+            return True
+        model = model.fn
+    return False
+
+
+class _TimeReparamHandler(numpyro.handlers.reparam):
+    """`numpyro.handlers.reparam` that raises when a nested model leaves it nothing to do.
+
+    A nesting behind a plain function or a `functools.partial()` is invisible to
+    `_contains_time_reparam()`. Each call counts the auxiliary sites this handler
+    sees and the sites it turns into a deterministic: auxiliary sites with nothing
+    targeted mean the outer transform is a no-op, so the call raises. A composite
+    model with time latents of its own next to a `time_reparam()` component is
+    accepted.
+    """
+
+    num_auxiliary: int = 0
+    num_targeted: int = 0
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Run the model and raise if it gave this handler only auxiliary sites."""
+        self.num_auxiliary = 0
+        self.num_targeted = 0
+        out = super().__call__(*args, **kwargs)
+        if self.num_auxiliary and not self.num_targeted:
+            raise ValueError(_NO_OP_MSG)
+        return out
+
+    def process_message(self, msg: Message) -> None:
+        """Reparameterize ``msg`` and count auxiliary and targeted sample sites."""
+        if msg["type"] != "sample":
+            return
+        if _is_time_reparam_aux(msg):
+            self.num_auxiliary += 1
+        super().process_message(msg)
+        if msg["type"] == "deterministic":
+            self.num_targeted += 1
 
 
 def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastModel:
@@ -142,8 +240,12 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
     same shape, computed from a new sample site ``f"{name}_haar"`` or
     ``f"{name}_dct"`` whose event shape owns the time axis and every plate axis
     to its right (plate axes to the left of time stay batch axes). The
-    transform is orthonormal, so the model's log density is unchanged; only the
-    geometry inference sees changes.
+    transform is orthonormal and acts on the unconstrained value of each site,
+    so the posterior and the unconstrained potential energy that NUTS and
+    ``AutoNormal`` target are the same function of the rotated coordinates;
+    only the geometry inference sees changes. For a site with a constrained support
+    (positive or bounded), the `numpyro.infer.util.log_density` values and the
+    ``AutoDelta`` MAP estimates are not those of the plain model: see the Notes.
 
     Parameters
     ----------
@@ -171,19 +273,42 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
     Raises
     ------
     ValueError
-        If ``model`` is already the result of `time_reparam()`. Nesting is not
-        supported: the inner handler would turn the site into a deterministic
+        If ``model`` already contains the result of `time_reparam()`. Nesting is
+        not supported: the inner handler would turn the site into a deterministic
         before the outer one sees it, so the outer transform would silently be
-        a no-op.
+        a no-op. The check runs when wrapping and looks through any NumPyro
+        handlers around ``model`` (``scope``, ``seed``, ...). A nesting behind a
+        plain function or a `functools.partial()` raises when the model is first
+        traced (inside ``SVI``, ``MCMC``, `~~numpyro_forecast.predictive.forecast()`,
+        ...), if the outer transform finds no in-sample time latent of its own. A
+        composite model whose body calls a `time_reparam()` component next to its
+        own ``innovations`` time latents is valid: the outer transform applies to
+        those latents. A composite whose own time latents are never targeted
+        (``markov_series`` or ``ssoe`` sites, observed sites) also raises, because
+        the outer transform does nothing there either.
+
+        Also if an in-sample time latent is under a subsampled plate when the
+        model is traced: a plate opened with ``subsample_size`` smaller than its
+        size, or a full model plate that the guide subsamples through
+        ``create_plates``. See the Notes.
 
     Notes
     -----
-    - Create the wrapped model once and reuse it: the drivers jit-compile with
-      the model as a static argument, so wrapping again inside a loop recompiles.
+    - Hand the wrapped model, not the original, to the guide, the sampler and
+      the drivers: only the wrapped model has the auxiliary site that the
+      posterior holds. Creating it once is a convenience, not a requirement:
+      the drivers key nothing on the model object, so a rewrapped model gives
+      the same draws.
     - Apply it innermost. ``scope(time_reparam(model), prefix="a")`` yields
       ``a/drift_haar``; ``time_reparam(scope(model, "a"))`` yields
       ``a/a/drift_haar`` because the auxiliary sample passes through ``scope``
       a second time (generic NumPyro reparam-under-scope behavior).
+      To export with `~~numpyro_forecast.convert.to_datatree()`, which
+      rejects ``"/"`` in a posterior key, scope a latent component with
+      ``divider="_"`` and call ``predict`` outside every scope
+      (``scope(time_reparam(trend), prefix="a", divider="_")`` yields
+      ``a_drift_haar`` and ``a_drift``); see the ``posterior`` parameter of
+      `~~numpyro_forecast.convert.to_datatree()`.
     - It composes with the per-block ``reparam=`` hook: after
       ``innovations(..., reparam=LocScaleReparam(0))`` the site under the plate
       is ``drift_decentered``, so the auxiliary site is
@@ -195,10 +320,51 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
       unaffected), the scan sites of
       `~~numpyro_forecast.models.markov_series()`, the error sites of
       `~~numpyro_forecast.models.ssoe()`, observed sites and discrete sites.
+    - Constrained supports. The rotation ``T`` acts on the unconstrained value
+      ``u = biject_to(support).inv(x)`` of a targeted site ``x``, so the
+      auxiliary site holds ``T(u)``. The potential energy in the unconstrained
+      space is the same function of the rotated coordinates for every support:
+      NUTS and the guides that work in that space (``AutoNormal``, for example)
+      target the same density, only in the rotated basis. A mean-field guide
+      such as ``AutoNormal`` is not rotation invariant, so its fit and its ELBO
+      can change; that is the point of the feature. For a site with real
+      support, ``u`` is ``x`` and the value of `numpyro.infer.util.log_density`
+      is unchanged too. For a site with a constrained support, the value of
+      `numpyro.infer.util.log_density` of the wrapped model at the auxiliary
+      value ``T(u)`` is the value of the plain model at ``x`` plus the log
+      absolute Jacobian determinant of ``biject_to(support)`` at ``u``:
+      ``sum(log(x))`` for a ``LogNormal`` site and
+      ``sum(log(x) + log(1 - x))`` for a ``Beta`` site. Values of
+      `numpyro.infer.util.log_density` and ``AutoDelta`` MAP estimates are
+      therefore not comparable with those of the plain model (NumPyro's
+      ``AutoDelta`` does MAP in constrained space, so the plain model's
+      estimate is the mode in ``x``; the wrapped model's auxiliary site is
+      real-valued, so its estimate is the mode in ``u``, which is what
+      ``AutoLaplaceApproximation`` gives for the plain model). To keep them
+      comparable, sample the innovation on the real line, for example
+      ``innovations(h, "log_growth", dist.Normal(0.0, 0.5))``, and apply
+      ``jnp.exp`` to it (to its cumulative sum for a multiplicative random
+      walk); the MAP is then the mode in the log for both models. Pyro's
+      ``time_reparam`` and NumPyro's ``UnitJacobianReparam`` behave the same
+      way.
+    - Time latents under a subsampled plate are not supported. The auxiliary
+      site is sampled outside every enclosing plate, so a subsampled plate
+      would apply no ``size / subsample_size`` scale to it and an ``AutoGuide``
+      would size its parameters to the minibatch. A time latent under such a
+      plate therefore raises ``ValueError``, also when the guide subsamples the
+      plate through ``create_plates``. Time latents outside the subsampled
+      plate (for example one level shared by all series) and a plate with
+      ``subsample_size`` equal to its size are accepted.
     - Posterior dictionaries from `~~numpyro_forecast.predictive.draw_posterior()`
       and ``mcmc.get_samples()`` contain both ``drift`` (deterministic) and
       ``drift_haar``; ``Predictive`` substitutes only the latter and recomputes
       the former. ``init_to_value`` must therefore target ``drift_haar``.
+      `~~numpyro_forecast.convert.to_datatree()` raises ``ValueError`` for a
+      posterior key that misses its site (``drift_haar`` without ``drift`` with
+      the plain model, or ``a_drift_haar`` with a model still scoped with
+      ``"/"``), while `~~numpyro_forecast.predictive.forecast()` and
+      `~~numpyro_forecast.predictive.predict_in_sample()` ignore such a key and
+      draw the site from the prior.
     - Measured on random-walk level models: mean-field ``AutoNormal`` reaches a
       better ELBO for both transforms (DCT slightly ahead of Haar), but an
       optimizer schedule tuned for the original coordinates does not transfer
@@ -219,10 +385,7 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
     samples = forecast(key_pred, model_dct, posterior, data, covariates)
     ```
     """
-    if isinstance(model, numpyro.handlers.reparam) and isinstance(
-        model.config, _TimeReparamConfig
-    ):
-        msg = "time_reparam cannot be nested: `model` is already a time_reparam model"
-        raise ValueError(msg)
-    wrapped = numpyro.handlers.reparam(model, config=_TimeReparamConfig(transform))
+    if _contains_time_reparam(model):
+        raise ValueError(_NESTING_MSG)
+    wrapped = _TimeReparamHandler(model, config=_TimeReparamConfig(transform))
     return cast(ForecastModel, wrapped)
