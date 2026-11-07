@@ -250,7 +250,7 @@ The model function `(covariates, data=None)` opens with `Horizon.from_data(covar
 
 One key component of specifying Gaussian processes is to set the length scale and amplitude parameters. We use an optimization strategy (`preliz`) to set these parameters by assuming they both come from an Inverse-Gamma distribution while specifying the support.
 
-We pass `mass=0.94` explicitly, so each prior puts 94\\ of its probability between the bounds (the same probability as the 94\\ HDI bands in the plots below). The default `mass` is the preliz setting `rcParams["stats.ci_prob"]`, which changed between preliz releases, so without it the priors would depend on the installed version.
+We pass `mass=0.94` explicitly, so each prior puts 94\\ of its probability between the bounds (the same probability as the 94\\ HDI bands of the plots later in this notebook). The default `mass` is the preliz setting `rcParams["stats.ci_prob"]`, which changed between preliz releases, so without it the priors would depend on the installed version.
 
 
 ``` python

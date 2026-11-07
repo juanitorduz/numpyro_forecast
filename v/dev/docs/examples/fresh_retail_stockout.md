@@ -1638,8 +1638,8 @@ plot_labels = list(dict.fromkeys([*top_volume_labels, *top_stockout_labels]))
 # 3 heaviest stockouts) to stay readable.
 focus_labels = list(dict.fromkeys([*top_volume_labels[:n_focus], *top_stockout_labels[:n_focus]]))
 split_x = float(mdates.date2num(dates[t_train]))
-# plot_lm concatenates x with the float predictions internally, so the faceted
-# plots below use matplotlib date numbers plus a date formatter on each axis.
+# plot_lm concatenates x with the predictions internally, so the faceted plots
+# below use matplotlib date numbers plus a date formatter on each axis.
 dates_num = np.asarray(mdates.date2num(dates))
 
 fig, axes = plt.subplots(
