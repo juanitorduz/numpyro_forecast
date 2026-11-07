@@ -975,6 +975,34 @@ def test_to_datatree_accepts_keys_that_name_no_missing_site() -> None:
     )
 
 
+def _flat_scale_model(covariates: Array, data: Array | None = None) -> None:
+    """A random walk whose noise scale has a flat prior that cannot be sampled.
+
+    ``ImproperUniform`` has no ``sample``: NUTS fits it, and the drivers never
+    sample it because ``Predictive`` substitutes the posterior value first.
+    """
+    h = Horizon.from_data(covariates, data)
+    flat = dist.ImproperUniform(dist.constraints.positive, (), ())
+    sigma = jnp.asarray(numpyro.sample("sigma", flat))
+    drift = innovations(h, "drift", dist.Normal(0.0, 0.1))
+    predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
+
+
+def test_to_datatree_site_check_substitutes_the_posterior_like_the_drivers() -> None:
+    """Issue #277: a latent with a sample-less prior exports, as it does without the check.
+
+    The check traces the model with the posterior substituted, as ``Predictive``
+    does, so it never samples a site that the posterior provides.
+    """
+    data, covariates = _series(), empty_covariates(18)
+    posterior = {"sigma": jnp.full((4,), 0.3), "drift": jnp.zeros((4, 18, 1))}
+    tree = to_datatree(random.PRNGKey(0), _flat_scale_model, posterior, data, covariates)
+    np.testing.assert_array_equal(
+        tree["posterior_predictive"]["obs"].to_numpy()[0],
+        predict_in_sample(random.PRNGKey(0), _flat_scale_model, posterior, covariates),
+    )
+
+
 def test_to_datatree_site_check_keeps_the_draws_of_the_drivers() -> None:
     """Issue #277: the site check draws nothing, so a valid export equals the drivers' draws."""
     posterior, data, _ = _svi_posterior(8)

@@ -17,6 +17,7 @@ from typing import Any, cast, get_args
 
 import arviz_base
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpyro
 import xarray
@@ -208,11 +209,16 @@ def _require_posterior_names_match_sites(
     key that names a missing site raises.
 
     The model is traced the way
-    `~~numpyro_forecast.predictive.predict_in_sample()` calls it (the in-sample
-    covariates only, so ``data=None``) under `jax.eval_shape`: the site
-    names, types and ``is_observed`` flags are recorded without computing or
-    compiling anything, and no draw changes. The drivers run the model under
-    `jax.jit`, so a model they accept traces abstractly.
+    `~~numpyro_forecast.predictive.predict_in_sample()` calls it: on the
+    in-sample covariates only (so ``data=None``), with one draw of the
+    posterior substituted for every site that is not deterministic, as
+    ``numpyro.infer.Predictive`` does, so a site the posterior provides is
+    never sampled from its prior (a prior with no ``sample``, such as
+    ``ImproperUniform``, exports as before). The trace runs under
+    `jax.eval_shape` on abstract values: the site names, types and
+    ``is_observed`` flags are recorded without computing or compiling
+    anything, and no draw changes. The drivers run the same substituted model
+    under `jax.jit`, so a model they accept traces abstractly.
 
     Parameters
     ----------
@@ -236,15 +242,26 @@ def _require_posterior_names_match_sites(
     """
     sites: dict[str, tuple[str, bool]] = {}
 
-    def record_sites(key: Array, model_covariates: Array) -> None:
-        trace = numpyro.handlers.trace(numpyro.handlers.seed(model, key)).get_trace(
+    def record_sites(key: Array, model_covariates: Array, draw: Mapping[str, Array]) -> None:
+        def posterior_value(msg: dict[str, Any]) -> Array | None:
+            # numpyro.infer.Predictive substitutes every site but the deterministic ones.
+            return draw.get(msg["name"]) if msg["type"] != "deterministic" else None
+
+        substituted = numpyro.handlers.substitute(model, substitute_fn=posterior_value)
+        trace = numpyro.handlers.trace(numpyro.handlers.seed(substituted, key)).get_trace(
             model_covariates
         )
         sites.update(
             (name, (site["type"], bool(site.get("is_observed")))) for name, site in trace.items()
         )
 
-    jax.eval_shape(record_sites, rng_key, covariates)
+    # One abstract draw per key: the shape without the sample axis, in the dtype the
+    # drivers would see (jnp.result_type canonicalizes float64 when x64 is off).
+    draw = {
+        name: jax.ShapeDtypeStruct(np.shape(value)[1:], jnp.result_type(value))
+        for name, value in posterior.items()
+    }
+    jax.eval_shape(record_sites, rng_key, covariates, draw)
     missing = sorted(
         name
         for name, (site_type, observed) in sites.items()
@@ -790,8 +807,9 @@ def to_datatree(
         and `~~numpyro_forecast.predictive.predict_in_sample()` ignore a key
         that matches no site and draw that site from the prior with no error.
         ``to_datatree`` traces the in-sample model call of
-        `~~numpyro_forecast.predictive.predict_in_sample()` abstractly (no
-        draw, no compile) and raises ``ValueError`` before any draw when such
+        `~~numpyro_forecast.predictive.predict_in_sample()` abstractly, with
+        the posterior substituted as the driver does (no draw, no compile),
+        and raises ``ValueError`` before any draw when such
         a key names a latent ``sample`` site that has no key of its own: the
         key equals the site name with ``"/"`` replaced by ``"_"`` (a
         half-applied rename, ``trend_drift`` with a model that still has
@@ -1043,8 +1061,9 @@ def to_datatree(
     # export keeps it as a variable.
     _require_no_slash_in_site_names(posterior)
     covariates_insample = covariates[..., :n_time, :]
-    # Trace the in-sample model call of predict_in_sample abstractly: a key that
-    # names a site the model has under another name would leave it prior-drawn.
+    # Trace the in-sample model call of predict_in_sample abstractly, with the posterior
+    # substituted as Predictive does: a key that names a site the model has under another
+    # name would leave that site prior-drawn.
     _require_posterior_names_match_sites(key_pred, model, posterior, covariates_insample)
     posterior_reshaped = {
         name: _reshape_chains(cast("Array | np.ndarray", value), num_chains)
