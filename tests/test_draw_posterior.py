@@ -54,7 +54,7 @@ _FLOW_GUIDES = [
 
 
 def _flow_fit(guide_cls: type[AutoGuide]) -> tuple[AutoGuide, dict, Array]:
-    """Fit a flow guide on ``rw_model`` for a few steps; its params hold lists of arrays."""
+    """Fit a flow guide on ``rw_model`` for a few steps; its params hold lists of tuples of arrays."""
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_FLOW_T, 1)), axis=-2)
     guide = guide_cls(rw_model)
     svi = SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
