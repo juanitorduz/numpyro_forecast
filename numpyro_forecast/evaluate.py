@@ -378,7 +378,8 @@ def evaluate_forecast(
     dict[str, float]
         Each metric name mapped to its value. A bool, integer, ``float8`` or
         ``float4`` metric result is converted to ``float``, whatever the other
-        metrics are.
+        metrics are (a ``float6`` result keeps its dtype: XLA on CPU cannot
+        convert it).
 
     Raises
     ------
@@ -1147,7 +1148,8 @@ def _vmapped_metrics(
     of each metric is checked inside the ``vmap``, where it is the value of one
     window, so a metric that does not return a 0-d value raises a
     ``ValueError`` that names it, and a bool, integer, ``float8`` or
-    ``float4`` result is cast to float inside the vmapped computation.
+    ``float4`` result is cast to float inside the vmapped computation (a
+    ``float6`` result keeps its dtype: XLA on CPU cannot convert it).
     """
     if not metrics:
         return {}
@@ -1420,8 +1422,9 @@ def backtest_vectorized(
         constants (``int(jnp.ceil(p.shape[0] * 0.1))``), raises
         `VectorizedMetricError`; compute static values with Python or
         ``math`` instead. A bool, integer, ``float8`` or ``float4`` metric
-        result is cast to float, so every entry of ``VectorizedBacktestResult.metrics`` has a floating
-        dtype.
+        result is cast to float (a ``float6`` one keeps its dtype: XLA on CPU
+        cannot convert it), so every entry of
+        ``VectorizedBacktestResult.metrics`` has a floating dtype.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
 

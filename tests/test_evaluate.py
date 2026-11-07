@@ -40,6 +40,9 @@ from numpyro_forecast.predictive import forecast, predict_in_sample
 from numpyro_forecast.typing import ForecastFn, ForecastModel, Metric
 from numpyro_forecast.validation import scalar_metric_value
 
+# float6 is in recent jax releases only.
+FLOAT6 = getattr(jnp, "float6_e2m3fn", None)
+
 
 def _canned_forecast_fn(
     rng_key: Array,
@@ -521,6 +524,15 @@ def test_scalar_metric_value_casts_a_sub_16_bit_float_to_default_float(dtype: An
     out = scalar_metric_value("m", value)
     assert out.dtype == jnp.result_type(float)
     assert float(out) == float(value)
+
+
+@pytest.mark.skipif(FLOAT6 is None, reason="no float6 in this jax")
+def test_scalar_metric_value_returns_a_float6_result_as_is() -> None:
+    """XLA on CPU cannot convert float6, so a float6 result is returned as is."""
+    value = jnp.asarray(0.5, FLOAT6)
+    out = scalar_metric_value("m", value)
+    assert out is value
+    assert float(out) == 0.5
 
 
 @pytest.mark.parametrize("with_defaults", [False, True], ids=["alone", "with_defaults"])

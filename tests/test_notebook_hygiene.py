@@ -54,9 +54,12 @@ def _reference_entries() -> set[str]:
 
 
 def _unmagic(line: str) -> str:
-    """Return ``line`` as Python: a flag-less time magic keeps its statement, other magics pass."""
+    """Return ``line`` as Python: a flag-less time magic keeps its statement, other magics pass.
+
+    The kept statement is unmagicked in turn, so ``%time !ls`` becomes ``pass``.
+    """
     if match := TIME_MAGIC_LINE.match(line):
-        return f"{match['indent']}{match['stmt']}"
+        return _unmagic(f"{match['indent']}{match['stmt']}")
     if match := MAGIC_LINE.match(line):
         return f"{match['indent']}pass"
     return line
@@ -202,6 +205,16 @@ def test_maxent_check_reads_the_statement_of_a_time_magic() -> None:
         _check_maxent_calls_pass_mass("synthetic.ipynb", cells)
         (tree,) = [tree for _, tree in _code_trees("s.ipynb", cells)]
         assert isinstance(tree.body[1], ast.Assign) and tree.body[1].lineno == 2
+
+
+def test_unmagic_blanks_a_magic_behind_a_time_magic() -> None:
+    """The kept statement of a ``%time`` is unmagicked too, so no magic is left in the cell."""
+    assert _unmagic("    %time !ls") == "    pass"
+    assert _unmagic("%time %run x") == "pass"
+    assert _unmagic("%time %timeit f = pz.maxent(d)") == "f = pz.maxent(d)"
+    cells = _cells("x = 1\n%time !ls\n%timeit %run x")
+    (tree,) = [tree for _, tree in _code_trees("s.ipynb", cells)]
+    assert [type(node) for node in tree.body] == [ast.Assign, ast.Pass, ast.Pass]
 
 
 def test_maxent_check_skips_a_timeit_magic_with_flags() -> None:

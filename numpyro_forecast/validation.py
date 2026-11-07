@@ -250,13 +250,14 @@ def scalar_metric_value(name: str, value: object) -> Array:
 
     The drivers call this on every metric result, so the
     `~~numpyro_forecast.typing.Metric` contract (a 0-d result) holds whatever the
-    other metrics are. A bool or integer result, or a floating result narrower
-    than 16 bits (the ``float8`` and ``float4`` types), is cast to the default
-    float dtype: JAX does not promote those floats with the other floating
-    types, so the drivers could not join them with the other results. A
-    ``float16``, ``bfloat16``, ``float32`` or ``float64`` jax ``Array`` is
-    returned as is (the same object), so its value and dtype do not change; a NumPy or Python float (a host-side metric
-    in `backtest()`) is converted with ``jnp.asarray`` (a ``float64`` value is
+    other metrics are. A bool or integer result, or a ``float8`` or ``float4``
+    result, is cast to the default float dtype: JAX does not promote those
+    floats with the other floating types, so the drivers could not join them
+    with the other results. Any other floating jax ``Array`` (``float16``,
+    ``bfloat16``, ``float32``, ``float64``, and ``float6``, which XLA on CPU
+    cannot convert) is returned as is (the same object), so its value and
+    dtype do not change; a NumPy or Python float (a host-side metric in
+    `backtest()`) is converted with ``jnp.asarray`` (a ``float64`` value is
     canonicalized to ``float32`` with x64 off, as every host value in
     `evaluate_forecast()` was before). The check reads the static shape and
     dtype only, so it costs nothing and also works on tracers under ``jit``,
@@ -312,7 +313,8 @@ def scalar_metric_value(name: str, value: object) -> Array:
         )
         raise ValueError(msg)
     # A float8 or float4 result has no type promotion with the other floats, so the
-    # dtype join of the drivers would raise next to a float32 result.
-    if is_float and dtype.itemsize >= 2:
+    # dtype join of the drivers would raise next to a float32 result. float6 has none
+    # either, but XLA on CPU cannot convert it, so it is returned as is.
+    if is_float and jnp.finfo(dtype).bits not in (4, 8):
         return jnp.asarray(arr)
     return jnp.asarray(arr, dtype=float)
