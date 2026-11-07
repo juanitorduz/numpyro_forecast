@@ -24,11 +24,11 @@ where X, X' are independent draws from the forecast distribution F. The expectat
 ## Parameters
 
 
-`pred: Float[ArrayLike, ``" sample *batch"]`  
-Forecast samples with the sample axis first, shape `(sample, *batch)`. May be host-committed (e.g. draws sampled with `device="host"`), regardless of whether `truth` is: either operand is moved to device memory first (`_device_view()`).
+`pred: Real[ArrayLike, ``" sample *batch"]`  
+Forecast samples with the sample axis first, shape `(sample, *batch)`. May be host-committed (e.g. draws sampled with `device="host"`), regardless of whether `truth` is: either operand is moved to device memory first (`float_view()`). Integer draws (a count model) are cast to the default float dtype there; a floating `pred` keeps its dtype.
 
-`truth: Float[ArrayLike, ``" *batch"]`  
-Ground-truth values with shape `(*batch)` (broadcastable to `pred`).
+`truth: Real[ArrayLike, ``" *batch"]`  
+Ground-truth values with shape `(*batch)` (matching `pred` without the sample axis). Integer values are cast like `pred`.
 
 
 ## Returns
@@ -36,6 +36,13 @@ Ground-truth values with shape `(*batch)` (broadcastable to `pred`).
 
 `Float[Array, ``"*batch"]`  
 Elementwise CRPS, one value per `batch` location.
+
+
+## Raises
+
+
+`ValueError`  
+If `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)), or `pred` has fewer than 2 samples.
 
 
 ## References

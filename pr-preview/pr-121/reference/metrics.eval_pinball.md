@@ -16,16 +16,16 @@ metrics.eval_pinball(
 ```
 
 
-The pinball loss for the forecast \hat q of quantile \tau is \max(\tau (y - \hat q), (\tau - 1)(y - \hat q)), averaged over all data elements. At `quantile=0.5` it is half the mean absolute error. A pure JAX scalar kernel (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); `quantile` is static so each level specializes its own branch. `pred` and `truth` are moved to device memory first (`_device_view()`), so either (or both) may be host-committed, e.g. draws sampled with `device="host"`.
+The pinball loss for the forecast \hat q of quantile \tau is \max(\tau (y - \hat q), (\tau - 1)(y - \hat q)), averaged over all data elements. At `quantile=0.5` it is half the mean absolute error. A pure JAX scalar kernel (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); `quantile` is static so each level specializes its own branch. `pred` and `truth` are moved to device memory first (`float_view()`), so either (or both) may be host-committed, e.g. draws sampled with `device="host"`. An integer operand (the draws of a count model) is cast to the default float dtype in the same step.
 
 
 ## Parameters
 
 
-`pred: Float[ArrayLike, ``" sample *batch"]`  
+`pred: Real[ArrayLike, ``" sample *batch"]`  
 Forecast samples with the sample axis first.
 
-`truth: Float[ArrayLike, ``" *batch"]`  
+`truth: Real[ArrayLike, ``" *batch"]`  
 Ground-truth values (matching `pred` without the sample axis).
 
 `quantile: float = ``0.5`  
@@ -43,4 +43,4 @@ The mean pinball loss as a scalar array.
 
 
 `ValueError`  
-If `quantile` is not strictly inside `(0, 1)`.
+If `quantile` is not strictly inside `(0, 1)`, or `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).

@@ -21,20 +21,20 @@ The array-level counterpart of [to_datatree()](convert.to_datatree.md#numpyro_fo
 ## Parameters
 
 
-`predictions: Float[ArrayLike, ``" sample time series"]`  
-Prediction draws with the sample axis first, shape `(sample, time, series)`.
+`predictions: Real[ArrayLike, ``" sample time series"]`  
+Prediction draws with the sample axis first, shape `(sample, time, series)`. Integer or floating; the integer draws of a count model are stored as they are, keeping their dtype (`plot_lm` draws them unchanged).
 
 `x: Num[ArrayLike, ``" time"]`  
-Independent-variable values, shape `(time,)`. Must be numeric: `plot_lm` cannot draw `datetime64` values (it concatenates `x` with the float predictions internally), so pass `matplotlib.dates.date2num()` floats and re-format the tick labels with `matplotlib.dates.ConciseDateFormatter`.
+Independent-variable values, shape `(time,)`. Must be numeric: `plot_lm` cannot draw `datetime64` values (it concatenates `x` with the predictions internally), so pass `matplotlib.dates.date2num()` floats and re-format the tick labels with `matplotlib.dates.ConciseDateFormatter`.
 
-`series: Sequence[Any]`  
-One label per series, defining the `series` coordinate.
+`series: Collection[Any]`  
+One label per series, defining the `series` coordinate. Any one-dimensional collection is accepted (a list, a NumPy array, a pandas index) and stored as `np.asarray(series)`.
 
 `group: str = ``"posterior_predictive"`  
-Predictive group to store the draws under (e.g. `"prior_predictive"`, `"posterior_predictive"`, `"predictions"`).
+Predictive group to store the draws under (e.g. `"prior_predictive"`, `"posterior_predictive"`, `"predictions"`). `"observed_data"` and `"constant_data"` are reserved: the function always writes those two groups.
 
-`observed: Float[ArrayLike, ``" time series"] | None`` = None`  
-Optional observations, shape `(time, series)`, stored in `observed_data`; when `None` a zeros placeholder is stored instead.
+`observed: Real[ArrayLike, ``" time series"] | None`` = None`  
+Optional observations, shape `(time, series)`, stored in `observed_data`; when `None` a zeros placeholder is stored instead. Integer or floating, stored with its own dtype, so the integer observations of a count model need no cast.
 
 
 ## Returns
@@ -48,4 +48,4 @@ A tree with the `group`, `observed_data`, and `constant_data` groups; `obs` has 
 
 
 `ValueError`  
-If `series` does not have one label per series in `predictions`.
+If `group` is `"observed_data"` or `"constant_data"` (reserved names), if `series` is not a one-dimensional collection of labels (a set, a dict, a scalar, a 2-D array, ragged input) or is a `pd.MultiIndex`, or if `series` does not have one label per series in `predictions`.

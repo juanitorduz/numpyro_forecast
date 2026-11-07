@@ -37,6 +37,15 @@ Croston's Method for Intermittent Demand
 Bayesian Croston method for intermittent demand, with masked exponential smoothing of demand sizes and intervals, NUTS inference, and one-step-ahead cross-validation.
 
 
+<a href="../../docs/examples/dynestyx_getting_started.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/dynestyx_getting_started.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
+
+
+Getting Started with `dynestyx` State Space Models
+
+
+Write dynestyx state space models with the state_space building block, integrate a local level out with a Kalman filter, export the in-sample predictive with to_datatree, sample the level explicitly for Student-T noise, fit through a gap of missing observations, and write ARMA(1,1) as a state space model.
+
+
 <a href="../../docs/examples/dynestyx_integration.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/dynestyx_integration.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
 
 
@@ -125,6 +134,15 @@ M5 forecasting: top-down, bottom-up and middle-out
 
 
 Port the three models of the Pyro M5 starter kit (top-down, bottom-up and middle-out) to the full M5 Walmart data, fit them with SVI, backtest them at the twelve hierarchy levels with a weighted scaled CRPS and compare their fitting times.
+
+
+<a href="../../docs/examples/m5_hierarchical_state_space.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/m5_hierarchical_state_space.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
+
+
+M5 forecasting II: a hierarchical count state space model
+
+
+A hierarchical negative binomial state space model of all 30,490 M5 series, trained with minibatch SVI and scored at the twelve hierarchy levels with a weighted scaled CRPS against the Pyro starter kit baseline.
 
 
 <a href="../../docs/examples/promotion_pricing_decisions.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/promotion_pricing_decisions.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>

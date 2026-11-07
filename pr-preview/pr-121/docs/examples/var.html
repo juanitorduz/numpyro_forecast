@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.19">
+<meta name="generator" content="quarto-1.11.9">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -75,14 +75,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../../docs/examples/tsb.html" rel="prev">
 <script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/scrollable-regions/scrollable-regions.js" type="module"></script>
 <script src="../../site_libs/quarto-html/popper.min.js"></script>
 <script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-63b5708e65d6cd79cd7618c58d0c21e7.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../../site_libs/bootstrap/bootstrap-c4d708d4e441993890320f2eab87994c.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-96bed50882d7ed35d1aa4676b982e3c5.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -182,19 +183,18 @@ window.Quarto = {
   <meta name="twitter:description" content="Fit a Bayesian VAR(2) to US macroeconomic growth rates with NUTS, forecast 30 quarters ahead, compute impulse response functions, and compare a weakly informative prior with Minnesota shrinkage.">
 </head>
 
-<body class="nav-sidebar floating nav-fixed quarto-light">
+<body class="nav-sidebar floating nav-fixed quarto-light"><a id="quarto-skip-link" class="visually-hidden-focusable" href="#quarto-document-content">Skip to main content</a>
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
-    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark" aria-label="Site">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../../index.html">
     <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
     </a>
   </div>
-            <div id="quarto-search" class=""></div>
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
   <span class="navbar-toggler-icon"></span>
 </button>
           <div class="collapse navbar-collapse" id="navbarCollapse">
@@ -215,22 +215,23 @@ window.Quarto = {
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="39" data-forks="3"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="40" data-forks="3"></div>
     </span>
   </li>  
 </ul>
           </div> <!-- /navcollapse -->
             <div class="quarto-navbar-tools">
 </div>
+            <div id="quarto-search" class=""></div>
       </div> <!-- /container-fluid -->
     </nav>
-  <nav class="quarto-secondary-nav">
+  <nav class="quarto-secondary-nav" aria-label="Toolbar">
     <div class="container-fluid d-flex">
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
         <h1 class="quarto-secondary-nav-title no-breadcrumbs">Vector Autoregression (VAR)</h1>
-        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        <a class="flex-grow-1" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
   </nav>
@@ -238,7 +239,7 @@ window.Quarto = {
 <!-- content -->
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
-  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto" aria-label="Section">
     <div class="sidebar-menu-container"> 
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
@@ -269,6 +270,12 @@ window.Quarto = {
   <div class="sidebar-item-container"> 
   <a href="../../docs/examples/croston.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Croston’s Method for Intermittent Demand</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../docs/examples/dynestyx_getting_started.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Getting Started with <code>dynestyx</code> State Space Models</span></a>
   </div>
 </li>
         <li class="sidebar-item">
@@ -333,6 +340,12 @@ window.Quarto = {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../../docs/examples/m5_hierarchical_state_space.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">M5 forecasting II: a hierarchical count state space model</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../../docs/examples/promotion_pricing_decisions.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Promotion pricing decisions</span></a>
   </div>
@@ -354,11 +367,11 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/var-preview.html"><i class="bi bi-journal-code"></i>Vector Autoregression (VAR) with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
-<main class="content" id="quarto-document-content">
+<main class="content" id="quarto-document-content" tabindex="-1">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
@@ -384,15 +397,15 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/var.ipynb" data-notebook-title="Vector Autoregression (VAR) with `numpyro_forecast`" data-notebook-cellid="50138624">
 <p>Vector Autoregression (VAR) with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/var_numpyro/"><strong>Bayesian VAR in NumPyro</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. A vector autoregression (VAR) models several time series jointly: each series is regressed on the past values of all series, and the shocks are correlated across series. We fit a VAR with two lags to the quarterly growth rates of US real GDP, consumption and investment, sample the posterior with NUTS, forecast 30 quarters ahead, and compute impulse response functions (IRFs), the standard tool to read a VAR.</p>
 <p>The package provides the VAR pieces as reusable components. You do not write the lag recursion, the forecast loop or the IRF recursion yourself:</p>
 <ul>
-<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.var_step.html"><code>var_step</code></a> turns sampled coefficients into the <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> and <code>update</code> functions for the <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block. The block runs the in-sample recursion and the generative forecast.</li>
-<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.impulse_response.html"><code>impulse_response</code></a> computes the responses for all posterior draws at once, with optional orthogonalization and cumulation.</li>
-<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.companion_matrix.html"><code>companion_matrix</code></a> gives the stability check.</li>
-<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/priors.minnesota_prior.html"><code>minnesota_prior</code></a> returns the moments of the Minnesota shrinkage prior. It lives in a separate module and is independent of the VAR code: the prior is always your own <code>numpyro.sample</code> call.</li>
+<li><a href="../../reference/var.var_step.html"><code>var_step</code></a> turns sampled coefficients into the <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> and <code>update</code> functions for the <a href="../../reference/models.ssoe.html"><code>ssoe</code></a> building block. The block runs the in-sample recursion and the generative forecast.</li>
+<li><a href="../../reference/var.impulse_response.html"><code>impulse_response</code></a> computes the responses for all posterior draws at once, with optional orthogonalization and cumulation.</li>
+<li><a href="../../reference/var.companion_matrix.html"><code>companion_matrix</code></a> gives the stability check.</li>
+<li><a href="../../reference/priors.minnesota_prior.html"><code>minnesota_prior</code></a> returns the moments of the Minnesota shrinkage prior. It lives in a separate module and is independent of the VAR code: the prior is always your own <code>numpyro.sample</code> call.</li>
 </ul>
 <p>The components are deliberately minimal. If you need a complete Bayesian VAR toolkit (identification schemes, variance decompositions, lag selection), see <a href="https://github.com/thomaspinder/impulso">Impulso</a> by Thomas Pinder. Its <code>MinnesotaPrior</code> parameterization and its batched moving-average recursion inspired the two helpers used here.</p>
 <section id="prepare-notebook" class="level1">
@@ -2030,7 +2043,7 @@ posterior mean responses at h = 0, 1, 2 (rows: response, columns: shock):
 </div>
 </div>
 </div>
-<p>The <code>realinv response to realcons shock</code> panel dominates the grid: its y-axis runs past <span class="math inline">3</span>, while every other off-diagonal panel stays within about <span class="math inline">\pm 0.6</span>. The printed <span class="math inline">h = 0, 1, 2</span> snapshot above puts a number on it: a one-unit consumption-growth shock moves investment growth by <span class="math inline">2.84</span> percentage points at <span class="math inline">h = 1</span> and <span class="math inline">1.28</span> at <span class="math inline">h = 2</span>, six to ten times larger than any other off-diagonal entry at the same horizons, consistent with investment’s well-known sensitivity to demand shocks. Every panel decays toward zero by <span class="math inline">h \approx 8</span>-<span class="math inline">10</span>, as stability requires; the own-shock (diagonal) panels start at exactly <span class="math inline">1</span> by construction and decay the fastest, some dipping briefly negative (e.g.&nbsp;<code>realgdp response to realgdp shock</code> around <span class="math inline">h = 1</span>-<span class="math inline">2</span>) before settling.</p>
+<p>The <code>realinv response to realcons shock</code> panel dominates the grid: its y-axis runs past <span class="math inline">3</span>, and apart from <code>realinv response to realgdp shock</code>, whose <span class="math inline">94\%</span> band runs from about <span class="math inline">-1.6</span> to <span class="math inline">1.3</span>, every other off-diagonal panel stays within about <span class="math inline">\pm 0.6</span>. The printed <span class="math inline">h = 0, 1, 2</span> snapshot above puts a number on it: a one-unit consumption-growth shock moves investment growth by <span class="math inline">2.84</span> percentage points at <span class="math inline">h = 1</span> and <span class="math inline">1.28</span> at <span class="math inline">h = 2</span>, about five times the next largest off-diagonal entry at <span class="math inline">h = 1</span> (<span class="math inline">-0.525</span>) and three and a half times at <span class="math inline">h = 2</span> (<span class="math inline">0.369</span>), consistent with investment’s well-known sensitivity to demand shocks. Every panel decays toward zero by <span class="math inline">h \approx 8</span>-<span class="math inline">10</span>, as stability requires; the own-shock (diagonal) panels start at exactly <span class="math inline">1</span> by construction and decay the fastest, some dipping briefly negative (e.g.&nbsp;<code>realgdp response to realgdp shock</code> around <span class="math inline">h = 1</span>-<span class="math inline">2</span>) before settling.</p>
 <section id="orthogonalized-and-cumulative-responses" class="level2">
 <h2 class="anchored" data-anchor-id="orthogonalized-and-cumulative-responses">Orthogonalized and cumulative responses</h2>
 <p>A unit shock to one reduced-form residual with the others held at zero is not an experiment we can observe when <span class="math inline">\Sigma</span> is not diagonal: the residuals move together. The standard fix is to rewrite the shocks as <span class="math inline">\varepsilon_t = L \, u_t</span> with <span class="math inline">u_t \sim \text{MultivariateNormal}(0, I)</span> and <span class="math inline">L</span> the Cholesky factor of <span class="math inline">\Sigma</span>, and to report the responses to the <em>orthogonalized</em> shocks <span class="math inline">u_t</span>:</p>
@@ -2482,7 +2495,7 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
 </section>
 <section id="shrinkage-of-the-coefficients" class="level2">
 <h2 class="anchored" data-anchor-id="shrinkage-of-the-coefficients">Shrinkage of the coefficients</h2>
-<p>The table compares the posterior standard deviation of every coefficient under the two priors. The ratio column is below one where the Minnesota prior tightened the posterior. The effect is largest on the second lag, where the harmonic decay halves the prior standard deviation, and on the GDP and consumption equations. The investment equation at lag one is unchanged within Monte Carlo error: after the scale correction its prior is wide relative to what the data say, so the data decide.</p>
+<p>The table compares the posterior standard deviation of every coefficient under the two priors. A ratio below one means that the Minnesota prior tightened the posterior. The effect is largest on the second lag, where the harmonic decay halves the prior standard deviation. The exception is the investment equation at lag one (polars elides these rows, so see the prior table and the Minnesota summary above). After the scale correction, its prior on lagged GDP and lagged consumption is wider than the weak <span class="math inline">\text{Normal}(0, 1)</span> prior. These posteriors are therefore slightly wider, and their means move away from zero, for example from <span class="math inline">2.84</span> to <span class="math inline">3.28</span> on lagged consumption.</p>
 <div id="e8dd69d4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:16.165618Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:16.165468Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:16.217413Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:16.215657Z&quot;}}" data-execution_count="24">
 <div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>lag_labels, equation_labels, lagged_labels <span class="op">=</span> <span class="bu">zip</span>(</span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>itertools.product(<span class="bu">range</span>(<span class="dv">1</span>, p <span class="op">+</span> <span class="dv">1</span>), names, names), strict<span class="op">=</span><span class="va">True</span></span>
@@ -2544,7 +2557,7 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
 </section>
 <section id="impulse-responses" class="level2">
 <h2 class="anchored" data-anchor-id="impulse-responses">Impulse responses</h2>
-<p>The grid overlays the posterior mean responses under the Minnesota prior (orange) on the bands and mean of the weak prior fit (blue). The two means agree closely and the orange line stays inside the <span class="math inline">50\%</span> band of the weak prior fit in every panel. The Minnesota mean is smoother at two and three quarters after the shock, where the prior halves the standard deviation of the second-lag coefficients and irons out the wiggle that the weak prior fit shows there. With 200 quarters for 18 coefficients the data dominate a prior of this tightness; a smaller <code>tightness</code> trades this agreement for more shrinkage.</p>
+<p>The grid overlays the posterior mean responses under the Minnesota prior (orange) on the bands and mean of the weak prior fit (blue). The two means agree closely, and the orange line stays inside the <span class="math inline">50\%</span> band of the weak prior fit in most panels. The clearest exception is <code>realinv response to realcons shock</code> at <span class="math inline">h = 1</span>: the response at one quarter equals the lag-one coefficient, so the Minnesota mean there is the posterior mean of <code>phi[1, realinv, realcons]</code>, <span class="math inline">3.28</span>, above the top of the weak prior’s <span class="math inline">50\%</span> band at about <span class="math inline">3.1</span>. This is the shift discussed above. The other is <code>realcons response to realgdp shock</code> at <span class="math inline">h = 2</span>, where the Minnesota mean sits near zero while the weak prior band runs from about <span class="math inline">-0.24</span> to <span class="math inline">-0.05</span>; a few other panels show smaller excursions at <span class="math inline">h = 2</span>. Two and three quarters after the shock are also where the Minnesota mean is smoother: the prior halves the standard deviation of the second-lag coefficients and irons out the wiggle that the weak prior fit shows there. With 200 quarters for 18 coefficients the data still dominate a prior of this tightness; a smaller <code>tightness</code> trades this agreement for more shrinkage.</p>
 <div id="ef8aaa0b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:16.263225Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:16.263123Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:17.058332Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:17.057419Z&quot;}}" data-execution_count="26">
 <div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>phi_draws_mn <span class="op">=</span> jnp.asarray(posterior_mn[<span class="st">"phi"</span>])</span>
 <span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>radius_mn <span class="op">=</span> np.<span class="bu">abs</span>(np.linalg.eigvals(np.asarray(companion_matrix(phi_draws_mn)))).<span class="bu">max</span>(axis<span class="op">=-</span><span class="dv">1</span>)</span>
@@ -2583,7 +2596,7 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
 <li>statsmodels. <a href="https://www.statsmodels.org/stable/datasets/generated/macrodata.html">macrodata</a>: United States macroeconomic data, 1959Q1 to 2009Q3, public domain.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/var-preview.html#50138624">Source: Vector Autoregression (VAR) with `numpyro_forecast`</a></div>
+</div>
 
 
 
@@ -2604,7 +2617,8 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }
       // Inspect non-navigation links and adorn them if external
-     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      window.quartoDecorateExternalLinks = function (root) {
+     var links = (root || window.document).querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
       for (var i=0; i<links.length; i++) {
         const link = links[i];
         if (!isInternal(link.href)) {
@@ -2613,8 +2627,69 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
           if (link.dataset.originalHref !== undefined) {
             link.href = link.dataset.originalHref;
           }
+          if (!link.classList.contains('no-external-icon')) {
+          }
         }
       }
+      };
+      window.quartoDecorateExternalLinks(window.document);
+    // Esc closes the popup (WCAG 1.4.13) and focus leaving both trigger and
+    // popup closes it (WCAG 2.4.11); tippy handles neither for interactive popups.
+    const hideOnEscAndFocusOut = {
+      name: 'hideOnEscAndFocusOut',
+      defaultValue: true,
+      fn(instance) {
+        const dismiss = () => {
+          // A show scheduled by the trigger delay would otherwise reopen it
+          instance.clearDelayTimeouts();
+          instance.hide();
+        };
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') {
+            return;
+          }
+          // Keep Esc from also reaching page handlers (e.g. reveal.js overview),
+          // except an open reveal.js slide menu, which Esc should close too.
+          // The menu handles keys only when its keyboard option is on.
+          const menuHandlesEsc = window.Reveal?.getPlugin?.('menu')?.isOpen() &&
+            window.Reveal.getConfig().menu?.keyboard !== false;
+          if (!menuHandlesEsc) {
+            event.stopPropagation();
+          }
+          if (instance.popper.contains(window.document.activeElement)) {
+            // Disabled while refocusing so the focus trigger does not reopen it
+            instance.disable();
+            instance.reference.focus();
+            instance.enable();
+          }
+          dismiss();
+        };
+        const onFocusOut = (event) => {
+          const target = event.relatedTarget;
+          if (target && !instance.reference.contains(target) &&
+              !instance.popper.contains(target)) {
+            dismiss();
+          }
+        };
+        // On the trigger too: a click trigger (code-annotations: select) has no
+        // blur handling. Attached for the instance's lifetime so leaving the
+        // trigger also cancels a show still pending on the trigger delay.
+        instance.reference.addEventListener('focusout', onFocusOut);
+        return {
+          onShow() {
+            window.document.addEventListener('keydown', onKeyDown, true);
+            instance.popper.addEventListener('focusout', onFocusOut);
+          },
+          onHide() {
+            window.document.removeEventListener('keydown', onKeyDown, true);
+            instance.popper.removeEventListener('focusout', onFocusOut);
+          },
+          onDestroy() {
+            instance.reference.removeEventListener('focusout', onFocusOut);
+          },
+        };
+      },
+    };
     function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
       const config = {
         allowHTML: true,
@@ -2628,6 +2703,7 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
         interactiveBorder: 10,
         theme: 'quarto',
         placement: 'bottom-start',
+        plugins: [hideOnEscAndFocusOut],
       };
       if (contentFn) {
         config.content = contentFn;
@@ -2790,44 +2866,54 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
           const lineIds = lines.map((line) => {
             return targetCell + "-" + line;
           })
-          let top = null;
-          let height = null;
-          let parent = null;
+          // Each band is positioned against its own containing block, which is
+          // not the offsetParent of the lines, so place it from client rects.
+          const placeBand = (band, firstEl, lastEl, codeBlock) => {
+            const container = band.offsetParent;
+            if (container === null) {
+              return;
+            }
+            const containerRect = container.getBoundingClientRect();
+            // Reveal.js scales slides with a transform, so convert client
+            // pixels back to the CSS pixels of the container.
+            const scale = containerRect.height / container.offsetHeight || 1;
+            const firstRect = firstEl.getBoundingClientRect();
+            const lastRect = lastEl.getBoundingClientRect();
+            const top = (firstRect.top - containerRect.top) / scale - container.clientTop + container.scrollTop;
+            const height = (lastRect.bottom - firstRect.top) / scale;
+            band.style.top = top - 2 + "px";
+            band.style.height = height + 4 + "px";
+            if (codeBlock) {
+              // Without the copy button wrapper, the containing block is wider
+              // than the code block, so span the code block explicitly.
+              const blockRect = codeBlock.getBoundingClientRect();
+              band.style.left = (blockRect.left - containerRect.left) / scale - container.clientLeft + container.scrollLeft + "px";
+              band.style.width = blockRect.width / scale + "px";
+            }
+          };
           if (lineIds.length > 0) {
-              //compute the position of the single el (top and bottom and make a div)
-              const el = window.document.getElementById(lineIds[0]);
-              top = el.offsetTop;
-              height = el.offsetHeight;
-              parent = el.parentElement.parentElement;
-            if (lineIds.length > 1) {
-              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
-              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
-              height = bottom - top;
+            const el = window.document.getElementById(lineIds[0]);
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const parent = el.parentElement.parentElement;
+            // cook up a div (if necessary) and position it
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
             }
-            if (top !== null && height !== null && parent !== null) {
-              // cook up a div (if necessary) and position it 
-              let div = window.document.getElementById("code-annotation-line-highlight");
-              if (div === null) {
-                div = window.document.createElement("div");
-                div.setAttribute("id", "code-annotation-line-highlight");
-                div.style.position = 'absolute';
-                parent.appendChild(div);
-              }
-              div.style.top = top - 2 + "px";
-              div.style.height = height + 4 + "px";
-              div.style.left = 0;
-              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
-              if (gutterDiv === null) {
-                gutterDiv = window.document.createElement("div");
-                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
-                gutterDiv.style.position = 'absolute';
-                const codeCell = window.document.getElementById(targetCell);
-                const gutter = codeCell.querySelector('.code-annotation-gutter');
-                gutter.appendChild(gutterDiv);
-              }
-              gutterDiv.style.top = top - 2 + "px";
-              gutterDiv.style.height = height + 4 + "px";
+            placeBand(div, el, lastEl, parent.closest("div.sourceCode") || parent);
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
             }
+            placeBand(gutterDiv, el, lastEl);
             selectedAnnoteEl = annoteEl;
           }
         };
@@ -2926,7 +3012,10 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
     }
   });
   </script>
-<nav class="page-navigation">
+  <script type="application/javascript">
+  window.quartoScrollableRegionsLabels = {"code":"Scrollable code","output":"Scrollable output"};
+  </script>
+<nav class="page-navigation" aria-label="Page">
   <div class="nav-page nav-page-previous">
       <a href="../../docs/examples/tsb.html" class="pagination-link" aria-label="TSB Method for Intermittent Demand">
         <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">TSB Method for Intermittent Demand</span>

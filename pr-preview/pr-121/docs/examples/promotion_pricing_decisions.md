@@ -4983,5 +4983,3 @@ Where the posterior changed the answer relative to a point estimate: the store l
 - Smith, J. E., Winkler, R. L. (2006). [*The Optimizer's Curse: Skepticism and Postdecision Surprise in Decision Analysis*](https://doi.org/10.1287/mnsc.1050.0451). Management Science, 52(3), 311-322.
 - Birge, J. R., Louveaux, F. (2011). [*Introduction to Stochastic Programming*](https://doi.org/10.1007/978-1-4614-0237-4). Springer.
 - Related examples: [hierarchical forecasting 1](hierarchical_forecasting_1.md) (the sampled centering idiom), [fresh retail stockout](fresh_retail_stockout.md) (the model factory and the covariate-swap counterfactual), [availability TSB](availability_tsb.md) (scenario covariates), [censored demand](censored_demand.md) (the NUTS template and the censored likelihood), [univariate forecasting](forecasting_univariate.md) ([time_reparam](../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam)).
-
-[Source: Promotion pricing decisions with `numpyro_forecast`](_src/promotion_pricing_decisions-preview.html#742f9ef0)

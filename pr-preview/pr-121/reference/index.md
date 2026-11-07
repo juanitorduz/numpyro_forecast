@@ -77,7 +77,7 @@ Time-axis operations on observation distributions, extensible via singledispatch
 
 
 [surgery.shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc)  
-Re-center a zero-centered noise distribution at `loc`.
+Shift the location parameter of a noise distribution by `loc`.
 
 [surgery.slice_time()](surgery.slice_time.md#numpyro_forecast.surgery.slice_time)  
 Slice an elementwise distribution along the time axis `-2`.
@@ -192,7 +192,7 @@ Pack prediction draws into a DataTree laid out for per-series `plot_lm` faceting
 ## Extensions (contrib)
 
 
-Optional backends behind pyproject extras (never imported by default).
+Optional backends behind pyproject extras (the backend library loads only on first use).
 
 
 [contrib.blackjax.BlackjaxNUTSKernel](contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel)  
@@ -202,7 +202,7 @@ BlackJAX NUTS with Stan-style window adaptation.
 BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
 
 [contrib.blackjax.BlackjaxCustomKernel](contrib.blackjax.BlackjaxCustomKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel)  
-Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn`.
+Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn` and `step_fn`.
 
 [contrib.blackjax.PathfinderFit](contrib.blackjax.PathfinderFit.md#numpyro_forecast.contrib.blackjax.PathfinderFit)  
 The result of fitting a forecasting model with BlackJAX Pathfinder.
@@ -221,6 +221,12 @@ Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 
 [contrib.blackjax.multipathfinder_samples()](contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples)  
 Draw `num_samples` posterior samples from a fitted multipath Pathfinder fit.
+
+[contrib.dynestyx.state_space()](contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space)  
+Condition, forecast or predict in-sample a dynestyx model over the horizon.
+
+[contrib.dynestyx.StateSpaceResult](contrib.dynestyx.StateSpaceResult.md#numpyro_forecast.contrib.dynestyx.StateSpaceResult)  
+Latent state draws of one `state_space()` call, `None` outside their mode.
 
 
 ## Typing
@@ -250,8 +256,17 @@ A zero-argument callable returning a fresh `ForecastModel` instance.
 [typing.Array](typing.Array.md#numpyro_forecast.typing.Array)  
 A JAX array (alias of `jax.Array`).
 
+[typing.IntScalar](typing.IntScalar.md#numpyro_forecast.typing.IntScalar)  
+A concrete integer scalar: a Python `int` or a NumPy integer scalar (`np.int64`, …).
+
+[typing.RealScalar](typing.RealScalar.md#numpyro_forecast.typing.RealScalar)  
+A concrete real scalar: a Python `float` or `int`, or a NumPy integer or floating scalar.
+
 [typing.BlackjaxBuildFn](typing.BlackjaxBuildFn.md#numpyro_forecast.typing.BlackjaxBuildFn)  
 A blackjax sampler build function `(rng_key, logdensity_fn, position, num_warmup)`.
+
+[typing.BlackjaxStepFn](typing.BlackjaxStepFn.md#numpyro_forecast.typing.BlackjaxStepFn)  
+A blackjax step function `(rng_key, inner_state, logdensity_fn, params)`.
 
 
 ## Autocorrelation

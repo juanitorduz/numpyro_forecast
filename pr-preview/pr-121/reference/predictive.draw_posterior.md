@@ -13,7 +13,7 @@ predictive.draw_posterior(
 ```
 
 
-The returned dict has the sample axis leading and is ready to pass to [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) or NumPyro's `Predictive`. An `AutoDelta` guide is a MAP point estimate: it is drawn once and tiled to `num_samples` (`_ensure_sample_axis_for_delta()`), since it carries no posterior spread of its own. Every other `AutoGuide` is sampled through a jitted, per-guide-cached `sample_posterior` (`_jitted_sample_posterior()`).
+The returned dict has the sample axis leading and is ready to pass to [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) or NumPyro's `Predictive`. An `AutoDelta` guide is a MAP point estimate: it is drawn once and tiled to `num_samples` (`_ensure_sample_axis_for_delta()`), since it carries no posterior spread of its own. Every other `AutoGuide` is sampled through a jitted `sample_posterior` (`_jitted_sample_posterior()`) that the call compiles once and shares across its chunks; nothing is cached across calls, so the draws (deterministic sites included) reflect the model as it is at call time.
 
 
 ## Parameters
@@ -25,8 +25,8 @@ PRNG key.
 `guide: AutoGuide`  
 The fitted variational guide, e.g. the `AutoGuide` instance passed to `SVI`.
 
-`params: dict[str, Array]`  
-The learned variational parameters, e.g. the trained parameters from `svi.run`'s result.
+`params: dict[str, PyTree[Array]]`  
+The learned variational parameters, e.g. the trained parameters from `svi.run`'s result. A value may be any pytree of arrays, not only an array: the flow weights of `AutoIAFNormal` and `AutoBNAFNormal` are lists of per-layer tuples of arrays, with an empty tuple for each parameter-free layer. `params` only reaches the guide's `sample_posterior`; `device` and `batch_size` act on the draws.
 
 `num_samples: int`  
 Number of posterior draws.
@@ -55,7 +55,7 @@ If `num_samples` or `batch_size` is not positive.
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
 
 `DevicePlatformError`  
-If `device` names a platform whose backend is not initialized (see `_resolve_device()`).
+If `device` names a platform whose backend is not initialized (see `resolve_device()`).
 
 
 ## Warns

@@ -3,7 +3,7 @@
 
 TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`
 
-This notebook ports the blog post [**Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints**](https://juanitorduz.github.io/availability_tsb/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It closes the intermittent-demand trilogy started by the [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html) and the [TSB example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html), and like those notebooks it focuses on the *one* structural change the method makes and why that change matters.
+This notebook ports the blog post [**Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints**](https://juanitorduz.github.io/availability_tsb/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It closes the intermittent-demand trilogy started by the [Croston example](croston.md) and the [TSB example](tsb.md), and like those notebooks it focuses on the *one* structural change the method makes and why that change matters.
 
 The motivation is a fact of retail life that the classical intermittent-demand methods ignore: a sales series contains **two kinds of zeros**. Some periods are zero because nobody wanted the product (no demand), and some are zero because nobody *could* buy it (a stock-out, a delisting, a closed store). What we observe is censored demand, y_t = a_t \cdot d^{\ast}\_t, where d^{\ast}\_t is the demand that would have materialized and a_t \in \\0, 1\\ says whether the product was on the shelf.
 
@@ -11,7 +11,7 @@ Plain TSB cannot tell these zeros apart. Its demand probability decays at *every
 
 Two practical notes on the port:
 
-- We reuse the sibling notebooks' reusable level channel (one call to the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block per exponential smoothing recursion, with a boolean gate deciding *when* the level updates), promoted from a single series to a `(time, series)` panel. Croston gates on demand events, TSB gates on every period, and the availability-aware variant gates on the availability mask. The entire method is that one argument.
+- We reuse the sibling notebooks' reusable level channel (one call to the package's [`ssoe`](../../reference/models.ssoe.md) building block per exponential smoothing recursion, with a boolean gate deciding *when* the level updates), promoted from a single series to a `(time, series)` panel. Croston gates on demand events, TSB gates on every period, and the availability-aware variant gates on the availability mask. The entire method is that one argument.
 - The covariates carry **two stacked inputs** in a `(covariate, time, series)` tensor: the **sales history** the recursions consume ([ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series as an argument, and the package's [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None`, so the history has to travel through `covariates`; only the first `t_obs` rows are read, which the block checks), and the **availability mask**. Because the forecast reads its future availability from the covariates, choosing a scenario is just choosing the trailing rows of the availability input. Everything plugs straight into plain NumPyro SVI, [draw_posterior](../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior), [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), and [add_forecast_groups](../../reference/convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups).
 
 
@@ -19,6 +19,15 @@ Two practical notes on the port:
 
 
 ``` python
+import warnings
+
+# preliz warns at import time when PyMC is not installed; this example does not use PyMC.
+warnings.filterwarnings("ignore", message="PyMC not installed", category=UserWarning)
+# arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.
+warnings.filterwarnings(
+    "ignore", message="When multiple credible intervals are plotted", category=UserWarning
+)
+
 from typing import NamedTuple
 
 import arviz as az
@@ -290,7 +299,7 @@ All three methods in this trilogy decompose the sparse series into a **demand si
 | TSB | demand indicator d_t | every period | P(\text{available}) \cdot P(\text{demand} \mid \text{available}) |
 | availability TSB | demand indicator d_t | available periods a_t = 1 | P(\text{demand} \mid \text{available}) |
 
-[Croston's method](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html) updates both components only at demand events, so a stock-out run simply freezes it, but it also *stretches the measured inter-demand intervals*: the drought caused by the stock-out is booked as demand slowing down, and there is no natural place in the interval bookkeeping to discount it. [TSB](https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html) replaces the intervals with the demand indicator d_t = \mathbf{1}\[y_t \> 0\] smoothed at every period:
+[Croston's method](croston.md) updates both components only at demand events, so a stock-out run simply freezes it, but it also *stretches the measured inter-demand intervals*: the drought caused by the stock-out is booked as demand slowing down, and there is no natural place in the interval bookkeeping to discount it. [TSB](tsb.md) replaces the intervals with the demand indicator d_t = \mathbf{1}\[y_t \> 0\] smoothed at every period:
 
  \hat{p}\_t = \begin{cases} \beta + (1 - \beta) \\ \hat{p}\_{t-1} & \text{if } y_t \> 0, \\ (1 - \beta) \\ \hat{p}\_{t-1} & \text{if } y_t = 0. \end{cases} 
 
@@ -333,7 +342,7 @@ ax.set(
 
 # Model specification
 
-The model is the TSB notebook's two-component construction promoted to a panel, with one structural change. The reusable `panel_level_channel` runs the gated level recursion for all series at once through the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block: the per-series parameters (sites `smoothing` and `noise`) are sampled inside a `numpyro.plate` over series, the block's in-sample scan carries the whole `(series,)` level vector (a panel puts the series on the observation axis, so the driving series is `(time, series)`, the carry `(series,)`, and the innovation distribution's batch shape `(series,)`, which is exactly what the `noise` site sampled under the plate provides), and, when forecasting, the block draws the component's innovations at its `eps_future` site and rolls the frozen level forward. The gate is an `xs` input padded with zeros over the horizon by [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html), so the levels never update there and the forecast is the final level plus iid noise, the flat forecast of the level model. Composing with NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler under the prefixes `z` and `p` yields the parameter names `z_smoothing`, …, and the innovation sites `z_eps_future` and `p_eps_future`, just like the siblings.
+The model is the TSB notebook's two-component construction promoted to a panel, with one structural change. The reusable `panel_level_channel` runs the gated level recursion for all series at once through the package's [`ssoe`](../../reference/models.ssoe.md) building block: the per-series parameters (sites `smoothing` and `noise`) are sampled inside a `numpyro.plate` over series, the block's in-sample scan carries the whole `(series,)` level vector (a panel puts the series on the observation axis, so the driving series is `(time, series)`, the carry `(series,)`, and the innovation distribution's batch shape `(series,)`, which is exactly what the `noise` site sampled under the plate provides), and, when forecasting, the block draws the component's innovations at its `eps_future` site and rolls the frozen level forward. The gate is an `xs` input padded with zeros over the horizon by [`pad_future`](../../reference/arrays.pad_future.md), so the levels never update there and the forecast is the final level plus iid noise, the flat forecast of the level model. Composing with NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler under the prefixes `z` and `p` yields the parameter names `z_smoothing`, …, and the innovation sites `z_eps_future` and `p_eps_future`, just like the siblings.
 
 The remaining choices, and where their numbers come from:
 
@@ -651,7 +660,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 ## Posterior draws
 
-A variational fit is a guide plus its fitted parameters; the posterior *draws* every downstream step consumes come from [`draw_posterior`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.draw_posterior.html), and we draw them once here and reuse them for the tree, the component forecasts, and the scenario forecasts below. Two knobs matter on this panel: `batch_size=250` bounds how many draws are materialized at once, because every per-timestep site on 1{,}000 series is a `(draws, time, series)` block, and `device="host"` moves each chunk into pageable host memory as it is drawn (jax arrays committed to the CPU device, or NumPy arrays when no CPU backend is initialized), so the whole ensemble never has to fit on the accelerator at once.
+A variational fit is a guide plus its fitted parameters; the posterior *draws* every downstream step consumes come from [`draw_posterior`](../../reference/predictive.draw_posterior.md), and we draw them once here and reuse them for the tree, the component forecasts, and the scenario forecasts below. Two knobs matter on this panel: `batch_size=250` bounds how many draws are materialized at once, because every per-timestep site on 1{,}000 series is a `(draws, time, series)` block, and `device="host"` moves each chunk into pageable host memory as it is drawn (jax arrays committed to the CPU device, or NumPy arrays when no CPU backend is initialized), so the whole ensemble never has to fit on the accelerator at once.
 
 
 ``` python
@@ -662,7 +671,7 @@ post = draw_posterior(rng_subkey, guide, svi_result.params, 1_000, batch_size=25
 
 # Diagnostics
 
-We export the posterior draws into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html); the tree shares the draws made above rather than drawing its own, so every number in this notebook comes from one ensemble. Because we pass the *extended* covariates (whose availability input carries the realized test availability), the tree automatically gains `predictions` groups holding the out-of-sample forecast draws for that scenario. We register the three per-timestep deterministics so they share the tree-wide `time` coordinate, name the covariate axes explicitly (the covariates are `3`-D here, so the default two-name layout does not apply), and bound the accelerator memory of the predictive pass with `batch_size`, since every stored site on this panel is a `(draws, time, series)` block.
+We export the posterior draws into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](../../reference/convert.to_datatree.md); the tree shares the draws made above rather than drawing its own, so every number in this notebook comes from one ensemble. Because we pass the *extended* covariates (whose availability input carries the realized test availability), the tree automatically gains `predictions` groups holding the out-of-sample forecast draws for that scenario. We register the three per-timestep deterministics so they share the tree-wide `time` coordinate, name the covariate axes explicitly (the covariates are `3`-D here, so the default two-name layout does not apply), and bound the accelerator memory of the predictive pass with `batch_size`, since every stored site on this panel is a `(draws, time, series)` block.
 
 
 ``` python
@@ -2745,7 +2754,7 @@ fig.suptitle(f"Component forecasts (series {i})", fontsize=16, fontweight="bold"
 
 ## Scenario planning: full availability
 
-Here is the payoff of modeling availability as an input. The tree above answers "what will we *sell* given the availability we actually had"; replenishment planning needs "what would we sell **if the product were always on the shelf**". That is one more [`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html) call on the *same* posterior draws, feeding covariates whose future availability rows are all ones, and one [`add_forecast_groups`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html) call to package the draws as the `predictions` group of a sibling tree (the groups it copies from `tree` are shared, so this costs no memory beyond the new forecast).
+Here is the payoff of modeling availability as an input. The tree above answers "what will we *sell* given the availability we actually had"; replenishment planning needs "what would we sell **if the product were always on the shelf**". That is one more [`forecast`](../../reference/predictive.forecast.md) call on the *same* posterior draws, feeding covariates whose future availability rows are all ones, and one [`add_forecast_groups`](../../reference/convert.add_forecast_groups.md) call to package the draws as the `predictions` group of a sibling tree (the groups it copies from `tree` are shared, so this costs no memory beyond the new forecast).
 
 
 ``` python
@@ -3086,10 +3095,8 @@ The same caveats as in the sibling notebooks apply to the likelihood choices: Ga
 # References
 
 - Orduz, J. [*Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints*](https://juanitorduz.github.io/availability_tsb/). The blog post this notebook ports.
-- The [TSB example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html) in this documentation, whose two-component level-model construction this notebook promotes to a panel, and the blog post it ports: Orduz, J. [*TSB Method for Intermittent Time Series Forecasting in NumPyro*](https://juanitorduz.github.io/tsb_numpyro/).
-- The [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html) in this documentation, the first notebook of the intermittent-demand trilogy.
+- The [TSB example](tsb.md) in this documentation, whose two-component level-model construction this notebook promotes to a panel, and the blog post it ports: Orduz, J. [*TSB Method for Intermittent Time Series Forecasting in NumPyro*](https://juanitorduz.github.io/tsb_numpyro/).
+- The [Croston example](croston.md) in this documentation, the first notebook of the intermittent-demand trilogy.
 - Teunter, R. H., Syntetos, A. A., & Babai, M. Z. (2011). *Intermittent demand: Linking forecasting to inventory obsolescence*. European Journal of Operational Research, 214(3), 606-615. The paper that introduces the TSB method.
 - Croston, J. D. (1972). *Forecasting and stock control for intermittent demands*. Operational Research Quarterly, 23(3), 289-303.
 - statsforecast documentation: [`TSB`](https://nixtlaverse.nixtla.io/statsforecast/docs/models/tsb.html), the classical TSB baseline.
-
-[Source: TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`](_src/availability_tsb-preview.html#9e4fd41f)
