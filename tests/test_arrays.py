@@ -38,8 +38,6 @@ def test_pad_future_appends_rows_with_value() -> None:
 
 
 def test_pad_future_accepts_an_int_fill_value() -> None:
-    # ``value`` is a RealScalar, which spells int (issue #165); jnp.full casts the fill to
-    # ``x.dtype`` either way.
     x = jnp.zeros((4, 1))
     np.testing.assert_array_equal(pad_future(x, 3, value=1), pad_future(x, 3, value=1.0))
     gate = jnp.zeros((2, 4, 3), dtype=bool)
@@ -52,23 +50,17 @@ def test_pad_future_accepts_an_int_fill_value() -> None:
     ids=["numpy-rows", "numpy-rows-and-float32-value", "numpy-int-value", "int32-rows-int-value"],
 )
 def test_pad_future_accepts_numpy_scalars(future: object, value: object) -> None:
-    # A row count from np.sum(mask) or a DataFrame and a NumPy fill value give the same
-    # rows as the Python scalars (issue #165).
     x = jnp.zeros((4, 1))
     np.testing.assert_array_equal(pad_future(x, future, value=value), pad_future(x, 3, value=1.0))  # ty: ignore[invalid-argument-type]
 
 
 @pytest.mark.parametrize("future", [3.0, np.float64(3.0), jnp.asarray(3)], ids=repr)
 def test_pad_future_rejects_a_float_or_array_row_count(future: object) -> None:
-    # The tower is one-way: a float row count fails the int hint instead of truncating,
-    # and a JAX array (a tracer under a trace) is rejected at the hint.
     with pytest.raises(TypeCheckError):
         pad_future(jnp.zeros((4, 1)), future)  # ty: ignore[invalid-argument-type]
 
 
 def test_pad_future_keeps_integer_fills_exact() -> None:
-    # The fill goes to jnp.full as it is: a float conversion would round an int64 above
-    # 2**53 and turn -1 into 0 for an unsigned dtype.
     with jax.enable_x64(True):
         wide = pad_future(jnp.zeros((1, 1), dtype=jnp.int64), 1, value=2**53 + 1)
         assert int(wide[1, 0]) == 2**53 + 1
@@ -78,7 +70,5 @@ def test_pad_future_keeps_integer_fills_exact() -> None:
 
 @pytest.mark.parametrize("future", [-1, np.int64(-1)], ids=repr)
 def test_pad_future_rejects_a_negative_row_count(future: IntScalar) -> None:
-    # Same boundary rule as fourier_features and periodic_repeat: a ValueError, not a raw
-    # jax shape error from jnp.full.
     with pytest.raises(ValueError, match="future must be non-negative"):
         pad_future(jnp.zeros((4, 1)), future)

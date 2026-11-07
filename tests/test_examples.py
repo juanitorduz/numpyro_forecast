@@ -54,7 +54,7 @@ def _fit_and_forecast_univariate(
     key_fit, key_forecast = random.split(rng_key)
     posterior = posterior_factory(key_fit, univariate_model, y[:t], covariates[:t])
     pred = forecast(key_forecast, univariate_model, posterior, y[:t], covariates)
-    assert isinstance(pred, jax.Array)  # no device passed, so never NumPy
+    assert isinstance(pred, jax.Array)
     return pred
 
 
@@ -74,7 +74,7 @@ def test_univariate_synthetic(
 
 @pytest.mark.skipif(not bart_available(), reason="BART dataset unavailable")
 def test_univariate_bart_smoke(rng_key: Array) -> None:
-    y = load_bart_weekly()[-120:]  # last 120 weeks keeps the smoke test fast
+    y = load_bart_weekly()[-120:]
     pred = _fit_and_forecast_univariate(
         rng_key,
         y,
@@ -103,7 +103,7 @@ def _fit_and_forecast_hierarchical(
     key_fit, key_forecast = random.split(rng_key)
     posterior = posterior_factory(key_fit, model, y[:, :t, :], covariates[:, :t, :])
     pred = forecast(key_forecast, model, posterior, y[:, :t, :], covariates)
-    assert isinstance(pred, jax.Array)  # no device passed, so never NumPy
+    assert isinstance(pred, jax.Array)
     return pred
 
 
@@ -123,7 +123,7 @@ def test_hierarchical_synthetic(
 @pytest.mark.skipif(not bart_available(), reason="BART dataset unavailable")
 def test_hierarchical_bart_smoke(rng_key: Array) -> None:
     y, _split, _stations = load_bart_hierarchical()
-    y = y[:4, -120:, :4]  # subsample stations and hours to keep the smoke test fast
+    y = y[:4, -120:, :4]
     pred = _fit_and_forecast_hierarchical(
         rng_key, y, period=24 * 7, future=24, posterior_factory=_svi_posterior_factory(80, 50)
     )

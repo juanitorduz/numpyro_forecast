@@ -48,10 +48,6 @@ def test_crps_matches_brute_force(rng_key: Array) -> None:
 
 
 def test_crps_large_sample_no_int_overflow(rng_key: Array) -> None:
-    # With n past ~46k both the rank weight ``i * (n - i)`` and the ``n ** 2``
-    # normalization overflow int32 if computed as integers, which silently
-    # corrupts (or raises in) the CRPS. Compare against an overflow-free float64
-    # NumPy reference built from the same sorted-sample identity.
     n = 100_001
     pred = random.normal(rng_key, (n, 1))
     truth = jnp.array([0.3])
@@ -81,7 +77,7 @@ def test_crps_float16_matches_float32(num_samples: int, scale: float) -> None:
     the sample count itself past the float16 range.
     """
     pred = scale * random.normal(random.PRNGKey(2), (num_samples, 3, 1))
-    pred32 = pred.astype(jnp.float16).astype(jnp.float32)  # same values in both dtypes
+    pred32 = pred.astype(jnp.float16).astype(jnp.float32)
     truth32 = jnp.zeros((3, 1))
     got = crps_empirical(pred32.astype(jnp.float16), truth32.astype(jnp.float16))
     assert got.dtype == jnp.float16
@@ -92,7 +88,6 @@ def test_crps_float16_matches_float32(num_samples: int, scale: float) -> None:
 
 
 def test_crps_deterministic_prediction_is_absolute_error() -> None:
-    # All samples identical -> the dispersion term vanishes -> CRPS = |c - y|.
     pred = jnp.full((50, 2), 3.0)
     truth = jnp.array([1.0, 5.0])
     got = crps_empirical(pred, truth)
@@ -106,8 +101,6 @@ def test_crps_is_nonnegative(rng_key: Array) -> None:
 
 
 def test_crps_shape_mismatch_raises() -> None:
-    # The jaxtyping/beartype import hook enforces the shared ``*batch`` axis
-    # between ``pred`` and ``truth`` at call time, before the manual check.
     with pytest.raises(TypeCheckError):
         crps_empirical(jnp.zeros((10, 3)), jnp.zeros((4,)))
 
@@ -157,9 +150,6 @@ def test_crps_accepts_host_committed_inputs(
     got = crps_empirical(pred_in, truth_in)
 
     np.testing.assert_allclose(got, expected)
-
-
-# --- P7: pinball, interval score, MASE ---------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -239,15 +229,12 @@ def test_crps_accepts_cpu_committed_pred_under_accelerator_default(
 def test_pinball_median_is_half_mae() -> None:
     pred = jnp.linspace(0.0, 1.0, 101)[:, None] * jnp.ones((101, 4))
     truth = jnp.full((4,), 0.7)
-    # At tau=0.5 the pinball loss is half the absolute error of the median.
     median = jnp.median(pred, axis=0)
     expected = 0.5 * jnp.abs(median - truth).mean()
     assert jnp.allclose(eval_pinball(pred, truth, quantile=0.5), float(expected), atol=1e-5)
 
 
 def test_pinball_minimized_at_true_quantile() -> None:
-    # With truth drawn from the same law as the samples, the pinball loss is
-    # minimized when we score the quantile that matches the target quantile.
     pred = random.normal(random.PRNGKey(0), (2_000, 400))
     truth = jnp.quantile(pred, 0.8, axis=0)
     at_truth = eval_pinball(pred, truth, quantile=0.8)
@@ -267,7 +254,6 @@ def test_interval_score_rewards_tight_covering_interval() -> None:
     truth = jnp.zeros((4,))
     tight = 0.1 * random.normal(random.PRNGKey(0), (500, 4))
     wide = 5.0 * random.normal(random.PRNGKey(1), (500, 4))
-    # Both cover 0, but the tight interval scores lower (better).
     assert eval_interval_score(tight, truth) < eval_interval_score(wide, truth)
 
 
@@ -285,9 +271,8 @@ def test_interval_score_rejects_out_of_range_alpha(alpha: float) -> None:
 
 
 def test_make_mase_scales_by_seasonal_naive() -> None:
-    train = jnp.arange(10.0)[:, None]  # constant step-1 differences of 1.0
+    train = jnp.arange(10.0)[:, None]
     mase = make_mase(train, seasonality=1)
-    # Seasonal-naive scale is 1.0, so MASE equals the forecast MAE.
     pred = jnp.full((20, 3, 1), 5.0)
     truth = jnp.full((3, 1), 7.0)
     assert jnp.allclose(mase(pred, truth), 2.0, atol=1e-5)
@@ -296,7 +281,7 @@ def test_make_mase_scales_by_seasonal_naive() -> None:
 def _mase_scale(mase: Metric) -> float:
     """Back out the factory-time scale: with a zero point forecast the metric is mae/scale."""
     pred = jnp.zeros((1, 1, 1))
-    truth = jnp.ones((1, 1))  # mae = |0 - 1| = 1, so metric == 1/scale
+    truth = jnp.ones((1, 1))
     return 1.0 / float(mase(pred, truth))
 
 
@@ -348,9 +333,6 @@ def test_make_mase_accepts_host_committed_train_data() -> None:
     assert jnp.allclose(got_scale, expected_scale, atol=1e-6)
 
 
-# --- The array-metric contract: scalar-array returns, vmap composability -----
-
-
 def test_metrics_return_scalar_arrays() -> None:
     """Every metric returns a 0-d array (host floats only at result boundaries)."""
     pred = random.normal(random.PRNGKey(0), (100, 6, 1))
@@ -381,9 +363,6 @@ def test_metrics_are_vmappable() -> None:
         values = jax.vmap(metric)(pred, truth)
         assert values.shape == (4,)
         assert bool(jnp.all(jnp.isfinite(values)))
-
-
-# --- The pred/truth shape contract without the runtime type hook (#196) -----
 
 
 def _bias(pred: Array, truth: Array) -> Array:
@@ -471,21 +450,10 @@ def test_require_pred_truth_shapes_reads_static_shapes_of_tracers() -> None:
         jax.jit(jax.vmap(checked))(pred, truth[..., 0])
 
 
-# --- Integer (count) operands (#163) -----------------------------------------
-#
-# ``predict()`` requires integer data for a discrete observation family, so the
-# draws of a count model are integers. Every metric casts them to the default
-# float dtype (``float_view``) instead of rejecting them or computing in the
-# integer dtype, where ``uint8``/``int16`` differences wrap and the CRPS rank
-# weights truncate to zero.
-
 _COUNT_BOUNDS: dict[str, tuple[type[np.integer], int, int]] = {
-    # dtype, low, high: pred sits near ``low`` and half of truth near ``high``, so
-    # ``pred - truth`` overflows the dtype and wraps if computed in it.
     "uint8": (np.uint8, 0, 200),
     "int16": (np.int16, -32_768, 32_700),
     "int32": (np.int32, -(2**31), 2**31 - 100),
-    # A NumPy int64 above 2 ** 31: jnp.asarray would wrap it to int32 before a cast.
     "numpy-int64": (np.int64, 0, 2**33),
 }
 
@@ -496,7 +464,7 @@ def _count_inputs(kind: str) -> tuple[np.ndarray, np.ndarray]:
     rng = np.random.default_rng(0)
     pred = low + rng.integers(0, 50, size=(40, 3, 2))
     truth = low + rng.integers(0, 50, size=(3, 2))
-    truth[0] += high - low  # one row far above the draws, the other inside them
+    truth[0] += high - low
     return pred.astype(dtype), truth.astype(dtype)
 
 
@@ -563,7 +531,7 @@ def test_crps_of_uint8_counts_matches_float64_brute_force() -> None:
     term1 = np.abs(pred64 - truth64).mean(axis=0)
     pairwise = np.abs(pred64[:, None] - pred64[None, :]).mean(axis=(0, 1))
     np.testing.assert_allclose(got, term1 - 0.5 * pairwise, rtol=1e-5)
-    assert bool(jnp.all(got[0] > 100.0))  # the far row: a wrapped |pred - truth| is small
+    assert bool(jnp.all(got[0] > 100.0))
 
 
 @pytest.mark.parametrize("metric", [eval_mae, eval_crps, eval_pinball, _MASE_FLOAT_TRAIN])
@@ -626,7 +594,6 @@ def test_metrics_accept_host_committed_integer_draws(
 @pytest.mark.parametrize(
     "train",
     [
-        # The two arrays of the issue: uint8 differences wrap, abs(int16 min) < 0.
         pytest.param(np.array([[5], [3], [8], [1], [0], [9]], dtype=np.uint8), id="uint8"),
         pytest.param(np.array([[32_767], [-32_768], [0], [5]], dtype=np.int16), id="int16"),
         pytest.param(np.array([[2**31 - 1], [-(2**31)], [7], [0]], dtype=np.int32), id="int32"),
@@ -671,9 +638,6 @@ def test_metrics_still_reject_boolean_arrays(call: Callable[[Array], object]) ->
         call(jnp.zeros((5, 4, 1), dtype=bool))
 
 
-# --- float_view: the metric operand view -------------------------------------
-
-
 @pytest.mark.parametrize("dtype", [jnp.float16, jnp.bfloat16, jnp.float32])
 def test_float_view_keeps_a_floating_array_without_a_copy(dtype: jnp.dtype) -> None:
     x = jnp.arange(4.0, dtype=dtype)
@@ -681,7 +645,7 @@ def test_float_view_keeps_a_floating_array_without_a_copy(dtype: jnp.dtype) -> N
 
 
 def test_float_view_canonicalizes_floating_numpy_like_device_view() -> None:
-    x = np.arange(4.0)  # float64
+    x = np.arange(4.0)
     viewed = float_view(x)
     assert viewed.dtype == jnp.result_type(float)
     np.testing.assert_array_equal(viewed, x)

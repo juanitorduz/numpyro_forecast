@@ -131,7 +131,6 @@ def test_innovations_predict_forecast_sites() -> None:
     covariates = jnp.zeros((25, 0))
     h = Horizon.from_data(covariates, data)
     tr = trace(seed(lambda: rw_body(h, covariates), random.PRNGKey(0))).get_trace()
-    # In-sample site keeps its training shape; the horizon uses a separate site.
     assert tr["drift"]["value"].shape == (20, 1)
     assert tr["drift_future"]["value"].shape == (5, 1)
     assert tr["forecast"]["value"].shape == (5, 1)
@@ -149,7 +148,6 @@ def test_innovations_reparam_applies() -> None:
 
     tr = trace(seed(body, random.PRNGKey(0))).get_trace()
     assert tr["drift"]["value"].shape == (10, 1)
-    # LocScaleReparam introduces a decentered companion site.
     assert any("decentered" in name for name in tr)
 
 
@@ -164,11 +162,10 @@ def test_innovations_shares_one_distribution_across_both_time_plates() -> None:
     tr = trace(seed(body, random.PRNGKey(0))).get_trace()
     assert tr["drift"]["value"].shape == (20, 1)
     assert tr["drift_future"]["value"].shape == (5, 1)
-    assert prior.batch_shape == ()  # the plates expand a copy, never the instance
+    assert prior.batch_shape == ()
 
 
 def test_predict_forecast_requires_data() -> None:
-    # future > 0 but data is None: forecasting needs observed data to condition on.
     h = Horizon(data=None, t_obs=10, future=5, duration=15)
     with pytest.raises(RuntimeError, match="forecasting requires observed data"):
         trace(
@@ -479,23 +476,17 @@ def test_rw_model_forecast_trace() -> None:
     """The plain-function ``rw_model`` produces the expected forecast-horizon trace."""
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(1), (20, 1)), axis=-2)
     tr = trace(seed(rw_model, random.PRNGKey(0))).get_trace(empty_covariates(25), data)
-    # In-sample site keeps its training shape; the horizon uses a separate site.
     assert tr["drift"]["value"].shape == (20, 1)
     assert tr["drift_future"]["value"].shape == (5, 1)
     assert tr["forecast"]["value"].shape == (5, 1)
 
 
 def test_rw_model_prior_sampling() -> None:
-    # data=None: pure prior sampling. The whole horizon is in-sample, so "obs" is
-    # sampled (not observed) and there are no forecast-horizon sites.
     tr = trace(seed(rw_model, random.PRNGKey(0))).get_trace(empty_covariates(15))
     assert tr["drift"]["value"].shape == (15, 1)
     assert tr["obs"]["is_observed"] is False
     assert "drift_future" not in tr
     assert "forecast" not in tr
-
-
-# --- predict: distribution form vs link form ----------------------------------
 
 
 def _link_form_body(h: Horizon, covariates: Array) -> None:
@@ -536,7 +527,6 @@ def test_predict_rejects_link_that_returns_no_distribution() -> None:
 
     def bad_body(h: Horizon, covariates: Array) -> None:
         level = innovations(h, "level", dist.Normal(0.0, 1.0))
-        # ty rejects this link statically; the runtime guard covers untyped callers.
         predict(h, lambda mu: mu, jnp.cumsum(level, axis=-2))  # ty: ignore[invalid-argument-type]
 
     model = as_model(bad_body)
@@ -610,25 +600,20 @@ def test_poisson_local_level_end_to_end() -> None:
         progress_bar=False,
     )
     mcmc.run(random.PRNGKey(1), empty_covariates(40), data)
-    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
-    # no draw_posterior step (that's guide-based only).
     post = mcmc.get_samples()
     fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(46))
     assert fc.shape == (200, 6, 1)
     assert bool(jnp.all(fc >= 0.0))
-    assert bool(jnp.all(fc == jnp.floor(fc)))  # integer-valued counts
-    # The forecast median should be in the right ballpark of the true rate.
+    assert bool(jnp.all(fc == jnp.floor(fc)))
     assert 2.0 < float(jnp.median(fc)) < 10.0
 
 
 def test_horizon_is_a_pytree_with_static_shapes() -> None:
     h = Horizon.from_data(jnp.zeros((25, 0)), jnp.ones((20, 1)))
-    # data is the only leaf; the three ints are static metadata.
     (leaf,) = jax.tree.leaves(h)
     assert leaf is h.data
 
     def forecast_zeros(h: Horizon) -> Array:
-        # future is static metadata, so it is a legal shape inside jit and vmap.
         assert h.data is not None
         return jnp.zeros((h.future, 1)) + h.data.sum()
 
@@ -638,7 +623,6 @@ def test_horizon_is_a_pytree_with_static_shapes() -> None:
 
 
 def test_horizon_unflattens_with_host_leaves() -> None:
-    # The beartype hook checks construction, not tree_unflatten: NumPy leaves are fine.
     h = Horizon.from_data(jnp.zeros((25, 0)), jnp.ones((20, 1)))
     host = jax.tree.map(np.asarray, h)
     assert isinstance(host.data, np.ndarray)

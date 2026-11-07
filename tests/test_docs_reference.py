@@ -19,15 +19,8 @@ yaml = pytest.importorskip("yaml")
 
 GREAT_DOCS_YML = Path(__file__).resolve().parent.parent / "great-docs.yml"
 
-# Internal submodules whose public symbols are intentionally undocumented: their
-# members carry public names only so that other package modules can import them
-# without importing a private name (see "Conventions" in ``AGENTS.md``), or, for
-# ``typecheck``, so that the jaxtyping import hook can resolve its typechecker.
 IGNORED_MODULES: set[str] = {"offload", "typecheck", "validation"}
 
-# Optional third-party dependencies: a module whose import fails on one of these
-# is covered by the extras CI leg instead of this walk. Any other ImportError
-# (e.g. a package-internal name) is a real bug and must fail the test loudly.
 _OPTIONAL_DEPS: frozenset[str] = frozenset({"blackjax", "optax", "pandas", "polars"})
 
 
@@ -68,8 +61,8 @@ def _public_api() -> set[str]:
             module = importlib.import_module(info.name)
         except ImportError as err:
             if err.name in _OPTIONAL_DEPS:
-                continue  # extras leg covers this module
-            raise  # a real import bug must fail the test loudly
+                continue
+            raise
         for name, obj in inspect.getmembers(
             module, lambda o: inspect.isfunction(o) or inspect.isclass(o)
         ):

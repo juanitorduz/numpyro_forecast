@@ -141,8 +141,6 @@ class TestMain:
             (api_snapshot.REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         )
         assert snapshot["version"] == pyproject["project"]["version"]
-        # Every reference entry resolves against the working tree, so nothing is pruned
-        # (test_docs_reference.py guarantees the entries stay resolvable).
         assert set(snapshot["symbols"]) == set(
             api_snapshot.reference_entries(api_snapshot.CONFIG_PATH)
         )

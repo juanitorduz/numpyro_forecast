@@ -10,7 +10,6 @@ from numpyro_forecast.surgery import (
     slice_time,
 )
 
-# One representative elementwise instance per registered family, for validation.
 _REPRESENTATIVES: dict[type, dist.Distribution] = {
     dist.Normal: dist.Normal(loc=jnp.zeros((4, 1)), scale=1.0),
     dist.StudentT: dist.StudentT(df=4.0, loc=jnp.zeros((4, 1)), scale=1.0),
@@ -31,16 +30,11 @@ def test_registry_consistency() -> None:
     """
     slice_types = set(slice_time.registry)
     prefix_types = set(prefix_condition.registry)
-    # Elementwise families flow through the default; the only explicit dispatch
-    # shared by both slicers is Independent (plus the object default).
     assert slice_types == prefix_types, (
         f"slice_time and prefix_condition disagree on dispatched types: "
         f"{slice_types ^ prefix_types}"
     )
 
-    # Correlated families (any explicit slice/prefix dispatch beyond the
-    # structural Independent/object) must register all three surgeries so a
-    # model can center, split, and condition them.
     shift_types = set(shift_loc.registry)
     structural = {object, dist.Independent}
     for cls in (slice_types | prefix_types) - structural:

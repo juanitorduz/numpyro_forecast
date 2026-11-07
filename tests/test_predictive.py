@@ -112,8 +112,6 @@ def test_forecast_parallel_matches_serial() -> None:
 
 
 def test_forecast_parallel_matches_serial_batched() -> None:
-    # With batch_size fixed, only the within-chunk mapping changes (vmap vs
-    # lax.map), so the chunked-vmap path must match the chunked-serial path.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     kwargs = {"batch_size": 3}
@@ -351,9 +349,6 @@ def test_predict_in_sample_parallel_matches_serial() -> None:
     assert jnp.allclose(vmapped, serial, atol=1e-4)
 
 
-# --- P5: chunk indexing & compile discipline ----------------------------------
-
-
 def test_sample_axis_size_rejects_empty() -> None:
     with pytest.raises(ValueError, match="non-empty"):
         _sample_axis_size({})
@@ -386,7 +381,7 @@ def test_chunk_indices_wraps_final_block() -> None:
     assert [tuple(int(i) for i in block) for block in blocks] == [
         (0, 1, 2, 3),
         (4, 5, 6, 7),
-        (8, 9, 0, 1),  # the tail wraps around to re-use leading draws
+        (8, 9, 0, 1),
     ]
 
 
@@ -405,16 +400,13 @@ def test_chunked_draws_splits_wraps_and_truncates() -> None:
 
     posterior = {"x": jnp.arange(10.0)[:, None]}
     out = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
-    # 10 samples make 3 wrapped chunks of 4; the result is cut back to 10.
     assert out.shape == (10, 1)
     assert jnp.allclose(out, posterior["x"] * 2.0)
     assert [chunk.shape for _, chunk in calls] == [(4, 1), (4, 1), (4, 1)]
-    # The tail chunk wraps around to the leading draws (the old padding scheme,
-    # bit for bit, without the padded posterior copy).
     assert jnp.array_equal(calls[-1][1][:, 0], jnp.array([8.0, 9.0, 0.0, 1.0]))
     keys = [key for key, _ in calls] + [random.PRNGKey(0)]
     raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for k in keys]
-    assert len(set(raw)) == len(raw)  # per-chunk subkeys distinct, parent unused
+    assert len(set(raw)) == len(raw)
 
 
 @pytest.mark.parametrize("batch_size", [None, 10, 64])
@@ -436,7 +428,6 @@ def test_chunked_draws_unchunked_passthrough(batch_size: int | None) -> None:
 
 @pytest.mark.parametrize("num_samples", [1, 3, 4, 5, 12])
 def test_forecast_chunked_shapes_and_finite(num_samples: int) -> None:
-    # Sweep num_samples around batch_size b=4: {1, b-1, b, b+1, 3b}.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, num_samples)
     fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=4)
@@ -445,8 +436,6 @@ def test_forecast_chunked_shapes_and_finite(num_samples: int) -> None:
 
 
 def test_forecast_chunked_close_to_unchunked() -> None:
-    # Chunking changes the PRNG layout, so draws differ; the sample means still
-    # agree within Monte Carlo error (same distribution).
     model, data, guide, params = _fit_data()
     n = 400
     post = draw_posterior(random.PRNGKey(2), guide, params, n)
@@ -471,7 +460,6 @@ def test_single_compile_while_chunking(count_compilations) -> None:
     """
     model, data, guide, params = _fit_data()
     covariates = empty_covariates(36)
-    # Pre-build posteriors OUTSIDE the counted block (draw/JIT would compile).
     posteriors = [draw_posterior(random.PRNGKey(2), guide, params, n) for n in (5, 8, 12)]
     jax.block_until_ready(posteriors)
 
@@ -485,11 +473,8 @@ def test_single_compile_while_chunking(count_compilations) -> None:
             counts.append(tally.count)
         return counts
 
-    _sweep()  # warm-up: compiles the eager chunking helpers for every shape
+    _sweep()
     assert _sweep() == [1, 1, 1]
-
-
-# --- Issue #167: the drivers read the model as it is at call time --------------
 
 
 def _offset_level_model(settings: dict[str, float]) -> ForecastModel:
@@ -587,9 +572,6 @@ def test_handlers_around_a_driver_call_apply_after_an_earlier_compile() -> None:
     with numpyro.handlers.substitute(data=shift):
         shifted = forecast(random.PRNGKey(3), model, post, data, covariates)
     assert float(shifted.mean()) > float(plain.mean()) + 50.0
-
-
-# --- posteriors that carry forecast-horizon sites (issue #161) ----------------
 
 
 def _rw_decentered_model(covariates: Array, data: Array | None = None) -> None:
@@ -757,9 +739,6 @@ def test_forecast_draws_each_series_of_a_shared_predictor_inside_a_plate() -> No
     assert not np.allclose(np.asarray(draws[..., 0]), np.asarray(draws[..., 1]))
 
 
-# --- P6: host offloading (issue #64) ------------------------------------------
-
-
 def _cpu() -> jax.Device:
     return jax.devices("cpu")[0]
 
@@ -783,7 +762,7 @@ def test_chunked_draws_device_commits_result() -> None:
     posterior = {"x": jnp.arange(10.0)[:, None]}
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
     committed = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, _cpu())
-    assert isinstance(committed, jax.Array)  # a jax.Device target stays a jax.Array
+    assert isinstance(committed, jax.Array)
     assert committed.devices() == {_cpu()}
     assert jnp.array_equal(plain, committed)
 
@@ -807,14 +786,10 @@ def test_chunked_draws_transfers_each_chunk(monkeypatch: pytest.MonkeyPatch) -> 
     _chunked_draws(
         random.PRNGKey(0), lambda _key, post: jnp.asarray(post["x"]), posterior, 4, _cpu()
     )
-    # One transfer per chunk, then the stitched result: CPU-committed chunks are
-    # stitched through NumPy and committed back with a zero-copy device_put, so
-    # the last entry is a commit of host memory, not a fourth accelerator transfer.
     assert transfers == [(4, 1), (4, 1), (4, 1), (10, 1)]
 
 
 def test_forecast_device_bitwise_matches_no_device() -> None:
-    # device is a placement knob, never a draws knob.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
@@ -854,7 +829,6 @@ def test_forecast_device_string_alias() -> None:
 
 
 def test_forecast_unchunked_device_commits_result() -> None:
-    # The unchunked passthrough honors device too (single transfer of the result).
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
@@ -890,11 +864,8 @@ def test_single_compile_while_chunking_with_device(count_compilations, device: s
             counts.append(tally.count)
         return counts
 
-    _sweep()  # warm-up: compiles the eager chunking and transfer helpers
+    _sweep()
     assert _sweep() == [1, 1, 1]
-
-
-# --- P7: host offloading (``device="host"``: CPU device, NumPy fallback, explicit pinned)
 
 
 @pytest.mark.parametrize("device", ["host", "cpu"])
@@ -966,7 +937,7 @@ def test_is_host_resident_predicate(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _is_cpu_committed(on_cpu)
     assert not _is_cpu_committed(x)
     assert _is_host_resident(pinned)
-    assert not _is_host_resident(on_cpu)  # real CPU backend: nothing to keep off
+    assert not _is_host_resident(on_cpu)
     assert not _is_host_resident(x)
 
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
@@ -987,7 +958,7 @@ def test_leaf_view_stages_cpu_committed_leaves_as_numpy_under_accelerator_defaul
     """
     x = jnp.arange(6.0).reshape(3, 2)
     on_cpu = commit_host(x, "cpu")
-    assert leaf_view(on_cpu) is on_cpu  # real CPU backend: untouched
+    assert leaf_view(on_cpu) is on_cpu
 
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
     viewed = leaf_view(on_cpu)
@@ -1034,7 +1005,7 @@ def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu(
     """
     cpu = jax.devices("cpu")[0]
     rows = chunk_shape[0]
-    num_samples = 3 * rows - 2  # cut an overdraw so the slice path is covered too
+    num_samples = 3 * rows - 2
     chunks: list[Array | np.ndarray] = [
         commit_host(jnp.arange(float(np.prod(chunk_shape))).reshape(chunk_shape) + 10.0 * i, "cpu")
         for i in range(3)
@@ -1165,7 +1136,7 @@ def test_leaf_view_stages_pinned_leaves_as_numpy() -> None:
     x = jnp.arange(6.0).reshape(3, 2)
     hosted = jax.device_put(x, _host_sharding(x))
 
-    assert leaf_view(x) is x  # device-resident: untouched, not even copied
+    assert leaf_view(x) is x
     viewed = leaf_view(hosted)
     assert isinstance(viewed, np.ndarray)
     assert np.array_equal(viewed, np.asarray(x))
@@ -1187,7 +1158,7 @@ def test_leaf_view_passes_tracers_through() -> None:
         return jnp.sum(jnp.asarray(viewed))
 
     out = jax.vmap(probe)(jnp.ones((3, 4)))
-    assert seen == [True]  # the tracer itself, not a NumPy copy
+    assert seen == [True]
     assert np.array_equal(np.asarray(out), np.full((3,), 4.0))
 
 
@@ -1278,7 +1249,7 @@ def test_device_view_passes_tracers_through() -> None:
         return jnp.sum(jnp.asarray(viewed))
 
     out = jax.vmap(probe)(jnp.ones((3, 4)))
-    assert seen == [True]  # the tracer itself, not a converted copy
+    assert seen == [True]
     assert np.array_equal(np.asarray(out), np.full((3,), 4.0))
 
 
@@ -1304,7 +1275,6 @@ def test_chunked_draws_gathers_pinned_posterior_chunks_on_the_host() -> None:
     assert len(chunk_types) == 3
     assert all(issubclass(t, np.ndarray) for t in chunk_types), chunk_types
 
-    # The single-shot passthrough stages the posterior the same way.
     chunk_types.clear()
     _chunked_draws(random.PRNGKey(0), predict_fn, posterior, None)
     assert [issubclass(t, np.ndarray) for t in chunk_types] == [True]
@@ -1348,7 +1318,7 @@ def test_chunked_draws_cpu_device_is_host_resident_and_matches_values() -> None:
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
     hosted = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, jax.devices("cpu")[0])
     assert_host_resident(hosted)
-    assert hosted.shape == (10, 1)  # the 12 drawn rows are cut back to 10
+    assert hosted.shape == (10, 1)
     assert np.array_equal(np.asarray(plain), np.asarray(hosted))
 
 
@@ -1362,7 +1332,7 @@ def test_chunked_draws_numpy_sentinel_returns_numpy_and_matches_values() -> None
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
     hosted = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, "numpy")
     assert isinstance(hosted, np.ndarray)
-    assert hosted.shape == (10, 1)  # the 12 drawn rows are cut back to 10
+    assert hosted.shape == (10, 1)
     assert np.array_equal(np.asarray(plain), hosted)
 
 
@@ -1389,7 +1359,7 @@ def test_chunked_draws_numpy_transfers_each_chunk_via_device_get(
     _chunked_draws(
         random.PRNGKey(0), lambda _key, post: jnp.asarray(post["x"]), posterior, 4, "numpy"
     )
-    assert gets == [(4, 1), (4, 1), (4, 1)]  # np.concatenate is not a transfer
+    assert gets == [(4, 1), (4, 1), (4, 1)]
     assert not any(_is_cpu_target(d) or _is_pinned_target(d) for d in puts)
 
 
@@ -1453,7 +1423,6 @@ def test_chunked_draws_host_transfers_each_chunk(
         4,
         target,
     )
-    # One host copy per chunk, plus the single commit of the stitched result.
     assert transfers == [(4, 1), (4, 1), (4, 1), (10, 1)]
 
 
@@ -1477,14 +1446,13 @@ def test_draw_chunked_host_is_host_resident_and_matches_values() -> None:
 
     assert_host_resident(hosted)
     assert set(hosted) == {"a", "b"}
-    assert hosted["a"].shape == (7, 2)  # nine drawn rows cut back to seven
+    assert hosted["a"].shape == (7, 2)
     assert hosted["b"].shape == (7,)
     for name, leaf in plain.items():
         assert np.array_equal(np.asarray(leaf), np.asarray(hosted[name]))
 
 
 def test_forecast_host_bitwise_matches_cpu_and_default() -> None:
-    # "host" is a placement knob, never a draws knob.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
@@ -1618,8 +1586,6 @@ def test_cpu_fallback_warning_attributes_to_caller(monkeypatch: pytest.MonkeyPat
     matching = [r for r in records if "falls back to device='host'" in str(r.message)]
     assert [r.filename for r in matching] == [__file__]
     assert_numpy_host(hosted)
-    # The package prefix must be exactly the package directory: one level too high
-    # would skip the whole checkout (tests included) and misattribute the warning.
     assert WARNING_SKIP_PREFIXES[0] == os.path.dirname(numpyro_forecast.__file__)
 
 
@@ -1672,7 +1638,6 @@ def test_predict_in_sample_numpy_posterior_bitwise_matches_jax() -> None:
 
 
 def test_forecast_unchunked_host_is_host_resident() -> None:
-    # The unchunked passthrough honors "host" too (a single commit of the result).
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))

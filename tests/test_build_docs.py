@@ -20,7 +20,6 @@ import yaml
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "build_docs.py"
 
-# A valid 1x1 PNG, used as a stand-in for a stored matplotlib figure.
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQAB"
     "h6FO1AAAAABJRU5ErkJggg=="
@@ -118,8 +117,6 @@ class TestExtractThumbnail:
 
 
 _EXAMPLES = sorted((Path(__file__).resolve().parent.parent / "docs" / "examples").glob("*.ipynb"))
-# Landscape thumbnails keep the example cards the same height; the narrowest committed
-# thumbnail is 1.3 wide for 1 tall and the typical one is about 2 (``figsize=(12, 6)``).
 _MIN_THUMBNAIL_ASPECT = 1.25
 
 

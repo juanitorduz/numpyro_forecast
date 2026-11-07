@@ -43,6 +43,8 @@ For the tests, we use `pytest`. `make tests` runs the suite in parallel with pyt
 
 Do not add tests for notebook-specific claims: a test that compares the prose of one example notebook with its stored outputs or code cells (a number, a percentage, an interval name, a phrase) breaks on every re-execution and checks no package behavior. When you change a notebook, check its claims by hand against the stored outputs instead. The rules that apply to every notebook (`tests/test_docstring_markup.py`, `tests/test_build_docs.py`, `tests/test_examples.py`, `tests/test_notebook_hygiene.py`) stay.
 
+Test files carry no explanatory comments, full-line or trailing: a test says what it checks through its name and, when needed, its docstring. Keep only the directives tools read (`# ty: ignore[...]`, `# noqa`, `# pragma: no cover`, `# fmt: ...`).
+
 `README.md` is a pytest doctest file (`--doctest-glob`): every `>>>` example in it runs in the suite, so keep the examples self-contained, prompt-formatted and under 99 characters per line, and keep the blank line before each closing fence (without it pytest reads the fence as expected output). The README renders on three surfaces: GitHub, PyPI (`readme = "README.md"`) and the docs landing page (great-docs inlines it into `index.qmd`). Its figures live in `docs/images/` (extracted from the stored outputs of the example notebooks, under the 500 KB `check-added-large-files` limit) and are referenced by absolute `https://raw.githubusercontent.com/juanitorduz/numpyro_forecast/main/docs/images/<name>.png` URLs, because relative paths break on PyPI and on the landing page; they therefore 404 on a PR until it is merged. PyPI renders no math, so `$...$` in the README shows literally there.
 
 ## Docstrings

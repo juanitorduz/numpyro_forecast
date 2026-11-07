@@ -73,7 +73,7 @@ def test_host_pipeline_draw_predict_forecast_datatree(
     horizon = 6
     n = 16
     batch_size = 8
-    assert n > batch_size  # otherwise draw_posterior would take the unchunked path
+    assert n > batch_size
 
     transfers: list[tuple[int, ...]] = []
     real_device_put = jax.device_put
@@ -88,12 +88,10 @@ def test_host_pipeline_draw_predict_forecast_datatree(
     guide, params = svi_guide_params(t, num_steps=fast_svi["num_steps"])
     key_draw, key_in_sample, key_forecast, key_tree = random.split(random.PRNGKey(0), 4)
 
-    # Stage 1: draw the posterior, entirely on the host.
     posterior = draw_posterior(key_draw, guide, params, n, batch_size=batch_size, device="host")
     assert_host_resident(posterior)
     transfers.clear()
 
-    # Stage 2: in-sample posterior predictive, fed the host posterior from stage 1.
     covariates = empty_covariates(t)
     in_sample = predict_in_sample(
         key_in_sample, rw_model, posterior, covariates, batch_size=batch_size, device="host"
@@ -103,12 +101,9 @@ def test_host_pipeline_draw_predict_forecast_datatree(
     assert transfers == [(batch_size, t, 1), (batch_size, t, 1), (n, t, 1)]
     transfers.clear()
 
-    # Same deterministic recipe svi_guide_params uses internally, so `data` matches
-    # what the guide was actually fit on.
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
     covariates_full = empty_covariates(t + horizon)
 
-    # Stage 3: forecast, again fed the host posterior.
     forecasts = forecast(
         key_forecast,
         rw_model,
@@ -122,10 +117,6 @@ def test_host_pipeline_draw_predict_forecast_datatree(
     assert forecasts.shape == (n, horizon, 1)
     assert transfers == [(batch_size, horizon, 1), (batch_size, horizon, 1), (n, horizon, 1)]
 
-    # Stage 4: to_datatree, once more fed the host posterior; covariates_full extends
-    # beyond data so it exercises to_datatree's internal forecast() call too (default
-    # device="host"), producing the predictions groups alongside the
-    # in-sample ones.
     tree = to_datatree(key_tree, rw_model, posterior, data, covariates_full)
     assert set(tree.children) == {
         "posterior",
@@ -185,7 +176,7 @@ def test_host_pipeline_without_cpu_backend_is_numpy_end_to_end(
             device="host",
         )
         assert_numpy_host(in_sample)
-        assert gets == [(batch_size, t, 1), (batch_size, t, 1)]  # np.concatenate is no transfer
+        assert gets == [(batch_size, t, 1), (batch_size, t, 1)]
         gets.clear()
         data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
         forecasts = forecast(

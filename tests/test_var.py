@@ -42,7 +42,6 @@ def _lower_tril(k: int) -> Array:
 
 def test_var_mean_matches_hand_computed_var2() -> None:
     phi, lags, c = _phi(), _lags(), jnp.array([0.5, -0.5])
-    # lags[-1] is y_{t-1} and pairs with Phi_1 = phi[0]; lags[-2] is y_{t-2} and pairs with phi[1].
     expected = c + phi[0] @ lags[-1] + phi[1] @ lags[-2]
     assert jnp.allclose(var_mean(phi, lags, c), expected, atol=1e-6)
 
@@ -246,7 +245,7 @@ def test_companion_matrix_block_layout() -> None:
 
 def test_companion_matrix_state_is_the_reversed_window() -> None:
     phi, lags = _phi(), _lags()
-    state = lags[::-1].reshape(-1)  # most recent first
+    state = lags[::-1].reshape(-1)
     assert jnp.allclose((companion_matrix(phi) @ state)[:K], var_mean(phi, lags), atol=1e-6)
 
 
@@ -272,7 +271,7 @@ def test_impulse_response_matches_a_unit_shock_simulation() -> None:
     psi = impulse_response(phi, horizon)
     for j in range(K):
         window = [jnp.zeros(K)] * P
-        y_t = jnp.eye(K)[j]  # a unit shock to variable j at step 0, no intercept
+        y_t = jnp.eye(K)[j]
         responses = [y_t]
         for _ in range(horizon):
             window = [*window[1:], y_t]
