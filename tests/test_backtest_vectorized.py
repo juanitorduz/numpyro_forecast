@@ -809,16 +809,16 @@ def _two_statistics(pred: Array, truth: Array) -> tuple[Array, Array]:
             {"bad": crps_empirical},
             10,
             ValueError,
-            r"metric 'bad' returned shape \(5, 1\) and dtype float32",
+            rf"metric 'bad' returned shape \(5, 1\) and dtype {jnp.result_type(float)}",
         ),
         (
             {**DEFAULT_METRICS, "bad": crps_empirical},
             10,
             ValueError,
-            r"metric 'bad' returned shape \(5, 1\) and dtype float32",
+            rf"metric 'bad' returned shape \(5, 1\) and dtype {jnp.result_type(float)}",
         ),
         ({"bad": _complex_mae}, 10, ValueError, r"metric 'bad' returned shape \(\) and dtype "),
-        ({"two": _two_statistics}, 10, ValueError, r"metric 'two' returned a tuple of traced"),
+        ({"two": _two_statistics}, 10, ValueError, r"metric 'two' returned a tuple of 2 values"),
         ({"host_mae": _host_float_mae}, 10, VectorizedMetricError, "pure JAX functions"),
         (
             {"crps": jax.jit(lambda p, t: eval_crps(p, t))},
@@ -868,11 +868,24 @@ def test_metric_errors_raise_before_the_fit(
 def test_metric_trace_before_the_fit_compiles_nothing(
     count_compilations: Callable[[], AbstractContextManager[types.SimpleNamespace]],
 ) -> None:
-    """``_require_scorable_metrics`` runs ``jax.eval_shape``: no computation, no compile."""
-    truth = jnp.zeros((4, TEST, 1))
+    """``_require_scorable_metrics`` runs ``jax.eval_shape``: tracers in, no compile.
+
+    The compile count alone cannot tell an abstract trace from eager scoring on
+    warm shapes (a cached compile counts zero), so the metric also records what
+    it received: a tracer in the default float dtype, the dtype the scoring
+    after the fit sees through ``float_view``.
+    """
+    seen: list[tuple[bool, jnp.dtype]] = []
+
+    def recording_mae(pred: Array, truth: Array) -> Array:
+        seen.append((isinstance(pred, jax.core.Tracer), pred.dtype))
+        return jnp.abs(pred - truth).mean()
+
+    truth = jnp.zeros((4, TEST, 1), jnp.float16)
     with count_compilations() as tally:
-        _require_scorable_metrics(DEFAULT_METRICS, 10, truth)
+        _require_scorable_metrics({**DEFAULT_METRICS, "mae": recording_mae}, 10, truth)
     assert tally.count == 0
+    assert seen == [(True, jnp.result_type(float))]
 
 
 def test_bool_and_integer_metrics_are_cast_to_float() -> None:

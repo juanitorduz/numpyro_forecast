@@ -456,9 +456,9 @@ def test_scalar_metric_value_casts_bool_and_integer_to_default_float(
 @pytest.mark.parametrize(
     ("value", "shape", "dtype"),
     [
-        (jnp.zeros((4, 1)), r"\(4, 1\)", "float32"),
-        (jnp.zeros(1), r"\(1,\)", "float32"),
-        (jnp.asarray(1.0 + 2.0j), r"\(\)", "complex64"),
+        (jnp.zeros((4, 1)), r"\(4, 1\)", str(jnp.result_type(float))),
+        (jnp.zeros(1), r"\(1,\)", str(jnp.result_type(float))),
+        (jnp.asarray(1.0 + 2.0j), r"\(\)", str(jnp.result_type(complex))),
         (random.key(0), r"\(\)", r"key<\w+>"),
         (None, r"\(\)", "object"),
         ("0.5", r"\(\)", "<U3"),
@@ -474,18 +474,43 @@ def test_scalar_metric_value_rejects_non_scalar_or_non_real(
         scalar_metric_value("bad", value)
 
 
+@pytest.mark.parametrize(
+    "metric",
+    [lambda p, t: (p, t), lambda p, t: (p.mean(0), t), lambda p, t: [p.mean(), t.mean()]],
+    ids=["pred_truth_pair", "same_shape_pair", "list_of_scalars"],
+)
+def test_evaluate_forecast_rejects_a_container_result_by_name(metric: Metric) -> None:
+    """A metric that returns a tuple or list is a bad result, in the message that names it.
+
+    The ragged ``(pred, truth)`` pair would otherwise surface NumPy's own error, and a
+    same-shape pair would be copied to the host before being rejected.
+    """
+    pred, truth = random.normal(random.PRNGKey(0), (50, 4, 1)), jnp.zeros((4, 1))
+    with pytest.raises(ValueError, match=r"metric 'two' returned a (tuple|list) of 2 values"):
+        evaluate_forecast(pred, truth, metrics={"two": metric})
+
+
 def test_scalar_metric_value_rejects_a_tuple_of_traced_values() -> None:
-    """A metric that returns ``(a, b)`` is a bad result in every driver, not a host conversion."""
+    """Under ``vmap`` the same tuple result raises the same error, not a host conversion."""
 
     def two_statistics(pred: Array, truth: Array) -> tuple[Array, Array]:
         return pred.mean(), truth.mean()
 
     pred, truth = jnp.zeros((3, 20, 4, 1)), jnp.zeros((3, 4, 1))
-    metrics = {"two": two_statistics}
-    with pytest.raises(ValueError, match=r"metric 'two' returned shape \(2,\)"):
-        evaluate_forecast(pred[0], truth[0], metrics=metrics)  # ty: ignore[invalid-argument-type]
-    with pytest.raises(ValueError, match=r"metric 'two' returned a tuple of traced values"):
+    with pytest.raises(ValueError, match=r"metric 'two' returned a tuple of 2 values"):
         jax.vmap(lambda p, t: scalar_metric_value("two", two_statistics(p, t)))(pred, truth)
+
+
+def test_evaluate_forecast_does_not_demote_a_result_next_to_a_bfloat16_metric() -> None:
+    """The stack joins the result dtypes, so a weak float32 result keeps its precision."""
+    pred, truth = random.normal(random.PRNGKey(0), (50, 4, 1)), jnp.zeros((4, 1))
+    metrics = {
+        "const": lambda p, t: jnp.asarray(0.1),
+        "half": lambda p, t: jnp.abs(p - t).mean().astype(jnp.bfloat16),
+    }
+    report = evaluate_forecast(pred, truth, metrics=metrics)
+    assert report["const"] == pytest.approx(0.1, rel=1e-6)
+    assert report["half"] == float(metrics["half"](pred, truth))
 
 
 def test_scalar_metric_value_reads_static_shapes_of_tracers() -> None:
@@ -525,7 +550,10 @@ def test_evaluate_forecast_converts_bool_and_integer_metrics_to_float(
 @pytest.mark.parametrize("with_defaults", [False, True], ids=["alone", "with_defaults"])
 @pytest.mark.parametrize(
     ("metric", "shape", "dtype"),
-    [(crps_empirical, r"\(4, 1\)", "float32"), (_complex_mae, r"\(\)", "complex64")],
+    [
+        (crps_empirical, r"\(4, 1\)", str(jnp.result_type(float))),
+        (_complex_mae, r"\(\)", str(jnp.result_type(complex))),
+    ],
     ids=["per_cell", "complex"],
 )
 def test_evaluate_forecast_rejects_a_metric_that_breaks_the_contract(

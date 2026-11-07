@@ -402,8 +402,11 @@ def evaluate_forecast(
     # Check each result on its own (shape and dtype are static, so no device sync), so
     # the outcome for one metric never depends on the others, then pull the whole batch
     # across the device boundary in a single host transfer instead of one per metric.
+    # The stack uses the join of the result dtypes: jnp.stack alone would demote a
+    # weak float32 result (jnp.asarray(0.1)) to bfloat16 next to a bfloat16 metric.
     values = [scalar_metric_value(name, fn(pred_arr, truth_arr)) for name, fn in metrics.items()]
-    return dict(zip(metrics, jnp.stack(values).tolist(), strict=True))
+    dtype = jnp.result_type(*(value.dtype for value in values))
+    return dict(zip(metrics, jnp.stack(values, dtype=dtype).tolist(), strict=True))
 
 
 @dataclass(frozen=True)
@@ -673,8 +676,13 @@ def _slice_window(
     return train_data, train_covariates, full_covariates, truth
 
 
-_TWO_SAMPLE_METRICS: tuple[Callable[..., Array], ...] = (eval_crps, crps_empirical)
-"""Metric kernels that need at least 2 forecast samples (the empirical CRPS)."""
+_TWO_SAMPLE_METRICS: tuple[Callable[..., Array], ...] = (eval_crps,)
+"""Metric kernels that need at least 2 forecast samples (the empirical CRPS).
+
+`~~numpyro_forecast.metrics.crps_empirical()` is not listed: every driver rejects
+its per-cell result (see `scalar_metric_value()`), so that error, not the
+``num_samples`` one, is the right first message for it.
+"""
 
 
 def _require_num_samples_for_metrics(num_samples: int, metrics: Mapping[str, Metric]) -> None:
@@ -1172,11 +1180,13 @@ def _require_scorable_metrics(
     the scoring after the fit (a result that is not 0-d or not real, a host
     conversion, a CRPS wrapped in a ``lambda`` with ``num_samples=1``) fails
     here first, with the same error. The forecast dtype is known only after
-    the fit, so the draws are traced with the floating dtype of ``truth``; the
-    scoring after the fit checks the real forecasts again through the same
-    `_vmapped_metrics()`. The trace calls each metric once more, on tracers,
-    before the fit: a metric with a side effect (a counter, a log line) sees
-    two calls per `backtest_vectorized()` run.
+    the fit, so the draws are traced in the default float dtype, which is what
+    `_vmapped_metrics()` sees after its `float_view()` cast whatever the model
+    draws (integer counts, float data under x64); the scoring after the fit
+    checks the real forecasts again through the same `_vmapped_metrics()`. The
+    trace calls each metric once more, on tracers, before the fit: a metric
+    with a side effect (a counter, a log line) sees two calls per
+    `backtest_vectorized()` run.
 
     Parameters
     ----------
@@ -1196,7 +1206,7 @@ def _require_scorable_metrics(
         If a metric is not a pure JAX function under ``vmap``.
     """
     pred_spec = jax.ShapeDtypeStruct(
-        (truth.shape[0], num_samples, *truth.shape[1:]), jnp.result_type(truth.dtype, float)
+        (truth.shape[0], num_samples, *truth.shape[1:]), jnp.result_type(float)
     )
     jax.eval_shape(partial(_vmapped_metrics, metrics), pred_spec, truth)
 
