@@ -94,6 +94,10 @@
       "dev",
       "0.4.0"
     ],
+    "docs/examples/m5_hierarchical_state_space.html": [
+      "dev",
+      "0.4.0"
+    ],
     "docs/examples/tsb.html": [
       "dev",
       "0.4.0"
