@@ -1937,8 +1937,6 @@ def test_predictions_to_datatree_integer_draws_with_float_observed() -> None:
 
 
 def test_predictions_to_datatree_rejects_bool_and_complex_arrays() -> None:
-    # Real accepts integer and floating arrays only: a bool mask or a complex array is not a
-    # draw. Every case below has the right shape, so only the dtype check can raise.
     predictions, x, labels = _prediction_draws()
     with pytest.raises(TypeCheckError):
         predictions_to_datatree(predictions > 1.0, x, labels)
