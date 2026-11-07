@@ -676,6 +676,23 @@ def test_filter_and_smoother_add_the_same_log_density(
     assert jnp.allclose(filtered, smoothed, rtol=1e-5)
 
 
+def test_a_filter_posterior_exports_under_the_smoother() -> None:
+    """The ``f_filtered_states_*`` keys of a Filter fit name no site of the model under the
+    Smoother, so ``to_datatree`` keeps them in the ``posterior`` group (issue #277).
+    """
+    with Filter(filter_config=KFConfig(filter_source="cuthbert")):
+        fitted = Predictive(local_level, posterior_samples=_repeat(PARAMS, 4))(
+            random.PRNGKey(4), TRAIN, TRAIN
+        )
+    posterior = {**_repeat(PARAMS, 4), **fitted}
+    filtered = {name for name in posterior if name.startswith("f_filtered_states")}
+    assert filtered
+    with smoother:
+        tree = to_datatree(random.PRNGKey(3), local_level, posterior, TRAIN, TRAIN)
+    assert filtered <= set(tree["posterior"].data_vars)
+    assert tree["posterior_predictive"]["obs"].shape == (1, 4, T_OBS, 1)
+
+
 def test_svi_fit_and_draw_posterior_run_through_the_block() -> None:
     """SVI with an AutoGuide fits through the block, and ``draw_posterior`` needs the handler.
 
