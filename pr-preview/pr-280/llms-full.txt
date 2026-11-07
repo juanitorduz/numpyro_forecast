@@ -2339,7 +2339,9 @@ posterior
     ``trend/drift``), or does so without a trailing ``"_haar"`` or
     ``"_dct"`` (the posterior of a
     `~~numpyro_forecast.reparam.time_reparam()` fit that holds
-    ``drift_haar`` but no ``drift``, passed with the plain model). Any
+    ``drift_haar`` but no ``drift``, passed with the plain model) or
+    without a trailing ``"_decentered"`` (a fit whose innovations use
+    ``LocScaleReparam``, passed with a model that does not). Any
     other key that matches no site, such as ``_auto_latent`` from
     ``Predictive`` over an ``AutoContinuous`` guide or a derived quantity
     you add, is stored in the ``posterior`` group and changes no draw.
