@@ -162,10 +162,10 @@ def shift_loc(noise_dist: dist.Distribution, loc: Array) -> dist.Distribution:
     ``(*batch, time)`` layout above with the series as time, for example the
     noise ``dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)`` with a
     ``(duration, n)`` predictor. `slice_time()` and `prefix_condition()` then
-    slice the series, and the shapes cannot tell the two layouts apart when
-    the panel has ``time`` series. `~~numpyro_forecast.models.predict()`
-    scores it in training but raises
-    `~~numpyro_forecast.exceptions.MVNLayoutError` when it forecasts.
+    slice the series: forecasting fails with a broadcasting error, or with a
+    forecast of the wrong shape when the panel has as many series as time
+    steps. `~~numpyro_forecast.models.predict()` scores it in training but
+    raises `~~numpyro_forecast.exceptions.MVNLayoutError` when it forecasts.
 
     Parameters
     ----------

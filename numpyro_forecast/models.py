@@ -1054,11 +1054,12 @@ def _require_mvn_over_time(full_dist: dist.Distribution) -> None:
         f"observation axis of size {base.event_shape[-1]}, independent over time): "
         "slice_time() and prefix_condition() read a MultivariateNormal event as time. "
         "The model still trains and predict_in_sample() still draws from it. To forecast "
-        'it, write the sites in the model: sample "obs" from '
+        'it, replace the predict call with these sites: sample "obs" from '
         "dist.MultivariateNormal(mu[..., : h.t_obs, :], cov) with obs=h.data and, when "
         'h.future > 0, sample "obs_future" from '
         "dist.MultivariateNormal(mu[..., h.t_obs :, :], cov) and record it with "
-        'numpyro.deterministic("forecast", ...). Slice a time-varying cov the same way.'
+        'numpyro.deterministic("forecast", ...). Slice a time-varying cov along its time '
+        "axis too, cov[..., : h.t_obs, :, :]."
     )
     raise MVNLayoutError(msg)
 
@@ -1150,8 +1151,8 @@ def predict(
         over time, for example ``lambda mu: dist.MultivariateNormal(mu, cov)``
         or the noise ``dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)``
         with a ``(duration, n)`` predictor. The time-axis surgery reads the
-        event as time. Write the ``"obs"``, ``"obs_future"`` and
-        ``"forecast"`` sites in the model instead. Also raised by
+        event as time. Replace the ``predict()`` call with ``"obs"``,
+        ``"obs_future"`` and ``"forecast"`` sites in the model. Also raised by
         `~~numpyro_forecast.surgery.shift_loc()` for MVN noise with an
         unsupported layout.
     """

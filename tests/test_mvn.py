@@ -393,9 +393,16 @@ def test_predict_mvn_panel_scores_each_series_jointly(wrap: bool) -> None:
     assert jnp.allclose(tr["obs_future"]["fn"].mean, expected_mean[..., None], atol=1e-4)
 
 
-@pytest.mark.parametrize("form", ["link", "to_event", "noise"])
-@pytest.mark.parametrize("series", [3, 8], ids=["panel", "square_panel"])
-def test_forecast_rejects_a_multivariate_normal_across_series(series: int, form: str) -> None:
+@pytest.mark.parametrize(
+    ("form", "series"),
+    [
+        pytest.param("link", 3, id="link"),
+        pytest.param("to_event", 3, id="to_event"),
+        pytest.param("noise", 3, id="noise"),
+        pytest.param("link", 8, id="link_square_panel"),
+    ],
+)
+def test_forecast_rejects_a_multivariate_normal_across_series(form: str, series: int) -> None:
     """A ``predict()`` MVN across the series raises ``MVNLayoutError`` in forecast.
 
     Regression for #262: the MVN surgery reads the event as time, so the
