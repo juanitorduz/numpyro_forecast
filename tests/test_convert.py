@@ -118,10 +118,8 @@ def test_mcmc_chain_reshape_roundtrip() -> None:
     """The (num_samples,...) -> (chain, draw, ...) reshape matches group_by_chain."""
     posterior, data, covariates = _mcmc_posterior(num_chains=2)
     tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
-    reshaped = np.asarray(tree["posterior"]["sigma"])  # (chain, draw)
-    flat = np.asarray(posterior["sigma"])  # (num_samples,)
-    # get_samples(group_by_chain=False) concatenates chains in order, so a plain
-    # reshape recovers the per-chain layout.
+    reshaped = np.asarray(tree["posterior"]["sigma"])
+    flat = np.asarray(posterior["sigma"])
     np.testing.assert_allclose(reshaped.reshape(-1), flat, rtol=1e-6)
     assert reshaped.shape == (2, flat.shape[0] // 2)
 
@@ -179,7 +177,6 @@ def test_add_forecast_groups_adds_groups_and_time_continuation() -> None:
     times = out["predictions"].coords["time"].values
     np.testing.assert_array_equal(times, np.arange(n, n + 5))
     assert out["predictions"]["obs"].dims == ("chain", "draw", "time", "obs_dim")
-    # The original tree is untouched.
     assert "predictions" not in tree.children
 
 
@@ -245,8 +242,6 @@ def test_to_datatree_forecast_covariates_add_prediction_groups() -> None:
     assert "predictions" in tree.children
     assert "predictions_constant_data" in tree.children
     np.testing.assert_array_equal(tree["predictions"].coords["time"].values, np.arange(n, n + 5))
-    # constant_data holds only the in-sample slice; the future rows live in
-    # predictions_constant_data.
     assert tree["constant_data"].sizes["time"] == n
     assert tree["predictions_constant_data"].sizes["time"] == 5
 
@@ -729,7 +724,6 @@ def test_require_no_slash_in_site_names_lists_every_offending_key(
     assert "divider='_'" in message
     assert "the model and the posterior must change together" in message
     assert "from the prior with no error" in message
-    # Scoping the whole model renames "obs" too, which the drivers read by name.
     assert "keep predict outside every scope" in message
 
 
@@ -811,8 +805,6 @@ def test_to_datatree_scoped_latent_exports_with_the_advice_of_the_error() -> Non
     np.testing.assert_array_equal(
         good, predict_in_sample(key, _scoped_trend_model("/"), posterior, covariates)
     )
-    # Two prior draws agree too (same seed, same site order): tie the draws to
-    # the posterior through the Normal(0.0, 0.1) observation noise.
     np.testing.assert_allclose(good, jnp.cumsum(posterior["trend/drift"], axis=-2), atol=0.5)
     tree = to_datatree(key, _scoped_trend_model("_"), renamed, data, covariates)
     assert set(tree["posterior"].data_vars) == {"trend_drift"}
@@ -1319,9 +1311,6 @@ def test_add_forecast_groups_inherited_dims_reject_wrong_ndim() -> None:
         add_forecast_groups(tree, fc, future_covariates[n:])
 
 
-# --- batched (*batch, time, obs) data (issue #172) --------------------------
-
-
 def _panel_body(h: Horizon, covariates: Array) -> None:
     """A model whose predictor takes the ``(batch, time, obs)`` layout of ``covariates``."""
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 0.5))
@@ -1612,9 +1601,7 @@ def test_add_forecast_groups_squeezed_observed_data_takes_default_names() -> Non
     ("covariate_dims", "coords", "width"),
     [
         pytest.param(_LEVEL_COVARIATE_DIMS, _LEVEL_COORDS, 2, id="named-labels"),
-        # The in-sample labels of a time axis named "step" must not reach the forecast.
         pytest.param(["covariate", "step", "obs_dim"], _LEVEL_COORDS, 2, id="time-named-step"),
-        # One covariate column for both series: 'obs_dim' has 2 labels on obs, 1 on covariates.
         pytest.param(
             _LEVEL_COVARIATE_DIMS, {"covariate": ["sales", "availability"]}, 1, id="broadcast"
         ),
@@ -1664,7 +1651,6 @@ def test_add_forecast_groups_keeps_the_posterior_draw_labels(
     posterior = {"level": jnp.arange(20, dtype=jnp.float32)}
     covariates = jnp.ones((2, 6, 2))
     subset = _level_tree(posterior, covariates[:, :4], num_chains=2).isel(selection)
-    # A C-order flatten of (chain, draw) is the order of stack(sample=("chain", "draw")).
     subset_level = np.asarray(subset["posterior"].dataset["level"]).reshape(-1)
     fc = forecast(
         random.PRNGKey(1), _level_model, {"level": subset_level}, jnp.ones((4, 2)), covariates
@@ -1708,7 +1694,6 @@ def test_to_datatree_forecast_groups_via_dict_to_dataset(monkeypatch: pytest.Mon
     to_datatree(
         random.PRNGKey(2), _model(), posterior, data, empty_covariates(n + 2), num_chains=2
     )
-    # The four in-sample groups plus predictions and predictions_constant_data.
     assert calls["count"] == 6
 
 
@@ -1724,7 +1709,6 @@ def test_all_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(arviz_base, "dict_to_dataset", spy)
     posterior, data, covariates = _mcmc_posterior()
     to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
-    # posterior + posterior_predictive + observed_data + constant_data.
     assert calls["count"] == 4
 
 
@@ -1854,9 +1838,6 @@ def test_to_datatree_deterministic_given_key() -> None:
     )
 
 
-# --- batch_size (issue #64) ----------------------------------------
-
-
 def _svi_posterior_with_horizon(
     num_draws: int, horizon: int = 5
 ) -> tuple[dict[str, Array], Array, Array]:
@@ -1975,7 +1956,6 @@ def test_to_datatree_forwards_device(monkeypatch: pytest.MonkeyPatch, device: st
             device=None,
         )
     else:
-        # The default must forward "host", so device is deliberately omitted.
         to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, batch_size=4)
     expected = None if device is None else jax.devices("cpu")[0]
     assert captured["predict_in_sample"] == expected
@@ -2108,8 +2088,6 @@ def test_predictions_to_datatree_custom_group() -> None:
 
 
 def test_predictions_to_datatree_default_observed_is_zeros() -> None:
-    # plot_lm requires the observed_data group even with observed_scatter disabled,
-    # so the default is a zeros placeholder rather than omitting the group.
     predictions, x, labels = _prediction_draws()
     tree = predictions_to_datatree(predictions, x, labels)
     np.testing.assert_array_equal(
