@@ -47,8 +47,7 @@ def test_version() -> None:
 
 
 def test_public_api_is_importable() -> None:
-    # The curated top-level surface re-exported in ``__init__``.
-    assert DEFAULT_METRICS  # the metrics mapping, a dict (unhashable, kept out of the set below)
+    assert DEFAULT_METRICS
     exported = {
         Advance,
         BacktestResult,

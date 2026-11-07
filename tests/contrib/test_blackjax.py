@@ -84,7 +84,6 @@ def test_blackjax_nuts_recovers_normal_normal_posterior() -> None:
     )
     mcmc.run(random.PRNGKey(1), covariates, data)
     posterior_mean = float(mcmc.get_samples()["mu"].mean())
-    # Posterior mean ~ sample mean with the near-flat prior; loose MC tolerance.
     assert abs(posterior_mean - float(data.mean())) < 0.1
 
 
@@ -131,9 +130,6 @@ def test_blackjax_mclmc_forecast_finite_and_competitive() -> None:
     mclmc_mcmc.run(random.PRNGKey(1), train_covariates, data)
     mclmc_post = mclmc_mcmc.get_samples()
 
-    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
-    # no draw_posterior step (that's guide-based only); both fits already hold
-    # exactly the 200 draws requested above.
     nuts_fc = forecast(random.PRNGKey(3), model, nuts_post, data, forecast_covariates)
     mclmc_fc = forecast(random.PRNGKey(3), model, mclmc_post, data, forecast_covariates)
 
@@ -289,9 +285,6 @@ def test_blackjax_custom_kernel_chains_step_with_their_own_params() -> None:
     np.testing.assert_allclose(steps, [[1.0, 1.0], [100.0, 100.0]], rtol=1e-5)
 
 
-# --- Per-chain tuning and re-runs on new data (#170) ---------------------------
-
-
 def mean_scale_model(covariates: Array, data: Array | None = None) -> None:
     """Constant-level model with an unknown noise scale (two sites, as MCLMC needs)."""
     h = Horizon.from_data(covariates, data)
@@ -353,9 +346,6 @@ def test_blackjax_jit_model_args_rerun_samples_new_data(kernel_name: str) -> Non
     )
     fresh.run(random.PRNGKey(2), cov, data_b)
     np.testing.assert_allclose(mcmc.get_samples()["mu"], fresh.get_samples()["mu"], rtol=1e-5)
-
-
-# --- Spec-required failure-mode pins (replacing the old fit_mcmc-level checks) ----
 
 
 def test_blackjax_kernel_vectorized_chain_method_raises_under_batched_rng() -> None:
@@ -428,7 +418,6 @@ def test_blackjax_api_canaries() -> None:
     """Pin the exact BlackJAX symbols the adapters rely on (risk K1)."""
     _api_canary("blackjax", ["nuts", "window_adaptation", "mclmc", "mclmc_find_L_and_step_size"])
     _api_canary("blackjax.mcmc.mclmc", ["init", "build_kernel"])
-    # The stable-sampler patch replaces this exact symbol in both namespaces.
     _api_canary("blackjax.optimizers.lbfgs", ["bfgs_sample", "minimize_lbfgs"])
     _api_canary("blackjax.vi.pathfinder", ["bfgs_sample"])
 
@@ -457,9 +446,6 @@ def test_blackjax_mclmc_tuning_signature_canary() -> None:
     assert "mclmc_kernel" in tune_params
 
 
-# --- Pathfinder (P11) --------------------------------------------------------
-
-
 def test_pathfinder_approximate_return_structure_canary() -> None:
     """Pin the ``approximate`` ELBO path and ``sample`` arity (risk K1)."""
     import blackjax
@@ -475,7 +461,7 @@ def test_pathfinder_approximate_return_structure_canary() -> None:
     )
     out = blackjax.vi.pathfinder.sample(random.PRNGKey(1), state, 5)
     assert isinstance(out, tuple)
-    assert len(out) == 2  # (samples, log_weights)
+    assert len(out) == 2
 
 
 def test_pathfinder_constrained_support() -> None:
@@ -592,7 +578,6 @@ def test_pathfinder_fit_pickle_round_trip() -> None:
     restored = pickle.loads(pickle.dumps(fit))  # noqa: S301 - round-trip of our own data
     assert isinstance(restored, PathfinderFit)
     assert restored.elbo == fit.elbo
-    # The restored fit still draws a valid constrained posterior.
     post = pathfinder_samples(random.PRNGKey(2), restored, 50)
     assert bool(jnp.all(post["sigma"] > 0.0))
 
@@ -614,7 +599,7 @@ def test_stable_bfgs_sample_matches_dense_gaussian_low_dim() -> None:
     alpha = random.uniform(k1, (dim,), minval=0.5, maxval=1.5)
     beta = 0.3 * random.normal(k2, (dim, rank))
     core = 0.3 * random.normal(k3, (rank, rank))
-    gamma = core @ core.T  # PSD keeps both Sigma and I + R @ gamma @ R.T valid
+    gamma = core @ core.T
     position = random.normal(k4, (dim,))
     grad_position = jnp.zeros(dim)
 
@@ -637,7 +622,7 @@ def test_stable_bfgs_sample_finite_beyond_float_underflow() -> None:
     alpha = jnp.full((dim,), 1e-3)
     beta = 1e-3 * random.normal(random.PRNGKey(0), (dim, rank))
     gamma = 0.1 * jnp.eye(rank)
-    assert bool(jnp.isneginf(jnp.log(jnp.prod(alpha))))  # the upstream failure mode
+    assert bool(jnp.isneginf(jnp.log(jnp.prod(alpha))))
 
     _phi, logq = _stable_bfgs_sample(
         random.PRNGKey(1), 20, jnp.zeros(dim), jnp.zeros(dim), alpha, beta, gamma
@@ -701,10 +686,6 @@ def test_fit_pathfinder_maxiter_passthrough(monkeypatch: pytest.MonkeyPatch) -> 
     assert captured["maxiter"] == 17
 
 
-# --- Multi-path Pathfinder ------------------------------------------------
-
-# Shared cheap settings for the multipath tests below: a short random walk and
-# the smallest num_paths/num_elbo_samples/maxiter that still exercise the API.
 _MULTIPATH_T = 24
 _MULTIPATH_NUM_PATHS = 2
 _MULTIPATH_NUM_ELBO_SAMPLES = 50
@@ -850,7 +831,6 @@ def test_multipathfinder_samples_elbo_exceeds_pool_size(
     assert bool(jnp.all(post["drift_scale"] > 0.0))
     for leaf in post.values():
         assert bool(jnp.all(jnp.isfinite(leaf)))
-    # Fresh draws: every one of the 500 is distinct, unlike pool resampling.
     assert len(np.unique(np.asarray(post["drift"]), axis=0)) == num_samples
 
 
@@ -927,7 +907,6 @@ def test_multipathfinder_samples_invalid_resample_raises(
             10,
             resample="nope",  # ty: ignore[invalid-argument-type]
         )
-    # With the checks disabled (``JAXTYPING_DISABLE=1``) the explicit guard still rejects it.
     unchecked = inspect.unwrap(multipathfinder_samples)
     with pytest.raises(ValueError, match="resample must be one of"):
         unchecked(random.PRNGKey(2), multipathfinder_fit, 10, resample="nope")
@@ -949,7 +928,6 @@ def test_multipathfinder_forecast_composes(multipathfinder_fit: MultiPathfinderF
 def test_multipathfinder_fit_pickle_round_trip(multipathfinder_fit: MultiPathfinderFit) -> None:
     restored = pickle.loads(pickle.dumps(multipathfinder_fit))  # noqa: S301 - our own data
     assert isinstance(restored, MultiPathfinderFit)
-    # The restored fit still resamples a valid constrained posterior.
     post = multipathfinder_samples(random.PRNGKey(5), restored, 50)
     assert bool(jnp.all(post["sigma"] > 0.0))
     assert bool(jnp.all(post["drift_scale"] > 0.0))
@@ -1112,9 +1090,6 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
             num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
             maxiter=_MULTIPATH_MAXITER,
         )
-    # Both fit-time warnings point at this call, not at the type-checking wrapper.
-    # Only the package's own warnings are checked, so an unrelated jax or blackjax
-    # DeprecationWarning cannot break the assertion.
     fit_warnings = [
         w
         for w in record

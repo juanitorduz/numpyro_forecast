@@ -57,9 +57,6 @@ def _fit_probe(
 ) -> tuple[AutoNormal, dict[str, Array]]:
     guide = guide_cls(_model)
 
-    # K11: the first init of an AutoGuide caches its setup on the instance, so
-    # a traced first init leaves tracers on it. Each window therefore sets up
-    # a copy of the guide; the caller's instance is never set up.
     def fit_one(key: Array, d: Array, c: Array) -> tuple[dict[str, Array], Array]:
         window_guide = _fresh_copy(guide)
         svi = SVI(_model, window_guide, numpyro.optim.Adam(0.05), Trace_ELBO())
@@ -120,7 +117,7 @@ def test_contamination_counterfactual_raises_on_the_traced_instance(
         return svi.init(key, c, d)
 
     keys = jax.vmap(lambda i: random.fold_in(random.PRNGKey(1), i))(starts)
-    jax.vmap(fit_one)(keys, train_d, train_c)  # first init is TRACED — contaminates
+    jax.vmap(fit_one)(keys, train_d, train_c)
 
     with pytest.raises(UnexpectedTracerError):
         svi.init(random.PRNGKey(9), train_c[0], train_d[0])

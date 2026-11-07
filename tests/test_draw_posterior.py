@@ -31,9 +31,6 @@ def test_draw_posterior_rejects_non_positive() -> None:
 
 
 def test_draw_posterior_autodelta_tiled_sample_axis() -> None:
-    # AutoDelta is a MAP point estimate: it carries no posterior spread of its
-    # own, so it is drawn once and tiled to the leading sample axis (dispatch by
-    # guide type, never shape inspection).
     data = jnp.zeros((20, 1))
     covariates = empty_covariates(20)
     guide = AutoDelta(rw_model)
@@ -43,8 +40,6 @@ def test_draw_posterior_autodelta_tiled_sample_axis() -> None:
     assert post["sigma"].shape[0] == 7
     assert jnp.allclose(post["sigma"][0], post["sigma"][1])
 
-
-# --- Normalizing-flow guides: params are pytrees, not flat arrays (#282) --------
 
 _FLOW_T = 12
 _FLOW_GUIDES = [
@@ -96,14 +91,9 @@ def test_flow_guide_draws_feed_forecast_and_datatree(guide_cls: type[AutoGuide])
 
 @pytest.mark.parametrize("bad", ["not an array", ["not an array"]], ids=["str", "list-of-str"])
 def test_draw_posterior_rejects_non_array_param_leaf(bad: object) -> None:
-    # The pytree hint still type-checks the leaves: a string is not a parameter.
-    # beartype checks one randomly chosen item of a dict, so the dict holds one key.
     guide, _ = svi_guide_params(t=30, num_steps=5)
     with pytest.raises(TypeCheckError):
         draw_posterior(random.PRNGKey(2), guide, {"bad": bad}, 4)
-
-
-# --- Chunked drawing with host offload (GPU OOM in draw_posterior) --------------
 
 
 def _trees_equal(a: dict, b: dict) -> bool:
@@ -111,7 +101,6 @@ def _trees_equal(a: dict, b: dict) -> bool:
 
 
 def test_draw_posterior_chunked_shape_finite_and_truncated() -> None:
-    # 10 draws in chunks of 4: the last chunk overdraws and is cut back to 10.
     guide, params = svi_guide_params(t=30)
     post = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
     assert post["drift"].shape == (10, 30, 1)
@@ -119,7 +108,6 @@ def test_draw_posterior_chunked_shape_finite_and_truncated() -> None:
 
 
 def test_draw_posterior_batch_ge_samples_bitwise_matches_default() -> None:
-    # At or above the draw count the single-shot path runs: same key, same draws.
     guide, params = svi_guide_params(t=30)
     plain = draw_posterior(random.PRNGKey(2), guide, params, 8)
     batched = draw_posterior(random.PRNGKey(2), guide, params, 8, batch_size=8)
@@ -136,7 +124,6 @@ def test_draw_posterior_chunked_deterministic_given_key_and_batch() -> None:
 
 
 def test_draw_posterior_host_is_host_resident_bitwise_match() -> None:
-    # device is a placement knob, never a draws knob.
     guide, params = svi_guide_params(t=30)
     plain = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
     hosted = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4, device="host")
@@ -170,9 +157,9 @@ def test_draw_posterior_chunked_calls_guide_per_fixed_size_chunk(
     monkeypatch.setattr(predictive_mod, "_jitted_sample_posterior", spy_jitted)
     guide, params = svi_guide_params(t=30)
     draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
-    assert [n for n, _ in calls] == [4, 4, 4]  # ceil(10 / 4) chunks, fixed size
+    assert [n for n, _ in calls] == [4, 4, 4]
     raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for _, k in calls]
-    assert len(set(raw)) == len(raw)  # one distinct subkey per chunk
+    assert len(set(raw)) == len(raw)
 
 
 def test_draw_posterior_chunked_single_compile(count_compilations) -> None:
@@ -195,7 +182,7 @@ def test_draw_posterior_chunked_single_compile(count_compilations) -> None:
             counts.append(tally.count)
         return counts
 
-    _sweep()  # warm-up
+    _sweep()
     assert _sweep() == [1, 1]
 
 
@@ -233,9 +220,6 @@ def test_draw_posterior_rejects_non_positive_batch_size() -> None:
     guide, params = svi_guide_params(t=30, num_steps=10)
     with pytest.raises(ValueError, match="batch_size must be positive"):
         draw_posterior(random.PRNGKey(0), guide, params, 5, batch_size=0)
-
-
-# --- Self-diagnosing device OOM errors -------------------------------------------
 
 
 def _raise_oom(guide):  # type: ignore[no-untyped-def]

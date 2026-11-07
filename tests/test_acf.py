@@ -147,9 +147,6 @@ def test_rejects_max_lag_out_of_range(max_lag: int) -> None:
 @pytest.mark.parametrize("time", [10, 30])
 @pytest.mark.parametrize("level", [0.0, 1.0, 3.3, 5.0, -7.25, 10_000.0])
 def test_constant_series_is_nan(level: float, time: int, eager: bool) -> None:
-    # A zero-variance series has no autocorrelation: every lag is a 0 / 0 in
-    # the default (jitted) call and under jax.disable_jit() alike, whatever the
-    # level, so it can never read as a persistent AR(1)-like spectrum.
     y = jnp.full((time,), level)
     mode = jax.disable_jit() if eager else contextlib.nullcontext()
     with mode:
@@ -160,9 +157,6 @@ def test_constant_series_is_nan(level: float, time: int, eager: bool) -> None:
 
 
 def test_constant_rows_of_a_panel_are_nan(rng_key: Array) -> None:
-    # Every constant row is NaN regardless of its level, through batching and
-    # through jax.vmap, and the NaN rows do not leak into the non-degenerate
-    # row of the same batch.
     noise = random.normal(rng_key, (30,))
     panel = jnp.stack([jnp.zeros(30), jnp.full(30, 1.0), jnp.full(30, 5.0), noise])
     for fn in (acf, pacf):
@@ -176,10 +170,6 @@ def test_constant_rows_of_a_panel_are_nan(rng_key: Array) -> None:
 
 @pytest.mark.parametrize(("level", "bump"), [(0.0, 1.0), (5.0, 1.0), (5.0, 1e-3), (10_000.0, 1.0)])
 def test_near_constant_series_is_finite(level: float, bump: float) -> None:
-    # Guard against over-rejection (passes before and after the constant
-    # series fix): one changed sample makes the variance nonzero, so the
-    # spectrum is finite and close to the float64 oracle, also when the bump
-    # is small compared with the level (a variance threshold would give NaN).
     y = jnp.full((30,), level).at[10].add(bump)
     acf_values = acf(y, max_lag=5)
     pacf_values = pacf(y, max_lag=5)
@@ -192,7 +182,6 @@ def test_near_constant_series_is_finite(level: float, bump: float) -> None:
 def test_wrong_input_typecheck_error() -> None:
     with pytest.raises(TypeCheckError):
         acf(jnp.array(1.0), max_lag=1)
-    # Integer counts are accepted (#163); a boolean series is still rejected.
     with pytest.raises(TypeCheckError):
         pacf(jnp.arange(10) > 4, max_lag=3)
 
