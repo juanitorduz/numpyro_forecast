@@ -18,40 +18,9 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
 
 ## Conventions
 
-- **Array layout:** time at axis `-2`, observation/event dim at `-1`, batch dims
-  to the left (matches Pyro). The `obs` and `forecast` sites, with their
-  enclosing plates, carry every axis of `data`: a predictor shared by `n`
-  series is `(duration, n)` or sits in a size-`n` plate at `dim=-1`. A
-  `(duration, 1)` predictor alone draws one forecast for all series, so
-  `forecast` and `to_datatree` raise (issue #259); `predict_in_sample` gets
-  no data and cannot check.
-- **Train vs forecast:** a single model handles both. In-sample time latents use
-  a fixed site name (`drift`); the forecast horizon uses a separate `_future`
-  site so `AutoNormal` never resizes and `Predictive` draws the suffix from the
-  prior. The horizon is derived from shapes (`covariates` longer than `data`).
-  The drivers substitute every posterior sample site by name, so `forecast`,
-  `predict_in_sample` and `to_datatree` reject a posterior key with values that
-  ends in `_future`, contains `_future_` or is `forecast` (the marks of a
-  `Predictive` call over a horizon, issue #161); `forecast` and
-  `predict_in_sample` drop such a key when its leaf is empty (a site registered
-  on every call, as a training run records it), and `to_datatree` still exports
-  it in the posterior group. `predict_in_sample` and `to_datatree` also drop
-  an `obs` key (issue #260), so the output of a `Predictive` call with `data`
-  does not pin the in-sample draws to the observed data or land in the
-  posterior group; a posterior that holds only `obs` raises `ValueError`.
-  `to_datatree` also raises `ValueError` before any draw for a posterior key
-  that contains `/` (issue #238), including an empty `_future` key, which the
-  export keeps: `xarray.DataTree` rejects `/` in a variable name, and
-  `numpyro.handlers.scope` joins prefix and site with `/` by default, so pass
-  `divider="_"` to every `scope` call of a model you export. The divider
-  changes only the names: a fit drawn under `/` exports once the model uses
-  `divider="_"` and the posterior keys are renamed the same way. Both must
-  change, because the drivers ignore a posterior key that matches no site and
-  draw that site from the prior with no error (the `posterior` parameter of
-  `to_datatree` has the details).
-- **Functional style:** pure model functions, explicit `PRNGKey` threading,
-  vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step
-  drift), no global parameter store.
+- **Array layout:** time at axis `-2`, observation/event dim at `-1`, batch dims to the left (matches Pyro). The `obs` and `forecast` sites, with their enclosing plates, carry every axis of `data`: a predictor shared by `n` series is `(duration, n)` or sits in a size-`n` plate at `dim=-1`. A `(duration, 1)` predictor alone draws one forecast for all series, so `forecast` and `to_datatree` raise (issue #259); `predict_in_sample` gets no data and cannot check.
+- **Train vs forecast:** a single model handles both. In-sample time latents use a fixed site name (`drift`); the forecast horizon uses a separate `_future` site so `AutoNormal` never resizes and `Predictive` draws the suffix from the prior. The horizon is derived from shapes (`covariates` longer than `data`). The drivers substitute every posterior sample site by name, so `forecast`, `predict_in_sample` and `to_datatree` reject a posterior key with values that ends in `_future`, contains `_future_` or is `forecast` (the marks of a `Predictive` call over a horizon, issue #161); `forecast` and `predict_in_sample` drop such a key when its leaf is empty (a site registered on every call, as a training run records it), and `to_datatree` still exports it in the posterior group. `predict_in_sample` and `to_datatree` also drop an `obs` key (issue #260), so the output of a `Predictive` call with `data` does not pin the in-sample draws to the observed data or land in the posterior group; a posterior that holds only `obs` raises `ValueError`. `to_datatree` also raises `ValueError` before any draw for a posterior key that contains `/` (issue #238), including an empty `_future` key, which the export keeps: `xarray.DataTree` rejects `/` in a variable name, and `numpyro.handlers.scope` joins prefix and site with `/` by default, so pass `divider="_"` to every `scope` call of a model you export. The divider changes only the names: a fit drawn under `/` exports once the model uses `divider="_"` and the posterior keys are renamed the same way. Both must change, because the drivers ignore a posterior key that matches no site and draw that site from the prior with no error (the `posterior` parameter of `to_datatree` has the details).
+- **Functional style:** pure model functions, explicit `PRNGKey` threading, vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step drift), no global parameter store.
 - **Host offload contract:** `device="host"` on `draw_posterior`, `forecast`, `predict_in_sample` and the pathfinder samplers returns draws as `Array | np.ndarray` (jax Arrays committed to the CPU device, or NumPy arrays when no CPU backend is initialized). Any new signature that consumes draws must accept both, and the placement contract is documented once, on `draw_posterior`; other drivers point at it.
 - **`rng_key` first:** every JAX/NumPyro function that consumes randomness takes `rng_key: Array` as its first parameter (first after `self` for methods), required and positional (not keyword-only), always.
 - **Integer literals:** write integers with four or more digits using underscore separators so zeros are easy to count: `1_000`, `10_000`, `1_234_567_890` (not `1000`, `1234567890`).
@@ -62,15 +31,10 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
 
 ## Hard requirements
 
-- Every function (public and private) has complete input and return type hints,
-  checked with `ty`.
+- Every function (public and private) has complete input and return type hints, checked with `ty`.
 - Every public function/class has a NumPy-style docstring (ruff `D`). The preview-only `DOC` (pydoclint) rules are deliberately not selected: without `preview = true` they are inert and warn on every ruff run, and enabling preview would switch all stable rules to their preview behavior. Revisit when `DOC` stabilizes.
 - **Line length:** the formatter targets 99 characters, but `E501` only fires above 120. The 100 to 120 band is an intentional grace zone for lines the formatter cannot wrap (trailing `# type: ignore` comments, long string literals); do not write new code past 99 on purpose.
-- **jaxtyping:** annotate array shapes as `Float[Array, " time obs"]` with a
-  **leading space** in the shape string (per the jaxtyping FAQ this turns ruff's
-  `F821` into `F722`, which we ignore globally; `F821` stays active otherwise).
-  Do **not** use `from __future__ import annotations` (incompatible with runtime
-  type checking).
+- **jaxtyping:** annotate array shapes as `Float[Array, " time obs"]` with a **leading space** in the shape string (per the jaxtyping FAQ this turns ruff's `F821` into `F722`, which we ignore globally; `F821` stays active otherwise). Do **not** use `from __future__ import annotations` (incompatible with runtime type checking).
 - **Sampled values and `ty`:** numpyro annotates `numpyro.sample` as returning `ArrayLike`. In `numpyro_forecast/`, `tests/` and `scripts/` narrow with `jnp.asarray(numpyro.sample(...))` when the value is indexed, attribute-accessed or passed to an `Array`-typed parameter (never `typing.cast`). In the example notebooks write the plain `numpyro.sample(...)`: `pyproject.toml` ignores `not-subscriptable`, `invalid-argument-type`, `invalid-return-type` and `unresolved-attribute` under `docs/examples/**` and nothing else. Those four are therefore blind in notebooks (a wrong argument type, a misspelled attribute or a stale return annotation is not reported there), which is why a notebook's model cell must be smoke-executed after any package API change; every other rule still applies, so keep the notebooks clean otherwise.
 
 ## Tests
@@ -115,16 +79,76 @@ Internal design documents live in `docs/dev/` with lower-case file names (for ex
 
 Author notebooks with [jupytext](https://jupytext.readthedocs.io/) as a `py:percent` script rather than editing the `.ipynb` JSON by hand: it keeps clean text diffs and is lintable like any other `.py`. Write `docs/examples/<name>.py` with `# %%` cell markers, then convert and execute it in one step with `uv run jupytext --to notebook --execute docs/examples/<name>.py`, which produces `docs/examples/<name>.ipynb` with all outputs (figures, tables) embedded. Only the `.ipynb` is committed: delete the `.py` afterwards (the two files are intentionally not paired). The committed notebook stores its outputs, so the docs build never re-executes it.
 
-Each notebook also feeds the card grid on the Examples index page: set a short plain-text `description` in the notebook-level metadata (no markdown, LaTeX, or HTML special characters; great-docs injects it into raw HTML), and tag the code cell whose figure should be the card thumbnail with a `thumbnail` cell tag. Both have fallbacks in `scripts/build_docs.py` (the intro paragraph's first sentence and the notebook's first figure, respectively), but set them explicitly so the card copy reads well and the thumbnail is a representative results plot (for example the forecast with HDI bands) rather than the raw-data plot (the exception is a dense multi-panel grid such as the hierarchical BART forecasts, which is unreadable at card size: those two notebooks keep a single-panel figure, the data overview for `hierarchical_forecasting_1` and the prior predictive check for `hierarchical_forecasting_2`, matching the stable site). Both survive re-execution; a jupytext round-trip keeps the `description` only when the notebook metadata carries `jupytext.notebook_metadata_filter: description` (write `description:` into the `.py` header and keep that filter), and keeps cell tags unless `cell_metadata_filter: -all` is set.
+Each notebook also feeds the card grid on the Examples index page: set a short plain-text `description` in the notebook-level metadata (no markdown, LaTeX, or HTML special characters; great-docs injects it into raw HTML), and tag the code cell whose figure should be the card thumbnail with a `thumbnail` cell tag. Both have fallbacks in `scripts/build_docs.py` (the intro paragraph's first sentence and the notebook's first figure, respectively), but set them explicitly so the card copy reads well and the thumbnail is a representative results plot (for example the forecast with HDI bands) rather than the raw-data plot (the exception is a dense multi-panel grid such as the hierarchical BART forecasts, which is unreadable at card size: those two notebooks keep a single-panel figure, the data overview for `hierarchical_forecasting_1` and the prior predictive check for `hierarchical_forecasting_2`, matching the stable site). Both survive re-execution; a jupytext round-trip keeps the `description` only when the notebook metadata carries `jupytext.notebook_metadata_filter: description` (write `description:` into the `.py` header and keep that filter), and keeps cell tags unless `cell_metadata_filter: -all` is set. The thumbnail figure is a single landscape panel about twice as wide as tall.
 
 **The thumbnail must be a single landscape panel, about twice as wide as tall.** The card grid scales the image to the card width, so a square or tall figure (a stacked multi-panel grid, a forest plot, a facet grid) makes its card several times taller than the others and breaks the layout. Pick a one-axes figure with `figsize=(12, 6)` or `(10, 6)` (every other notebook's thumbnail has an aspect ratio between 1.3 and 2.0), typically the headline forecast with its HDI bands, and if the best results figure is a grid, tag a single-panel figure instead. `tests/test_build_docs.py` checks the aspect ratio of every committed notebook's thumbnail.
 
-- Do not use `plt.show()` in notebooks.
-- Link to other example notebooks and to the API reference with relative paths: `<example>.html` for another example and `../../reference/<entry>.html` for a reference page. Do not use absolute `https://juanitorduz.github.io/numpyro_forecast/` URLs. They always open the stable site root, also from the `/v/dev/` pages and from PR previews, and the stable reference has only the symbols of the last release. The example wrappers that `scripts/build_docs.py` writes set `notebook-view: false`, so Quarto renders no `_src/<name>-preview.html` copy of a notebook, where these relative links would not resolve.
+### Example notebook style
+
+These conventions apply to every example notebook under `docs/examples/`. They complement the jupytext workflow, the `description` metadata and the thumbnail rule above, and the [Writing](#writing) rules below apply to every markdown cell; `m5_forecasting.ipynb` and `m5_hierarchical_state_space.ipynb` are the reference implementations.
+
+#### Storyline
+
+- One idea per section, in the order a reader needs it: data and exploration, the metric, the model (specification, priors, the model function), fitting, posterior, forecasts, evaluation, cost, discussion. A reader must be able to follow the notebook top to bottom without jumping ahead.
+- **Every figure and every table gets a takeaway**, in a markdown cell right **after** it: what the reader should see, with the concrete numbers read off the output (ranges, which group is highest, where the band fails). A figure without a takeaway is either removed or explained. The markdown cell **before** a figure says what is plotted; the one after says what it means.
+- Prose that reads a figure comes after the figure, never before it.
+- The discussion closes with what the results say about modeling this kind of data, the open weaknesses, and the fairness notes (what the model knows about the horizon).
+- Every number in the prose is read from the executed outputs of the same run. After re-executing, re-read the outputs and patch the prose; never leave a number from an earlier run.
+
+#### Model specification
+
+- Write the model as display math (`$$ \begin{align*} ... \end{align*} $$`) with a short definition of every symbol, then list **every prior as display math, one line per prior**, followed by a paragraph of intuition: what the scale means on the scale of the data (a factor on the log scale, units of a typical daily change), why it is wide or tight, what the posterior will have to decide.
+- Visualize the informative priors with preliz (`pz.LogNormal(-2, 1).plot_pdf(ax=ax, color="C0", legend=None)` and the distribution in the panel title or a figure legend). Standard normals need no plot; when every prior is a standard normal, plot what matters instead (for example the implied prior on a mean through a link function).
+- Run a prior predictive check, show it, and say what the priors allow before the data.
+- A model-selection ladder or ablation that is not re-run in the notebook is still shown, as a figure built from the literal scores, with a sentence saying it is not re-run.
+
+#### Helpers and code layout
+
+- **Define every function and constant in the code cell of its first use or in the code cell right before it**, never in a block of definitions at the top of the notebook or of a section. A function called inside another function's body is used where that function is defined. When a step needs several functions, interleave them with the calls (define, use, define the next, use it) instead of defining them all before one call cell; if that changes the order of the sections, change the order. The markdown cell before a definition says why the step is needed and what each function does, as part of the storyline.
+- **Every `for` loop has a blank line before and after it**, at every indentation level (the only exception is a loop that is the first statement of a block, right after the `def`/`with`/`if` line).
+- **Every `print` has a blank line before and after it.**
+- No long squashed blocks: separate the steps of a cell with blank lines and a one-line comment per step; comment model bodies and tensor code shape by shape (`# (days, n)`), in particular every `einsum`, gather, transpose and broadcast.
+- Comment the construction of every covariate array: which column or channel is what, in which order, and the shape; print the shape.
+- One topic per cell: a cell may define a small helper and call it, but a cell that fits a model does not also build an unrelated figure.
+- No dead code: no covariate channel that the model does not read, no variable that is never used, no unused import.
+- Pass optax optimizers to `SVI` directly; never import `numpyro.optim._NumPyroOptim` or other private names for a type hint.
+- Split long f-strings so the code stays within the 99-character line length of the hard requirements.
+- No `print` for information that belongs in a figure: the step count and wall time of a fit go in the loss-plot title, not in a print above it. Prints are for shapes, counts and the summary numbers the prose quotes.
+- No global `pl.Config` calls. When a table needs more rows than the default, use a local `with pl.Config(tbl_rows=n): display(df)`.
+- Do not use `plt.show()`.
 - Do not store environment warnings in the outputs. Filter them with `warnings.filterwarnings` in the setup cell. preliz emits "PyMC not installed" at import time, so its filter goes before `import preliz`; arviz-plots emits "When multiple credible intervals are plotted" when `aes` maps `alpha`. `tests/test_notebook_hygiene.py` rejects stored stderr that contains these two warnings or a `site-packages/` path, and checks that every relative link names an example notebook or a `reference:` entry.
 - When a notebook elicits a prior with preliz's `maxent`, every call passes `mass` explicitly, not `None` (its default is `rcParams["stats.ci_prob"]`, which went from 0.94 to 0.89 between preliz releases), and the model's prior is built from the returned fit object, for example `dist.InverseGamma(concentration=fit.alpha, rate=fit.beta)`, never from copied literals (issue #198). See `tests/test_notebook_hygiene.py` for what is checked.
 
+#### Figures and tables
+
+- **Prefer a figure to a table whenever possible**: a per-level comparison is a bar chart, a timing table is a bar chart, a posterior summary is a forest plot. Keep a table only for small lookups that are data, not results, and keep a `print` of the summary numbers next to a figure so the prose can be checked.
+- **Legends never overlap the plot and are never smaller than the default font** (no `fontsize` below 10 anywhere). Put legends outside the axes: `ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0))` for a single axes; `fig.legend(handles, labels, loc="outside lower center", ncols=n)` for a constrained-layout figure with several panels; `fig.legend(..., loc="upper center", bbox_to_anchor=(0.5, 0.0), ncols=n)` below a facet grid; the distribution in the panel title for preliz plots. Never per-axes legends below adjacent panels (constrained layout squeezes the axes to nothing).
+- A legend lists every band it shows. A plot with in-sample and forecast bands has entries for both (`r"in-sample $94\%$ HDI"`, `r"forecast $94\%$ HDI"`); a prior predictive plot labels its bands as prior bands. With arviz `plot_lm`, a second call on the same plot collection replaces the band artists of the first in `pc.viz`, so collect the handles of the first call before the second.
+- Use `ConciseDateFormatter` on date axes that get narrow (a legend outside the axes narrows them and the default date ticks collide).
+- Multi-panel figures use `layout="constrained"`, a bold `suptitle`, and `width_ratios` when the panels differ in content.
+
+#### Notebook prose
+
+- Link to other example notebooks and to the API reference with relative paths: `<example>.html` for another example and `../../reference/<entry>.html` for a reference page. Do not use absolute `https://juanitorduz.github.io/numpyro_forecast/` URLs. They always open the stable site root, also from the `/v/dev/` pages and from PR previews, and the stable reference has only the symbols of the last release. The example wrappers that `scripts/build_docs.py` writes set `notebook-view: false`, so Quarto renders no `_src/<name>-preview.html` copy of a notebook, where these relative links would not resolve.
+- Answer a reviewer's question in the notebook, not only in the PR: if something looks odd (a warning that is filtered, a noisy loss, a parametrization), say what it is, why it is harmless or not, and show the check that proves it.
+- When a decision was tested (a prior widened, a component dropped), state the measured effect in one sentence rather than an opinion.
+
 ## Writing
+
+### Storyline and clarity
+
+These patterns come from review rounds of notebook prose; they apply to every markdown cell and to PR descriptions.
+
+- **Connected story, not patched sentences.** Each section opens with what it does and why the reader needs it, and closes with the step that leads to the next one ("Now that the loss is defined, we fit the model to..."). A paragraph that reads like independent facts in a row needs a through-line or a split.
+- **Open with the point, explicitly.** No question headlines ("Why the margin?"), slogans ("We ask for a service level instead of a cost.") or abrupt verbs ("We minimize ...") as openers.
+- **Define before use.** Define every symbol, term and concept before its first use, and do not mention one that comes later. One symbol per meaning (no `x` next to `x_t`, no `S` next to `S_t`). Write a new concept in bold where it is defined.
+- **One idea per sentence.** Split a sentence that carries several numbers or several clauses. Put formulas in display math, not packed inline.
+- **Bullets for lists.** Results, comparisons, steps and reasons go in bullet points, and the items keep the same order everywhere (the order in which they were introduced, which is also the color order of the figures).
+- **Explain, do not assert.** Give the intuition or the derivation behind a claim (why a plan overstocks, where a formula comes from), and cite a reference for a result that the notebook does not derive.
+- **Plain words.** Spell out private shorthand ("within a divergence ball", "the level enters the rate through an exponential"); prefer standard statistical terms (right-skewed, point mass at zero).
+- **Read a figure, do not describe its construction.** Say why the figure is there and what it shows; the plotting function and the panel layout are in the code. Keep the takeaway, not a re-narration of every line in the plot.
+- **Cut what carries no information:** sentences that hedge without content ("we read this as a consistency check"), comparisons with models the notebook does not fit, and details the reader does not need for the next step.
+- **Name sections in italics** when the text refers to them, for example *The model*.
 
 ### No em-dashes
 
@@ -137,7 +161,7 @@ When writing text files (`.txt`, `.md`, `.qmd`, and similar), do **not** wrap pr
 - Yes: one line per paragraph, one line per bullet.
 - No: inserting newlines every 80 (or 100, or any other) characters inside a paragraph.
 
-Exceptions: code blocks, tables, YAML front matter, and anything where the newline is semantically meaningful (e.g. markdown lists, mermaid diagrams) — keep those formatted normally.
+Exceptions: code blocks, tables, YAML front matter, and anything where the newline is semantically meaningful (e.g. markdown lists, mermaid diagrams): keep those formatted normally.
 
 ### Latex Formulas
 
