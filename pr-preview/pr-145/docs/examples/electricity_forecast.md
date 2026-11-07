@@ -12,6 +12,11 @@ Instead of hand-writing a bespoke predictive loop, we write the model as a plain
 
 
 ``` python
+import warnings
+
+# preliz warns at import time when PyMC is not installed; this example does not use PyMC.
+warnings.filterwarnings("ignore", message="PyMC not installed", category=UserWarning)
+
 %load_ext autoreload
 %autoreload 2
 %load_ext jaxtyping
@@ -656,5 +661,3 @@ Indeed, at the extremes of the common temperature range the temperature effect o
 - NumPyro. [*Hilbert Space Gaussian Processes approximation*](https://num.pyro.ai/en/stable/contrib.html#hilbert-space-gaussian-processes-approximation).
 - Hyndman, R. J., & Athanasopoulos, G. [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/).
 - [*Continuous Ranked Probability Score*](https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score) (Wikipedia).
-
-[Source: Electricity demand forecasting with `numpyro_forecast`](_src/electricity_forecast-preview.html#9cb111e5)

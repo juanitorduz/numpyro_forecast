@@ -87,7 +87,7 @@ def forecast_fn(
 
 
 `rng_key: Array`  
-Base PRNG key (used for every window, matching Pyro).
+Base PRNG key, used for every window (matching Pyro). Each window splits it once, `forecast_key, train_key = random.split(rng_key)`: `forecast_fn` receives `forecast_key` and `in_sample_fn` receives `train_key`. The split does not depend on `eval_train`, so turning in-sample scoring on does not change the out-of-sample draws.
 
 `model_fn: ModelFactory`  
 Factory returning a fresh [ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel) per window.
@@ -102,7 +102,7 @@ Covariates with time at axis `-2` (same duration as `data`).
 Closure that fits `model` on the training window and forecasts the test horizon (see [ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn) and the contract above).
 
 `in_sample_fn: InSampleFn | None = None`  
-Optional closure that fits `model` on the training window and scores its in-sample fit (see [InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn) and the contract above). Required when `eval_train=True`.
+Optional closure that fits `model` on the training window and scores its in-sample fit (see [InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn) and the contract above). Required when `eval_train=True`. It receives its own child of `rng_key` (see `rng_key`), never a key that `forecast_fn` can derive from its own.
 
 `metrics: Mapping[str, Metric] | None = None`  
 Mapping of metric name to function; defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS). Each function takes `(pred, truth)` and returns a scalar array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`.
@@ -132,7 +132,7 @@ Minimum test window size when `test_window` is `None`.
 Step between successive train/test splits.
 
 `num_samples: int = ``100`  
-Number of forecast samples per window.
+Number of forecast samples per window. Must be positive, and at least 2 when `metrics` contains [eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps) (as [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS) does) or a `functools.partial()` of it. Both rules are checked before the first window is fitted. A CRPS inside another wrapper (a `lambda` or a `jax.jit` function) or added by `per_window_metrics` is not checked up front: it fails only when it runs.
 
 `batch_size: int | None = None`  
 Optional chunk size forwarded to `forecast_fn` and `in_sample_fn` (see the contract above).
@@ -144,7 +144,7 @@ If `True`, also score the in-sample posterior predictive over each training wind
 If `True`, store each window's out-of-sample forecast samples (after `transform`) on `BacktestResult.prediction`. Defaults to `False` to avoid retaining large Monte Carlo arrays.
 
 `reuse_model: bool = ``True`  
-When `True` (default) and the windowing strategy is rolling, the model instance returned by the first `model_fn()` call is reused for every window so forecast/predict kernels can cache across windows. SVI still recompiles per window; for a single fused fit over all windows use [backtest_vectorized()](evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized). Ignored for expanding windows and when `False`.
+When `True` (default) and the windowing strategy is rolling, the model instance returned by the first `model_fn()` call is reused for every window, so `model_fn` runs once. Ignored for expanding windows and when `False` (`model_fn` then runs once per window). It does not cache compiled programs: each [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) or [predict_in_sample()](predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) call that `forecast_fn` or `in_sample_fn` makes compiles once per window, and so does an SVI fit; for a single fused fit and forecast over all windows use [backtest_vectorized()](evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized). Kept for API stability: it only matters for a `model_fn` that is expensive or stateful.
 
 
 ## Returns
@@ -158,7 +158,7 @@ One result per backtest window.
 
 
 `ValueError`  
-If `data` and `covariates` durations differ, or if `eval_train=True` but `in_sample_fn` is `None`.
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if their durations differ, if `eval_train=True` but `in_sample_fn` is `None`, or if `num_samples` is too small (see `num_samples`).
 
 `BacktestWindowError`  
 If `window_type` and `train_window` disagree (`"rolling"` without a `train_window`, or `"expanding"` with one).

@@ -83,7 +83,7 @@
 - [convert.predictions_to_datatree](https://juanitorduz.github.io/numpyro_forecast/reference/convert.predictions_to_datatree.html)
 
 #### Extensions (contrib)
-> Optional backends behind pyproject extras (never imported by default).
+> Optional backends behind pyproject extras (the backend library loads only on first use).
 
 - [contrib.blackjax.BlackjaxNUTSKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxNUTSKernel.html)
 - [contrib.blackjax.BlackjaxMCLMCKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxMCLMCKernel.html)
@@ -94,6 +94,8 @@
 - [contrib.blackjax.MultiPathfinderFit](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.MultiPathfinderFit.html)
 - [contrib.blackjax.fit_multipathfinder](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.fit_multipathfinder.html)
 - [contrib.blackjax.multipathfinder_samples](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.multipathfinder_samples.html)
+- [contrib.dynestyx.state_space](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.dynestyx.state_space.html)
+- [contrib.dynestyx.StateSpaceResult](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.dynestyx.StateSpaceResult.html)
 
 #### Typing
 > Public type contracts.
@@ -106,6 +108,7 @@
 - [typing.ModelFactory](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ModelFactory.html)
 - [typing.Array](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Array.html)
 - [typing.BlackjaxBuildFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.BlackjaxBuildFn.html)
+- [typing.BlackjaxStepFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.BlackjaxStepFn.html)
 
 #### Autocorrelation
 > Batched autocorrelation and partial autocorrelation diagnostics.

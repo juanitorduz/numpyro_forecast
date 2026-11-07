@@ -34,10 +34,10 @@ PRNG key.
 The forecasting model callable (the same one that produced `posterior`).
 
 `posterior: Mapping[str, ArrayLike]`  
-Posterior samples of the latent sites, sample axis leading. The output of a `device="host"` stage (CPU-committed jax leaves or NumPy leaves) is accepted directly.
+Posterior samples of the latent sites of the training run, sample axis leading (`mcmc.get_samples()` of the fit, or [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)). The output of a `device="host"` stage (CPU-committed jax leaves or NumPy leaves) is accepted directly. A forecast-horizon key with values (one that ends in `"_future"` or contains `"_future_"`, or `"forecast"`) raises `ValueError`: it comes from a `numpyro.infer.Predictive` call over a horizon, whose sample sites would pin the horizon instead of drawing it from the prior, since the driver substitutes every posterior sample site by name. Such a key with an empty leaf (a site that the model registers on every call, recorded by the training run with a size-0 time axis) is dropped, so the model draws or computes the site as if the key were absent.
 
 `data: Array`  
-Observed data with time at axis `-2` and length `t`.
+Observed data with time at axis `-2` and length `t`. When `posterior` holds in-sample time latents, `t` must be the training length that `posterior` was drawn for; a [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site of another length raises `ValueError`.
 
 `covariates: Array`  
 Covariates with time at axis `-2` and length `duration > t`.
@@ -63,13 +63,13 @@ Forecast samples over the `future = duration - t` horizon (floating point for co
 
 
 `ValueError`  
-If `covariates` does not extend beyond `data` along the time axis.
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps, if `covariates` does not extend beyond `data` along the time axis, if `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, if a forecast-horizon key of `posterior` (one that ends in `"_future"` or contains `"_future_"`, or `"forecast"`) has a non-empty leaf, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have `t` steps (a posterior drawn for a different training length), if the `"forecast"` draws do not have time at axis `-2` with `duration - t` steps, or if they do not have the other axes of `data` (a predictor shared by the `n` series of `data` needs a size-`n` plate at `dim=-1` or shape `(duration, n)`; without either, the model draws one forecast for all series).
 
 `HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
 
 `DevicePlatformError`  
-If `device` names a platform whose backend is not initialized (see `_resolve_device()`).
+If `device` names a platform whose backend is not initialized (see `resolve_device()`).
 
 
 ## Warns
@@ -81,4 +81,6 @@ If `device="cpu"` is requested and the JAX CPU backend is not initialized, so th
 
 ## Notes
 
-Chunking is a memory knob, not a reproducibility knob: reproducibility is per `(rng_key, batch_size)`. Every chunk shares the exact `batch_size` shape (the final chunk wraps around to re-used draws that are discarded), so the underlying `_predict` compiles exactly once for a fixed shape, but changing `batch_size` changes the PRNG stream layout and therefore the exact draws. `device` never changes the draws, only where they live.
+Chunking is a memory knob, not a reproducibility knob: reproducibility is per `(rng_key, batch_size)`. Every chunk shares the exact `batch_size` shape (the final chunk wraps around to re-used draws that are discarded), so each call compiles the predictive exactly once, but changing `batch_size` changes the PRNG stream layout and therefore the exact draws. `device` never changes the draws, only where they live.
+
+Each call traces and compiles the model once and keeps no compiled program afterwards. In exchange, like a plain `numpyro.infer.Predictive` call (which re-runs the model every time), the draws always reflect the model as it is at call time (a changed global, closure value or attribute it reads takes effect on the next call), and `model` can be any callable, hashable or not. A repeated call with the same model and shapes, for example in a scenario loop, therefore compiles again; so does [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree), which runs the drivers itself.

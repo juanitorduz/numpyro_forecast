@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.19">
+<meta name="generator" content="quarto-1.11.9">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -73,14 +73,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="quarto:offset" content="../">
 <script src="../site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/scrollable-regions/scrollable-regions.js" type="module"></script>
 <script src="../site_libs/quarto-html/popper.min.js"></script>
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-63b5708e65d6cd79cd7618c58d0c21e7.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-c4d708d4e441993890320f2eab87994c.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-96bed50882d7ed35d1aa4676b982e3c5.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -163,19 +164,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <meta name="twitter:description" content="Convert an already-drawn posterior into an ArviZ-schema xarray.DataTree.">
 </head>
 
-<body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
+<body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light"><a id="quarto-skip-link" class="visually-hidden-focusable" href="#quarto-document-content">Skip to main content</a>
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
-    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark" aria-label="Site">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
     <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
     </a>
   </div>
-            <div id="quarto-search" class=""></div>
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
   <span class="navbar-toggler-icon"></span>
 </button>
           <div class="collapse navbar-collapse" id="navbarCollapse">
@@ -203,15 +203,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
           </div> <!-- /navcollapse -->
             <div class="quarto-navbar-tools">
 </div>
+            <div id="quarto-search" class=""></div>
       </div> <!-- /container-fluid -->
     </nav>
-  <nav class="quarto-secondary-nav">
+  <nav class="quarto-secondary-nav" aria-label="Toolbar">
     <div class="container-fluid d-flex">
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
         <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">convert.to_datatree()</span></h1>
-        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        <a class="flex-grow-1" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
   </nav>
@@ -219,7 +220,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <!-- content -->
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
-  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto" aria-label="Section">
     <div class="sidebar-menu-container"> 
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
@@ -230,10 +231,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Model building blocks</span></a>
-</div>
-      <ul id="quarto-sidebar-section-1" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" aria-controls="quarto-sidebar-section-1" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-1-label">Model building blocks</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-1" aria-labelledby="quarto-sidebar-section-1-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/models.Horizon.html" class="sidebar-item-text sidebar-link">
@@ -304,10 +305,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Vector autoregression</span></a>
-</div>
-      <ul id="quarto-sidebar-section-2" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" aria-controls="quarto-sidebar-section-2" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-2-label">Vector autoregression</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-2" aria-labelledby="quarto-sidebar-section-2-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/var.var_mean.html" class="sidebar-item-text sidebar-link">
@@ -336,10 +337,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Priors</span></a>
-</div>
-      <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" aria-controls="quarto-sidebar-section-3" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-3-label">Priors</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-3" aria-labelledby="quarto-sidebar-section-3-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/priors.minnesota_prior.html" class="sidebar-item-text sidebar-link">
@@ -350,10 +351,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Distribution surgery</span></a>
-</div>
-      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" aria-controls="quarto-sidebar-section-4" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-4-label">Distribution surgery</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-4" aria-labelledby="quarto-sidebar-section-4-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
@@ -382,10 +383,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Reparameterization</span></a>
-</div>
-      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" aria-controls="quarto-sidebar-section-5" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-5-label">Reparameterization</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-5" aria-labelledby="quarto-sidebar-section-5-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/reparam.time_reparam.html" class="sidebar-item-text sidebar-link">
@@ -402,10 +403,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Producing draws</span></a>
-</div>
-      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" aria-controls="quarto-sidebar-section-6" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-6-label">Producing draws</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-6" aria-labelledby="quarto-sidebar-section-6-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/predictive.draw_posterior.html" class="sidebar-item-text sidebar-link">
@@ -428,10 +429,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Backtesting &amp; evaluation</span></a>
-</div>
-      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" aria-controls="quarto-sidebar-section-7" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-7-label">Backtesting &amp; evaluation</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-7" aria-labelledby="quarto-sidebar-section-7-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.backtest.html" class="sidebar-item-text sidebar-link">
@@ -532,10 +533,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">ArviZ export</span></a>
-</div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" aria-controls="quarto-sidebar-section-8" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-8-label">ArviZ export</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-8" aria-labelledby="quarto-sidebar-section-8-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link active">
@@ -558,10 +559,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Extensions (contrib)</span></a>
-</div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" aria-controls="quarto-sidebar-section-9" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-9-label">Extensions (contrib)</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-9" aria-labelledby="quarto-sidebar-section-9-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -616,14 +617,26 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">contrib.blackjax.multipathfinder_samples</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.dynestyx.state_space.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.dynestyx.state_space</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.dynestyx.StateSpaceResult.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.dynestyx.StateSpaceResult</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Typing</span></a>
-</div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" aria-controls="quarto-sidebar-section-10" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-10-label">Typing</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-10" aria-labelledby="quarto-sidebar-section-10-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ForecastModel.html" class="sidebar-item-text sidebar-link">
@@ -672,14 +685,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxStepFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxStepFn</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Autocorrelation</span></a>
-</div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-11" aria-controls="quarto-sidebar-section-11" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-11-label">Autocorrelation</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-11" aria-labelledby="quarto-sidebar-section-11-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
@@ -696,10 +715,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Seasonal features</span></a>
-</div>
-      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-12" aria-controls="quarto-sidebar-section-12" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-12-label">Seasonal features</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-12" aria-labelledby="quarto-sidebar-section-12-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
@@ -716,10 +735,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Array helpers</span></a>
-</div>
-      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-13" aria-controls="quarto-sidebar-section-13" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-13-label">Array helpers</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-13" aria-labelledby="quarto-sidebar-section-13-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
@@ -742,10 +761,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Datasets</span></a>
-</div>
-      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-14" aria-controls="quarto-sidebar-section-14" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-14-label">Datasets</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-14" aria-labelledby="quarto-sidebar-section-14-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -786,10 +805,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Optional dependencies</span></a>
-</div>
-      <ul id="quarto-sidebar-section-15" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-15" aria-controls="quarto-sidebar-section-15" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-15-label">Optional dependencies</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-15" aria-labelledby="quarto-sidebar-section-15-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
@@ -800,10 +819,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Exceptions</span></a>
-</div>
-      <ul id="quarto-sidebar-section-16" class="list-unstyled sidebar-section depth1 show">  
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-16" aria-controls="quarto-sidebar-section-16" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-16-label">Exceptions</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-16" aria-labelledby="quarto-sidebar-section-16-label" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
@@ -866,7 +885,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <nav id="TOC" role="doc-toc" class="toc-active">
+        <nav id="TOC" role="doc-toc" aria-labelledby="toc-title" class="toc-active">
     <h3 id="toc-title">On this page</h3>
    
   <ul class="collapse">
@@ -879,7 +898,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </nav>
     </div>
 <!-- main -->
-<main class="content" id="quarto-document-content">
+<main class="content" id="quarto-document-content" tabindex="-1">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
@@ -905,7 +924,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L229-L489" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L593-L950" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -921,8 +940,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">coords</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">posterior_dims</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="va">obs_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Posterior-first: callers draw their own posterior (<code>mcmc.get_samples()</code> for MCMC, <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> for a variational fit) and pass it in; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> never draws a posterior of its own. <code>rng_key</code> is consumed only by the in-sample posterior-predictive draws and, when a forecast horizon is present, the forecast draws.</p>
@@ -941,11 +961,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">posterior</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, ArrayLike]</span></code></dt>
 <dd>
-<p>Posterior samples of the latent sites, with a single flattened sample axis leading (NumPyro’s <code>mcmc.get_samples()</code> order, or the output of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). Host-committed leaves (the output of <code>draw_posterior(..., device="host")</code>) and NumPy leaves are accepted directly.</p>
+<p>Posterior samples of the latent sites of the training run, with a single flattened sample axis leading (NumPyro’s <code>mcmc.get_samples()</code> order, or the output of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). Host-committed leaves (the output of <code>draw_posterior(..., device="host")</code>) and NumPy leaves are accepted directly. Forecast-horizon keys follow the rule of <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>: one with values (a key that ends in <code>"_future"</code> or contains <code>"_future_"</code>, or <code>"forecast"</code>) raises <code>ValueError</code>. One with an empty leaf (a site that the model registers on every call, recorded by the training run with a size-0 time axis) is kept in the <code>posterior</code> group as a size-0 variable, and the predictive drivers drop it. An <code>"obs"</code> key is dropped, as in <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a>: it is not in the <code>posterior</code> group, and the in-sample draws come from the latent sites.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>In-sample data with time at axis <code>-2</code>.</p>
+<p>In-sample data shaped <code>(*batch, time, obs)</code>: time at axis <code>-2</code>, the observation dim at axis <code>-1</code> and any batch axes to the left (<code>obs_dims</code> names them).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
@@ -953,7 +973,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">num_chains</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
 <dd>
-<p>Number of chains to split <code>posterior</code>’s flattened sample axis into (and, identically, the in-sample/forecast predictive draws, which are drawn with the same sample count). Defaults to <code>1</code> (a single pseudo-chain, correct for a posterior with no chain structure, e.g. SVI or Pathfinder draws). For an MCMC posterior, pass the <code>num_chains</code> the sampler was run with; see <code>_reshape_chains()</code> for the reshape contract and its divisibility requirement.</p>
+<p>Number of chains to split <code>posterior</code>’s flattened sample axis into (and, identically, the in-sample/forecast predictive draws, which are drawn with the same sample count). Defaults to <code>1</code> (a single pseudo-chain, correct for a posterior with no chain structure, e.g. SVI or Pathfinder draws). For an MCMC posterior, pass the <code>num_chains</code> the sampler was run with; see <code>_reshape_chains()</code> for the reshape contract and its divisibility requirement. Must be a positive integer.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -963,21 +983,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>Where the predictive draws are moved as they are sampled, forwarded to the <code>device</code> argument of <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> (the placement contract of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). It is resolved once and the same placement is handed to both, so an unmet <code>"cpu"</code> warns once per export. The default <code>"host"</code> keeps the predictive draws in pageable host memory (jax Arrays the tree views as NumPy without a copy, or NumPy arrays when no CPU backend is initialized), which is what bounds accelerator memory when <code>batch_size</code> is set; pass <code>None</code> to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">coords</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">coords</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Collection[Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional extra coordinates; these take precedence over the generated <code>time</code> coordinate. They also propagate to the forecast groups, where the generated forecast <code>time</code> takes precedence instead (a user <code>time</code> entry covers the in-sample window; use <code>time_coord</code> for explicit forecast time values).</p>
+<p>Optional extra coordinates; these take precedence over the generated <code>time</code> coordinate. They also propagate to the forecast groups, where the generated forecast <code>time</code> takes precedence instead (a user <code>time</code> entry covers the in-sample window; use <code>time_coord</code> for explicit forecast time values). Each value is a one-dimensional collection of labels (a list, a NumPy array, a pandas index) and is stored as <code>np.asarray(value)</code>, so the name of a pandas index is dropped.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Collection[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional explicit time coordinate values. Without a forecast horizon it covers the in-sample window (defaults to <code>range(n_time)</code>); with a horizon it must cover the full <code>covariates</code> length and is split into the in-sample and forecast time coordinates (the default is the integer continuation).</p>
+<p>Optional explicit time coordinate values. Without a forecast horizon it covers the in-sample window (defaults to <code>range(n_time)</code>); with a horizon it must cover the full <code>covariates</code> length and is split into the in-sample and forecast time coordinates (the default is the integer continuation). Any one-dimensional collection is accepted (a list, a NumPy array, a pandas index) and stored as <code>np.asarray(time_coord)</code>. A timezone-aware <code>pd.DatetimeIndex</code> keeps its zone and clock time, as an object array of aware <code>pd.Timestamp</code> values (<code>arviz_base.dict_to_dataset()</code> cannot store a zoned datetime dtype). xarray does not treat that coordinate as a datetime: <code>.dt</code>, <code>resample()</code> and selection by a date string fail (select with a <code>pd.Timestamp</code>), and <code>to_netcdf()</code> cannot write it. For a datetime coordinate pass <code>index.tz_convert("UTC").tz_localize(None)</code> (UTC times), or <code>index.tz_localize(None)</code> (local clock times, which repeat an hour when daylight saving time ends).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">posterior_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[str]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">posterior_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Collection[str]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional mapping from a posterior site name to its non-sample dimension names, e.g.&nbsp;<code>{"drift": ["time"]}</code>. Sites listed here share the tree-wide <code>time</code> coordinate; unlisted sites keep ArviZ’s auto-named dims. This is an explicit opt-in on purpose: inferring time-indexed sites from trace shapes is fragile (a coincidental <code>n_params == n_time</code> would misattribute the axis).</p>
+<p>Optional mapping from a posterior site name to its non-sample dimension names, e.g.&nbsp;<code>{"drift": ["time"]}</code>. Sites listed here share the tree-wide <code>time</code> coordinate; unlisted sites keep ArviZ’s auto-named dims. This is an explicit opt-in on purpose: inferring time-indexed sites from trace shapes is fragile (a coincidental <code>n_params == n_time</code> would misattribute the axis). Each value, like <code>covariate_dims</code> and <code>obs_dims</code>, is any ordered one-dimensional collection of <code>str</code> (a list, a tuple, a NumPy array, a pandas index).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">covariate_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">covariate_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Collection[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional dimension names for the stored covariates, one per axis; defaults to the 2-D <code>("time", "covariate_dim")</code> layout. Use this when <code>covariates</code> carries extra batch axes, e.g.&nbsp;a panel tensor shaped <code>(channel, time, series)</code> with <code>covariate_dims=["channel", "time", "series"]</code>. The time axis is always <code>-2</code> (the package-wide convention), so its entry should be named <code>"time"</code> to share the tree-wide time coordinate.
+<p>Optional dimension names for the stored covariates, one per axis, as any ordered one-dimensional collection of <code>str</code>; defaults to the 2-D <code>("time", "covariate_dim")</code> layout. Use this when <code>covariates</code> carries extra batch axes, e.g.&nbsp;a panel tensor shaped <code>(channel, time, series)</code> with <code>covariate_dims=["channel", "time", "series"]</code>. The time axis is always <code>-2</code> (the package-wide convention), so its entry should be named <code>"time"</code> to share the tree-wide time coordinate.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">obs_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Collection[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Optional dimension names for the <code>obs</code> variables of <code>observed_data</code>, <code>posterior_predictive</code> and <code>predictions</code>, one per <code>data</code> axis, as any ordered one-dimensional collection of <code>str</code>. Defaults to <code>("time", "obs_dim")</code> for 2-D <code>data</code> and names the leading batch axes of a panel <code>obs_batch_0</code>, <code>obs_batch_1</code>, …, e.g.&nbsp;<code>("obs_batch_0", "time", "obs_dim")</code> for <code>(batch, time, obs)</code> data. Give a batch axis the name of the matching <code>covariate_dims</code> entry so the groups share it, e.g. <code>obs_dims=["origin", "time", "destin"]</code> with <code>covariate_dims=["origin", "time", "covariate_dim"]</code>; <code>coords</code> labels and <code>posterior_dims</code> entries refer to the same names. Axis <code>-2</code> must be named <code>"time"</code> (it carries the tree-wide time coordinate), the names must be distinct, and <code>"chain"</code> and <code>"draw"</code> are reserved for the sample dims.
 </dd>
 </dl>
 </div>
@@ -988,7 +1012,7 @@ Optional dimension names for the stored covariates, one per axis; defaults to th
 <dl>
 <dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
 <dd>
-A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <code>num_chains</code>), <code>posterior_predictive</code> (in-sample <code>obs</code>), <code>observed_data</code>, and <code>constant_data</code> groups. When <code>covariates</code> extends beyond <code>data</code>, also <code>predictions</code> and <code>predictions_constant_data</code> groups (sharing the same <code>num_chains</code> split).
+A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <code>num_chains</code>), <code>posterior_predictive</code> (in-sample <code>obs</code>), <code>observed_data</code>, and <code>constant_data</code> groups. When <code>covariates</code> extends beyond <code>data</code>, also <code>predictions</code> and <code>predictions_constant_data</code> groups (sharing the same <code>num_chains</code> split). The <code>obs</code> variable has dims <code>obs_dims</code> in <code>observed_data</code> and <code>(chain, draw, *obs_dims)</code> in <code>posterior_predictive</code> and <code>predictions</code>.
 </dd>
 </dl>
 </div>
@@ -999,7 +1023,11 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>covariates</code> is shorter than <code>data</code> along the time axis, if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon, or if <code>posterior</code>’s sample count is not evenly divisible by <code>num_chains</code>.</p>
+<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if <code>data</code> has no time steps, if <code>covariates</code> is shorter than <code>data</code> along the time axis, if a <code>posterior</code> leaf has no sample axis, if a forecast-horizon key of <code>posterior</code> (one that ends in <code>"_future"</code> or contains <code>"_future_"</code>, or <code>"forecast"</code>) has a non-empty leaf, if <code>"obs"</code> is the only key of <code>posterior</code>, if <code>time_coord</code> or a <code>coords</code> value is not a one-dimensional collection of labels (a set, a dict, a scalar, a 2-D array, ragged input) or is a <code>pd.MultiIndex</code>, if <code>time_coord</code> mixes time zones (or aware and naive times), if <code>obs_dims</code>, <code>covariate_dims</code> or a <code>posterior_dims</code> value is not an ordered one-dimensional collection (a set, a dict, a single <code>str</code>), if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon, if <code>num_chains</code> is not a positive integer (<code>bool</code> included), if <code>posterior</code>’s sample count is not evenly divisible by <code>num_chains</code>, if a <code>posterior</code> value of an <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a> site does not have one step per <code>data</code> row (a posterior drawn for a different training length), or if the in-sample draws do not have one time step per <code>data</code> row or the forecast draws one per <code>covariates</code> row past <code>data</code> (see <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>). Also if <code>obs_dims</code> does not name every <code>data</code> axis, does not name axis <code>-2</code> <code>"time"</code>, repeats a name or uses <code>"chain"</code> or <code>"draw"</code>, if the in-sample or forecast draws do not have one axis per <code>obs_dims</code> name (the model’s <code>obs</code> site must have the layout of <code>data</code>), or if an in-sample draw does not have the shape of <code>data</code> (a predictor shared by the series of <code>data</code> without a series plate draws one column).</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">TypeError</span></code></dt>
+<dd>
+<p>If a name in <code>obs_dims</code>, <code>covariate_dims</code> or a <code>posterior_dims</code> value is not a <code>str</code>.</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
 <dd>
@@ -1011,7 +1039,7 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <
 </dd>
 <dt><code> <span class="doc-parameter-annotation">DevicePlatformError</span></code></dt>
 <dd>
-If <code>device</code> names a platform whose backend is not initialized (see <code>_resolve_device()</code>).
+If <code>device</code> names a platform whose backend is not initialized (see <code>resolve_device()</code>).
 </dd>
 </dl>
 </div>
@@ -1053,7 +1081,8 @@ If <code>device="cpu"</code> is requested and the JAX CPU backend is not initial
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }
       // Inspect non-navigation links and adorn them if external
-     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      window.quartoDecorateExternalLinks = function (root) {
+     var links = (root || window.document).querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
       for (var i=0; i<links.length; i++) {
         const link = links[i];
         if (!isInternal(link.href)) {
@@ -1062,8 +1091,69 @@ If <code>device="cpu"</code> is requested and the JAX CPU backend is not initial
           if (link.dataset.originalHref !== undefined) {
             link.href = link.dataset.originalHref;
           }
+          if (!link.classList.contains('no-external-icon')) {
+          }
         }
       }
+      };
+      window.quartoDecorateExternalLinks(window.document);
+    // Esc closes the popup (WCAG 1.4.13) and focus leaving both trigger and
+    // popup closes it (WCAG 2.4.11); tippy handles neither for interactive popups.
+    const hideOnEscAndFocusOut = {
+      name: 'hideOnEscAndFocusOut',
+      defaultValue: true,
+      fn(instance) {
+        const dismiss = () => {
+          // A show scheduled by the trigger delay would otherwise reopen it
+          instance.clearDelayTimeouts();
+          instance.hide();
+        };
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') {
+            return;
+          }
+          // Keep Esc from also reaching page handlers (e.g. reveal.js overview),
+          // except an open reveal.js slide menu, which Esc should close too.
+          // The menu handles keys only when its keyboard option is on.
+          const menuHandlesEsc = window.Reveal?.getPlugin?.('menu')?.isOpen() &&
+            window.Reveal.getConfig().menu?.keyboard !== false;
+          if (!menuHandlesEsc) {
+            event.stopPropagation();
+          }
+          if (instance.popper.contains(window.document.activeElement)) {
+            // Disabled while refocusing so the focus trigger does not reopen it
+            instance.disable();
+            instance.reference.focus();
+            instance.enable();
+          }
+          dismiss();
+        };
+        const onFocusOut = (event) => {
+          const target = event.relatedTarget;
+          if (target && !instance.reference.contains(target) &&
+              !instance.popper.contains(target)) {
+            dismiss();
+          }
+        };
+        // On the trigger too: a click trigger (code-annotations: select) has no
+        // blur handling. Attached for the instance's lifetime so leaving the
+        // trigger also cancels a show still pending on the trigger delay.
+        instance.reference.addEventListener('focusout', onFocusOut);
+        return {
+          onShow() {
+            window.document.addEventListener('keydown', onKeyDown, true);
+            instance.popper.addEventListener('focusout', onFocusOut);
+          },
+          onHide() {
+            window.document.removeEventListener('keydown', onKeyDown, true);
+            instance.popper.removeEventListener('focusout', onFocusOut);
+          },
+          onDestroy() {
+            instance.reference.removeEventListener('focusout', onFocusOut);
+          },
+        };
+      },
+    };
     function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
       const config = {
         allowHTML: true,
@@ -1077,6 +1167,7 @@ If <code>device="cpu"</code> is requested and the JAX CPU backend is not initial
         interactiveBorder: 10,
         theme: 'quarto',
         placement: 'bottom-start',
+        plugins: [hideOnEscAndFocusOut],
       };
       if (contentFn) {
         config.content = contentFn;
@@ -1239,44 +1330,54 @@ If <code>device="cpu"</code> is requested and the JAX CPU backend is not initial
           const lineIds = lines.map((line) => {
             return targetCell + "-" + line;
           })
-          let top = null;
-          let height = null;
-          let parent = null;
+          // Each band is positioned against its own containing block, which is
+          // not the offsetParent of the lines, so place it from client rects.
+          const placeBand = (band, firstEl, lastEl, codeBlock) => {
+            const container = band.offsetParent;
+            if (container === null) {
+              return;
+            }
+            const containerRect = container.getBoundingClientRect();
+            // Reveal.js scales slides with a transform, so convert client
+            // pixels back to the CSS pixels of the container.
+            const scale = containerRect.height / container.offsetHeight || 1;
+            const firstRect = firstEl.getBoundingClientRect();
+            const lastRect = lastEl.getBoundingClientRect();
+            const top = (firstRect.top - containerRect.top) / scale - container.clientTop + container.scrollTop;
+            const height = (lastRect.bottom - firstRect.top) / scale;
+            band.style.top = top - 2 + "px";
+            band.style.height = height + 4 + "px";
+            if (codeBlock) {
+              // Without the copy button wrapper, the containing block is wider
+              // than the code block, so span the code block explicitly.
+              const blockRect = codeBlock.getBoundingClientRect();
+              band.style.left = (blockRect.left - containerRect.left) / scale - container.clientLeft + container.scrollLeft + "px";
+              band.style.width = blockRect.width / scale + "px";
+            }
+          };
           if (lineIds.length > 0) {
-              //compute the position of the single el (top and bottom and make a div)
-              const el = window.document.getElementById(lineIds[0]);
-              top = el.offsetTop;
-              height = el.offsetHeight;
-              parent = el.parentElement.parentElement;
-            if (lineIds.length > 1) {
-              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
-              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
-              height = bottom - top;
+            const el = window.document.getElementById(lineIds[0]);
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const parent = el.parentElement.parentElement;
+            // cook up a div (if necessary) and position it
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
             }
-            if (top !== null && height !== null && parent !== null) {
-              // cook up a div (if necessary) and position it 
-              let div = window.document.getElementById("code-annotation-line-highlight");
-              if (div === null) {
-                div = window.document.createElement("div");
-                div.setAttribute("id", "code-annotation-line-highlight");
-                div.style.position = 'absolute';
-                parent.appendChild(div);
-              }
-              div.style.top = top - 2 + "px";
-              div.style.height = height + 4 + "px";
-              div.style.left = 0;
-              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
-              if (gutterDiv === null) {
-                gutterDiv = window.document.createElement("div");
-                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
-                gutterDiv.style.position = 'absolute';
-                const codeCell = window.document.getElementById(targetCell);
-                const gutter = codeCell.querySelector('.code-annotation-gutter');
-                gutter.appendChild(gutterDiv);
-              }
-              gutterDiv.style.top = top - 2 + "px";
-              gutterDiv.style.height = height + 4 + "px";
+            placeBand(div, el, lastEl, parent.closest("div.sourceCode") || parent);
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
             }
+            placeBand(gutterDiv, el, lastEl);
             selectedAnnoteEl = annoteEl;
           }
         };
@@ -1374,6 +1475,9 @@ If <code>device="cpu"</code> is requested and the JAX CPU backend is not initial
       }
     }
   });
+  </script>
+  <script type="application/javascript">
+  window.quartoScrollableRegionsLabels = {"code":"Scrollable code","output":"Scrollable output"};
   </script>
 </div> <!-- /content -->
 <footer class="footer">

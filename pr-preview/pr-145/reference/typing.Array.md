@@ -135,7 +135,7 @@ __invert__(x)
 ```
 
 
-JAX implementation of [numpy.invert()](typing.Array.md#numpyro_forecast.typing.Array.__invert__). This function provides the implementation of the `~` operator for JAX arrays.
+JAX implementation of `numpy.invert()`. This function provides the implementation of the `~` operator for JAX arrays.
 
 ## Parameters
 
@@ -216,7 +216,7 @@ JAX implementation of `numpy.negative`.
 
 An array with same shape and dtype as `x` containing `-x`.
 
-See also: - [jax.numpy.positive()](typing.Array.md#numpyro_forecast.typing.Array.__pos__): Returns element-wise positive values of the input. - `jax.numpy.sign()`: Returns element-wise indication of sign of the input.
+See also: - `jax.numpy.positive()`: Returns element-wise positive values of the input. - `jax.numpy.sign()`: Returns element-wise indication of sign of the input.
 
 ## Notes
 
@@ -274,7 +274,7 @@ __pos__(x)
 ```
 
 
-JAX implementation of [numpy.positive](typing.Array.md#numpyro_forecast.typing.Array.__pos__).
+JAX implementation of `numpy.positive`.
 
 ## Parameters
 

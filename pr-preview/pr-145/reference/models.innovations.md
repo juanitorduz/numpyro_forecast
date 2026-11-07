@@ -41,3 +41,10 @@ Optional reparameterization (e.g. `LocScaleReparam`) applied to both the in-sam
 
 `Array`  
 The latent over the full horizon with time at axis `-2`.
+
+
+## Raises
+
+
+`ValueError`  
+If a given value of the `name` or `f"{name}_future"` site (for example a posterior that `Predictive` substitutes) does not have `h.t_obs` or `h.future` steps on its time plate: the usual cause is a posterior drawn for a different training length.

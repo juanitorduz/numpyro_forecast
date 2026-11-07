@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.19">
+<meta name="generator" content="quarto-1.11.9">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -76,14 +76,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../../docs/examples/m5_hierarchical_state_space.html" rel="prev">
 <script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/scrollable-regions/scrollable-regions.js" type="module"></script>
 <script src="../../site_libs/quarto-html/popper.min.js"></script>
 <script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-63b5708e65d6cd79cd7618c58d0c21e7.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../../site_libs/bootstrap/bootstrap-c4d708d4e441993890320f2eab87994c.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-96bed50882d7ed35d1aa4676b982e3c5.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -183,19 +184,18 @@ window.Quarto = {
   <meta name="twitter:description" content="Bayesian TSB method for intermittent demand: masked exponential smoothing of demand sizes and a per-period demand probability, so the forecast decays during zero-runs where Croston’s stays frozen. NUTS inference and one-step-ahead cross-validation.">
 </head>
 
-<body class="nav-sidebar floating nav-fixed quarto-light">
+<body class="nav-sidebar floating nav-fixed quarto-light"><a id="quarto-skip-link" class="visually-hidden-focusable" href="#quarto-document-content">Skip to main content</a>
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
-    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark" aria-label="Site">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../../index.html">
     <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
     </a>
   </div>
-            <div id="quarto-search" class=""></div>
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
   <span class="navbar-toggler-icon"></span>
 </button>
           <div class="collapse navbar-collapse" id="navbarCollapse">
@@ -223,15 +223,16 @@ window.Quarto = {
           </div> <!-- /navcollapse -->
             <div class="quarto-navbar-tools">
 </div>
+            <div id="quarto-search" class=""></div>
       </div> <!-- /container-fluid -->
     </nav>
-  <nav class="quarto-secondary-nav">
+  <nav class="quarto-secondary-nav" aria-label="Toolbar">
     <div class="container-fluid d-flex">
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
         <h1 class="quarto-secondary-nav-title no-breadcrumbs">TSB Method for Intermittent Demand</h1>
-        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        <a class="flex-grow-1" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
   </nav>
@@ -239,7 +240,7 @@ window.Quarto = {
 <!-- content -->
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
-  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto" aria-label="Section">
     <div class="sidebar-menu-container"> 
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
@@ -270,6 +271,12 @@ window.Quarto = {
   <div class="sidebar-item-container"> 
   <a href="../../docs/examples/croston.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Croston’s Method for Intermittent Demand</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../docs/examples/dynestyx_getting_started.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Getting Started with <code>dynestyx</code> State Space Models</span></a>
   </div>
 </li>
         <li class="sidebar-item">
@@ -355,11 +362,11 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/tsb-preview.html"><i class="bi bi-journal-code"></i>TSB Method for Intermittent Demand with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
-<main class="content" id="quarto-document-content">
+<main class="content" id="quarto-document-content" tabindex="-1">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
@@ -385,71 +392,80 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/tsb.ipynb" data-notebook-title="TSB Method for Intermittent Demand with `numpyro_forecast`" data-notebook-cellid="df433ad4">
 <p>TSB Method for Intermittent Demand with <code>numpyro_forecast</code></p>
-<p>This notebook ports the blog post <a href="https://juanitorduz.github.io/tsb_numpyro/"><strong>TSB Method for Intermittent Time Series Forecasting in NumPyro</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. It is the direct follow-up to the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html">Croston example</a>, and rather than re-deriving intermittent demand from scratch, we focus on the one thing the <strong>Teunter-Syntetos-Babai (TSB)</strong> method changes and why that change matters.</p>
+<p>This notebook ports the blog post <a href="https://juanitorduz.github.io/tsb_numpyro/"><strong>TSB Method for Intermittent Time Series Forecasting in NumPyro</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. It is the direct follow-up to the <a href="croston.html">Croston example</a>, and rather than re-deriving intermittent demand from scratch, we focus on the one thing the <strong>Teunter-Syntetos-Babai (TSB)</strong> method changes and why that change matters.</p>
 <p>The setup is the same. <strong>Intermittent demand</strong> series are dominated by zeros, with the occasional non-zero demand arriving at irregular times (spare parts, slow-moving SKUs). <a href="https://juanitorduz.github.io/croston_numpyro/">Croston’s method</a> splits the series <span class="math inline">y_t</span> into <strong>demand sizes</strong> <span class="math inline">z_t</span> (the non-zero values) and <strong>demand intervals</strong> <span class="math inline">p_t</span> (the gaps between demands), smooths each with simple exponential smoothing, and forecasts the ratio <span class="math inline">\hat{z}_t / \hat{p}_t</span>: the expected demand per period. Its well-known weakness is that both components update <strong>only at demand events</strong>. Once demand stops, a Croston forecast never moves again: it stays frozen at the last level no matter how long the drought runs, so it cannot express that a slow item is going obsolete.</p>
 <p>TSB fixes exactly this. It keeps the demand-size channel unchanged, but replaces the interval channel with a <strong>demand probability</strong> <span class="math inline">p_t \in [0, 1]</span> that is smoothed at <strong>every period</strong>, not just at demand events:</p>
 <p><span class="math display">\hat{y}_{t+h} = \hat{z}_t \cdot \hat{p}_t,</span></p>
 <p>the expected demand size times the probability that a demand occurs. Because the probability is updated on every zero as well as every demand, it <strong>decays geometrically through a run of zeros</strong> and jumps back up at the next demand, so the forecast responds to the <em>recency</em> of demand. That single structural change, one smoothing recursion that runs every period instead of only at events, is the whole story, and it is what this notebook makes concrete. As a side benefit, TSB smooths a probability directly instead of an inverse interval, so it sidesteps the inversion (Jensen) bias and the Syntetos-Boylan correction that the Croston notebook has to reckon with.</p>
-<p>Two practical notes on the port, unchanged from the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html">Croston example</a>:</p>
+<p>Two practical notes on the port, unchanged from the <a href="croston.html">Croston example</a>:</p>
 <ul>
-<li>We reuse the <em>same</em> reusable <code>level_channel</code> (the simple exponential smoothing level model from the blog’s <a href="https://juanitorduz.github.io/exponential_smoothing_numpyro/">exponential smoothing predecessor</a>) on the <strong>raw calendar timeline</strong>: each level recursion is one call to the package’s <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block, with a boolean gate deciding when the level updates. The only difference from Croston lives in <em>which gate is passed</em>: Croston freezes the level (and masks the likelihood) outside demand events, while TSB’s probability channel updates on every period. Everything plugs straight into plain NumPyro NUTS, <a href="../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a>, and <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a>.</li>
+<li>We reuse the <em>same</em> reusable <code>level_channel</code> (the simple exponential smoothing level model from the blog’s <a href="https://juanitorduz.github.io/exponential_smoothing_numpyro/">exponential smoothing predecessor</a>) on the <strong>raw calendar timeline</strong>: each level recursion is one call to the package’s <a href="../../reference/models.ssoe.html"><code>ssoe</code></a> building block, with a boolean gate deciding when the level updates. The only difference from Croston lives in <em>which gate is passed</em>: Croston freezes the level (and masks the likelihood) outside demand events, while TSB’s probability channel updates on every period. Everything plugs straight into plain NumPyro NUTS, <a href="../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a>, and <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a>.</li>
 <li>The observed series itself plays the role of the covariates: <a href="../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> takes the driving series as an argument, and the package’s <a href="../../reference/predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample</a> and <a href="../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> call the model with <code>data=None</code>, so the history has to travel through <code>covariates</code>, which spans the full horizon at prediction time. The model only ever reads the first <code>t_obs</code> rows (the block checks this), so no future information leaks into a forecast.</li>
 </ul>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
 <div id="416589b9" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:17:41.234685Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:17:41.234441Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:17:43.917345Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:17:43.916858Z&quot;}}" data-execution_count="1">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> functools <span class="im">import</span> partial</span>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> warnings</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> preliz <span class="im">as</span> pz</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.artist <span class="im">import</span> Artist</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.axes <span class="im">import</span> Axes</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.handlers <span class="im">import</span> scope</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> MCMC, NUTS, Predictive</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    SSOEResult,</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    backtest,</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>    ssoe,</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.arrays <span class="im">import</span> pad_future</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastModel</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># preliz warns at import time when PyMC is not installed; this example does not use PyMC.</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>warnings.filterwarnings(<span class="st">"ignore"</span>, message<span class="op">=</span><span class="st">"PyMC not installed"</span>, category<span class="op">=</span><span class="pp">UserWarning</span>)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>warnings.filterwarnings(</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ignore"</span>, message<span class="op">=</span><span class="st">"When multiple credible intervals are plotted"</span>, category<span class="op">=</span><span class="pp">UserWarning</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> functools <span class="im">import</span> partial</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> preliz <span class="im">as</span> pz</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.artist <span class="im">import</span> Artist</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.axes <span class="im">import</span> Axes</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.handlers <span class="im">import</span> scope</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> MCMC, NUTS, Predictive</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    SSOEResult,</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    backtest,</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    ssoe,</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.arrays <span class="im">import</span> pad_future</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastModel</span>
 <span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
-<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
-<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
 </div>
 </section>
 <section id="generate-data" class="level1">
 <h1>Generate data</h1>
-<p>We use exactly the same data as the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html">Croston example</a> so the two notebooks are directly comparable: <span class="math inline">T = 80</span> periods of intermittent demand drawn from a Poisson distribution with a small rate, <span class="math inline">y_t \sim \text{Poisson}(0.3)</span>, so roughly three quarters of the periods are zero and the non-zero demands are small counts. We hold out the last <span class="math inline">15\%</span> of the series as a test window for the fixed-origin forecast (the rolling-origin evaluation at the end refits over this window step by step).</p>
+<p>We use exactly the same data as the <a href="croston.html">Croston example</a> so the two notebooks are directly comparable: <span class="math inline">T = 80</span> periods of intermittent demand drawn from a Poisson distribution with a small rate, <span class="math inline">y_t \sim \text{Poisson}(0.3)</span>, so roughly three quarters of the periods are zero and the non-zero demands are small counts. We hold out the last <span class="math inline">15\%</span> of the series as a test window for the fixed-origin forecast (the rolling-origin evaluation at the end refits over this window step by step).</p>
 <div id="06d7cd64" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:17:43.919208Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:17:43.918997Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:17:44.294904Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:17:44.294443Z&quot;}}" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> <span class="dv">80</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>lam <span class="op">=</span> <span class="fl">0.3</span></span>
@@ -543,7 +559,7 @@ empirical demand rate (share of periods with demand): 0.294</code></pre>
 </section>
 <section id="prior-for-the-smoothing-parameters" class="level1">
 <h1>Prior for the smoothing parameters</h1>
-<p>Both components get a <span class="math inline">\text{Beta}(2, 20)</span> prior on their smoothing parameter, the <em>same</em> prior the Croston notebook uses. Its mean is <span class="math inline">2/22 \approx 0.09</span> and most of its mass sits below <span class="math inline">0.3</span>, consistent with the standard practice of restricting the smoothing parameter to roughly <span class="math inline">[0.1, 0.3]</span>: a level that reacts strongly to each observation produces volatile forecasts on sparse data. The blog post uses a slightly more reactive <span class="math inline">\text{Beta}(10, 40)</span> (mean <span class="math inline">0.2</span>); we keep <span class="math inline">\text{Beta}(2, 20)</span> so that the <em>only</em> difference from the Croston notebook is the structural one (which recursion updates every period), not the prior.</p>
+<p>Both components get a <span class="math inline">\text{Beta}(2, 20)</span> prior on their smoothing parameter, the <em>same</em> prior the Croston notebook uses. Its mean is <span class="math inline">2/22 \approx 0.09</span> and most of its mass (<span class="math inline">99.4\%</span>) sits below <span class="math inline">0.3</span>, in the spirit of the standard practice of restricting the smoothing parameter to roughly <span class="math inline">[0.1, 0.3]</span>: a level that reacts strongly to each observation produces volatile forecasts on sparse data. The prior is more conservative than that range: its mean sits just below it, and <span class="math inline">63.5\%</span> of its mass is below <span class="math inline">0.1</span>. The blog post uses a slightly more reactive <span class="math inline">\text{Beta}(10, 40)</span> (mean <span class="math inline">0.2</span>); we keep <span class="math inline">\text{Beta}(2, 20)</span> so that the <em>only</em> difference from the Croston notebook is the structural one (which recursion updates every period), not the prior.</p>
 <div id="26a25b3f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:17:44.739470Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:17:44.739362Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:17:45.719423Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:17:45.718966Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="dv">5</span>))</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">2</span>, <span class="dv">20</span>).plot_pdf(ax<span class="op">=</span>ax, color<span class="op">=</span><span class="st">"C0"</span>)</span>
@@ -589,7 +605,7 @@ empirical demand rate (share of periods with demand): 0.294</code></pre>
 \sigma &amp; \sim \text{HalfNormal}(1).
 \end{align*}</span></p>
 <p>One transparency note on the priors, sharper than in the Croston notebook: <span class="math inline">\text{Normal}(0, 1)</span> on the initial levels allows negative values, which is looser still for the probability channel, whose level is meant to live in <span class="math inline">[0, 1]</span>. We keep the loose prior for comparability with the blog post and the Croston notebook; centering the probability init near the base demand rate, using a <span class="math inline">\text{Beta}</span> init, or replacing the Gaussian <code>obs_prob</code> likelihood with a <span class="math inline">\text{Bernoulli}</span> one (the indicator is, after all, a Bernoulli outcome) are the natural refinements.</p>
-<p>Because both components run the <em>same</em> level model, we write it once and compose with NumPyro’s <a href="https://num.pyro.ai/en/stable/handlers.html#scope"><code>scope</code></a> handler, exactly as the Croston notebook does. The reusable <code>level_channel</code> samples the three component priors (sites <code>smoothing</code>, <code>init</code>, <code>noise</code>) and hands the package’s <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block a <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> that emits the <em>pre-update</em> level (the one-step-ahead mean) and an <code>update</code> that applies the gated update; the block owns the in-sample filter and, when forecasting, the innovation site and the forecast scan. The gate is an <code>xs</code> input padded with zeros over the horizon by <a href="../../reference/arrays.pad_future.html#numpyro_forecast.arrays.pad_future" class="gdls-link gdls-code">pad_future</a>, so the level is frozen there and the forecast is the final level plus iid innovation noise, the level model’s flat forecast distribution; that explicit freeze is also what keeps the cross-validation below leak-free, since <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> hands the model real future rows. Calling the helper under <code>scope(level_channel, "z", divider="_")</code> and <code>scope(level_channel, "p", divider="_")</code> yields the parameter names <code>z_smoothing</code>, <code>z_init</code>, …, and the innovation sites <code>z_eps_future</code> and <code>p_eps_future</code>. <strong>This is the identical helper used in the Croston notebook</strong>; the entire difference between the two methods is in the <code>tsb</code> body below, in a single argument.</p>
+<p>Because both components run the <em>same</em> level model, we write it once and compose with NumPyro’s <a href="https://num.pyro.ai/en/stable/handlers.html#scope"><code>scope</code></a> handler, exactly as the Croston notebook does. The reusable <code>level_channel</code> samples the three component priors (sites <code>smoothing</code>, <code>init</code>, <code>noise</code>) and hands the package’s <a href="../../reference/models.ssoe.html"><code>ssoe</code></a> building block a <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> that emits the <em>pre-update</em> level (the one-step-ahead mean) and an <code>update</code> that applies the gated update; the block owns the in-sample filter and, when forecasting, the innovation site and the forecast scan. The gate is an <code>xs</code> input padded with zeros over the horizon by <a href="../../reference/arrays.pad_future.html#numpyro_forecast.arrays.pad_future" class="gdls-link gdls-code">pad_future</a>, so the level is frozen there and the forecast is the final level plus iid innovation noise, the level model’s flat forecast distribution; that explicit freeze is also what keeps the cross-validation below leak-free, since <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> hands the model real future rows. Calling the helper under <code>scope(level_channel, "z", divider="_")</code> and <code>scope(level_channel, "p", divider="_")</code> yields the parameter names <code>z_smoothing</code>, <code>z_init</code>, …, and the innovation sites <code>z_eps_future</code> and <code>p_eps_future</code>. <strong>This is the identical helper used in the Croston notebook</strong>; the entire difference between the two methods is in the <code>tsb</code> body below, in a single argument.</p>
 <p>The <code>tsb</code> body then does what is specific to TSB:</p>
 <ol type="1">
 <li><strong>Bookkeeping.</strong> From the observed prefix of the covariates it builds the demand indicator <code>is_demand</code> and the float <code>demand_indicator</code>. Where Croston passes <code>is_demand</code> as the event gate to <em>both</em> channels, TSB passes an all-<code>True</code> gate (<code>every_period</code>) to the probability channel, so that channel updates on every period. That one substitution is the method. Over the forecast horizon the all-true gate is padded with zeros like any other: TSB’s multi-step forecast is the flat level at the end of training, the assumption made visible in code rather than left implicit.</li>
@@ -696,7 +712,7 @@ empirical demand rate (share of periods with demand): 0.294</code></pre>
 <section id="inference-with-nuts" class="level1">
 <h1>Inference with NUTS</h1>
 <p>We fit the model on the training window with plain NumPyro: the No-U-Turn Sampler through <code>MCMC</code>, running <span class="math inline">4</span> chains of <span class="math inline">1{,}000</span> warmup and <span class="math inline">1{,}000</span> sampling steps each. As in Croston the posterior has six scalar parameters, three per component, and the small <code>fit_nuts</code> helper wraps the call so the cross-validation below can refit every fold with the same settings.</p>
-<p>We then export the draws into an ArviZ-schema <code>xarray.DataTree</code> with <a href="https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html"><code>to_datatree</code></a>, which restores the <code>(chain, draw)</code> structure (we pass <code>num_chains=4</code>). Because we pass the <em>extended</em> covariates, the tree automatically carries <code>predictions</code> groups with the out-of-sample forecast draws. We register both per-timestep deterministics, <code>"rate"</code> and <code>"prob"</code>, so they share the tree-wide <code>time</code> coordinate.</p>
+<p>We then export the draws into an ArviZ-schema <code>xarray.DataTree</code> with <a href="../../reference/convert.to_datatree.html"><code>to_datatree</code></a>, which restores the <code>(chain, draw)</code> structure (we pass <code>num_chains=4</code>). Because we pass the <em>extended</em> covariates, the tree automatically carries <code>predictions</code> groups with the out-of-sample forecast draws. We register both per-timestep deterministics, <code>"rate"</code> and <code>"prob"</code>, so they share the tree-wide <code>time</code> coordinate.</p>
 <div id="1db35e96" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:17:45.753414Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:17:45.753345Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:17:55.144560Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:17:55.142099Z&quot;}}" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> fit_nuts(</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    rng_key: Array, model: ForecastModel, data: Array, covariates: Array</span>
@@ -1781,7 +1797,7 @@ Group: /
 </section>
 <section id="one-step-ahead-cross-validation" class="level1">
 <h1>One-step-ahead cross-validation</h1>
-<p>The fixed-origin forecast uses one training window. The sharper experiment, and the one where TSB and Croston visibly part ways, is a <strong>rolling-origin, one-step-ahead</strong> evaluation: refit the model on an expanding training window and forecast a single step, repeatedly, across the whole test span. <a href="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html"><code>backtest</code></a> runs this loop with <code>test_window=1</code> and <code>stride=1</code>; a <code>forecast_fn</code> closure calls <code>fit_nuts</code> on each fold’s training window and hands the draws to the package’s <a href="https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html"><code>forecast</code></a> driver. With <code>min_train_window=n_train</code> the folds tile the test span exactly, one fold per held-out period, and <code>keep_predictions=True</code> retains each fold’s forecast samples; <code>num_samples</code> records the ensemble size the closure returns (<span class="math inline">4</span> chains of <span class="math inline">1{,}000</span> draws). As in the Croston notebook, the covariates handed to the closure span the full window including the held-out row, and the model’s padded gates are what keep that row out of the levels. Alongside the CRPS we track the empirical coverage of the central <span class="math inline">50\%</span> and <span class="math inline">94\%</span> intervals.</p>
+<p>The fixed-origin forecast uses one training window. The sharper experiment, and the one where TSB and Croston visibly part ways, is a <strong>rolling-origin, one-step-ahead</strong> evaluation: refit the model on an expanding training window and forecast a single step, repeatedly, across the whole test span. <a href="../../reference/evaluate.backtest.html"><code>backtest</code></a> runs this loop with <code>test_window=1</code> and <code>stride=1</code>; a <code>forecast_fn</code> closure calls <code>fit_nuts</code> on each fold’s training window and hands the draws to the package’s <a href="../../reference/predictive.forecast.html"><code>forecast</code></a> driver. With <code>min_train_window=n_train</code> the folds tile the test span exactly, one fold per held-out period, and <code>keep_predictions=True</code> retains each fold’s forecast samples; <code>num_samples</code> records the ensemble size the closure returns (<span class="math inline">4</span> chains of <span class="math inline">1{,}000</span> draws). As in the Croston notebook, the covariates handed to the closure span the full window including the held-out row, and the model’s padded gates are what keep that row out of the levels. Alongside the CRPS we track the empirical coverage of the central <span class="math inline">50\%</span> and <span class="math inline">94\%</span> intervals.</p>
 <div id="ff11f7a7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:17:57.544990Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:17:57.544812Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:19:20.649823Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:19:20.645584Z&quot;}}" data-execution_count="14">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> forecast_fn(</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    rng_key: Array,</span>
@@ -1833,7 +1849,7 @@ Group: /
 <section id="one-step-ahead-forecasts" class="level2">
 <h2 class="anchored" data-anchor-id="one-step-ahead-forecasts">One-step-ahead forecasts</h2>
 <p>Because the folds tile the test span, we can concatenate the per-fold forecast samples into a single array of one-step-ahead predictive draws and plot them in one go.</p>
-<p>This is the mirror image of the Croston plot. The <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html">Croston example</a> shows its one-step-ahead forecast <strong>barely moving while zeros accumulate</strong>, because Croston’s levels only update at demand events. TSB, updating its probability every period, does the opposite: through a run of zeros the one-step-ahead forecast <strong>slides downward</strong>, and it steps back up when a demand lands. Even on this stationary series, where the true occurrence rate is constant and so the swings are modest, the qualitative behavior is unmistakably different: TSB’s forecast tracks the recency of demand, which is precisely Croston’s structural blind spot.</p>
+<p>This is the mirror image of the Croston plot. The <a href="croston.html">Croston example</a> shows its one-step-ahead forecast <strong>barely moving while zeros accumulate</strong>, because Croston’s levels only update at demand events. TSB, updating its probability every period, does the opposite: through a run of zeros the one-step-ahead forecast <strong>slides downward</strong>, and it steps back up when a demand lands. Even on this stationary series, where the true occurrence rate is constant and so the swings are modest, the qualitative behavior is unmistakably different: TSB’s forecast tracks the recency of demand, which is precisely Croston’s structural blind spot.</p>
 <div id="6eef7b91" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:19:20.655969Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:19:20.655426Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:19:20.886203Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:19:20.884969Z&quot;}}" data-execution_count="15">
 <div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>predictions <span class="op">=</span> [r.prediction <span class="cf">for</span> r <span class="kw">in</span> results <span class="cf">if</span> r.prediction <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>]</span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>cv_pred <span class="op">=</span> np.concatenate([np.asarray(pred) <span class="cf">for</span> pred <span class="kw">in</span> predictions], axis<span class="op">=</span><span class="dv">1</span>)</span>
@@ -1865,7 +1881,7 @@ Group: /
 </section>
 <section id="crps-per-fold" class="level2">
 <h2 class="anchored" data-anchor-id="crps-per-fold">CRPS per fold</h2>
-<p>The per-fold CRPS makes the same point numerically. Where Croston’s per-fold score sits at essentially two flat levels (its forecast never moves), TSB’s score <strong>glides</strong>: through the run of held-out zeros the forecast decays steadily toward zero, fitting each accumulating zero a little better, so the CRPS falls smoothly across the drought. It jumps back up only at the two held-out demands (the first fold and the last), where the now-low forecast misses a realized <span class="math inline">1</span>. This is the opposite of Croston’s pattern, where the inflated, frozen rate scores the demands <em>better</em> than the zeros; TSB’s decaying rate instead pays its price on the demands and earns it back across the far more numerous zeros.</p>
+<p>The per-fold CRPS makes the same point numerically. Where Croston’s per-fold score sits at essentially two flat levels (its forecast never moves), TSB’s score <strong>glides</strong>: through the run of held-out zeros the forecast decays steadily toward zero, fitting each accumulating zero a little better, so the CRPS falls smoothly across the drought. It is high only at the two held-out demands (the first fold and the last), where the forecast misses a realized <span class="math inline">1</span>. Only the last of these misses comes from the decay: at the first fold the forecast has not decayed yet (it is among the highest of the test span), but it is still well below <span class="math inline">1</span>; at the last fold the forecast has decayed through the drought. This is the opposite of Croston’s pattern, where the inflated, frozen rate scores the demands <em>better</em> than the zeros; TSB’s decaying rate instead pays its price on the demands and earns it back across the far more numerous zeros.</p>
 <div id="24dbe99c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:19:20.888183Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:19:20.888058Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:19:21.007983Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:19:21.007251Z&quot;}}" data-execution_count="16">
 <div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>ax.plot(split_points, test_crps, <span class="st">"o-"</span>, color<span class="op">=</span><span class="st">"C1"</span>, label<span class="op">=</span><span class="st">"out-of-sample CRPS"</span>)</span>
@@ -1912,22 +1928,22 @@ empirical 94% coverage: 1.00  (nominal 0.94)</code></pre>
 </section>
 <section id="a-final-note-tsb-versus-arma" class="level1">
 <h1>A final note: TSB versus ARMA</h1>
-<p>It is worth being explicit about why a classical ARMA model is not the tool here. ARMA (and ARIMA) describe a continuous, autocorrelated series fluctuating around a stable mean with additive noise, and they forecast by extrapolating that autocorrelation. Intermittent demand breaks every one of those assumptions: the series is mostly exact zeros with a spike-at-zero marginal, the per-period mean is a tiny rate rather than a level to revert to, and an ARMA fit would smear a smooth continuous prediction across the zeros while never separating <em>how much</em> is demanded from <em>whether</em> a demand occurs. TSB (like Croston) instead decomposes the series into a demand size and a demand probability, which is the structurally correct representation for this kind of data. What the notebook does share with the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html">ARMA example</a> is only the mechanical scaffolding, the <a href="../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> building block, the series-as-covariates carrier and the expanding-window <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> loop, not the modeling assumptions.</p>
+<p>It is worth being explicit about why a classical ARMA model is not the tool here. ARMA (and ARIMA) describe a continuous, autocorrelated series fluctuating around a stable mean with additive noise, and they forecast by extrapolating that autocorrelation. Intermittent demand breaks every one of those assumptions: the series is mostly exact zeros with a spike-at-zero marginal, the per-period mean is a tiny rate rather than a level to revert to, and an ARMA fit would smear a smooth continuous prediction across the zeros while never separating <em>how much</em> is demanded from <em>whether</em> a demand occurs. TSB (like Croston) instead decomposes the series into a demand size and a demand probability, which is the structurally correct representation for this kind of data. What the notebook does share with the <a href="arma.html">ARMA example</a> is only the mechanical scaffolding, the <a href="../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> building block, the series-as-covariates carrier and the expanding-window <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> loop, not the modeling assumptions.</p>
 </section>
 <section id="references" class="level1">
 <h1>References</h1>
 <ul>
 <li>Orduz, J. <a href="https://juanitorduz.github.io/tsb_numpyro/"><em>TSB Method for Intermittent Time Series Forecasting in NumPyro</em></a>. The blog post this notebook ports.</li>
-<li>Orduz, J. <a href="https://juanitorduz.github.io/croston_numpyro/"><em>Croston’s Method for Intermittent Time Series Forecasting in NumPyro</em></a>, and the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html">Croston example</a> in this documentation. The predecessor method this notebook is contrasted against.</li>
+<li>Orduz, J. <a href="https://juanitorduz.github.io/croston_numpyro/"><em>Croston’s Method for Intermittent Time Series Forecasting in NumPyro</em></a>, and the <a href="croston.html">Croston example</a> in this documentation. The predecessor method this notebook is contrasted against.</li>
 <li>Orduz, J. <a href="https://juanitorduz.github.io/exponential_smoothing_numpyro/"><em>Notes on Exponential Smoothing with NumPyro</em></a>. The predecessor post whose level model both notebooks reuse.</li>
 <li>Teunter, R. H., Syntetos, A. A., &amp; Babai, M. Z. (2011). <em>Intermittent demand: Linking forecasting to inventory obsolescence</em>. European Journal of Operational Research, 214(3), 606-615. The paper that introduces the TSB method.</li>
 <li>Croston, J. D. (1972). <em>Forecasting and stock control for intermittent demands</em>. Operational Research Quarterly, 23(3), 289-303.</li>
 <li>Morgan, P. <a href="https://www.pmorgan.com.au/tutorials/adaptations-of-crostons-method/"><em>Adaptations of Croston’s Method</em></a>. A tutorial covering TSB alongside the other Croston variants.</li>
 <li>statsforecast documentation: <a href="https://nixtlaverse.nixtla.io/statsforecast/docs/models/tsb.html"><code>TSB</code></a>, the classical baseline the blog post compares against.</li>
-<li>The <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html">ARMA example</a> in this documentation, which introduces the series-as-covariates pattern and the expanding-window <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> workflow.</li>
+<li>The <a href="arma.html">ARMA example</a> in this documentation, which introduces the series-as-covariates pattern and the expanding-window <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> workflow.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/tsb-preview.html#df433ad4">Source: TSB Method for Intermittent Demand with `numpyro_forecast`</a></div>
+</div>
 
 
 
@@ -1948,7 +1964,8 @@ empirical 94% coverage: 1.00  (nominal 0.94)</code></pre>
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }
       // Inspect non-navigation links and adorn them if external
-     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      window.quartoDecorateExternalLinks = function (root) {
+     var links = (root || window.document).querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
       for (var i=0; i<links.length; i++) {
         const link = links[i];
         if (!isInternal(link.href)) {
@@ -1957,8 +1974,69 @@ empirical 94% coverage: 1.00  (nominal 0.94)</code></pre>
           if (link.dataset.originalHref !== undefined) {
             link.href = link.dataset.originalHref;
           }
+          if (!link.classList.contains('no-external-icon')) {
+          }
         }
       }
+      };
+      window.quartoDecorateExternalLinks(window.document);
+    // Esc closes the popup (WCAG 1.4.13) and focus leaving both trigger and
+    // popup closes it (WCAG 2.4.11); tippy handles neither for interactive popups.
+    const hideOnEscAndFocusOut = {
+      name: 'hideOnEscAndFocusOut',
+      defaultValue: true,
+      fn(instance) {
+        const dismiss = () => {
+          // A show scheduled by the trigger delay would otherwise reopen it
+          instance.clearDelayTimeouts();
+          instance.hide();
+        };
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') {
+            return;
+          }
+          // Keep Esc from also reaching page handlers (e.g. reveal.js overview),
+          // except an open reveal.js slide menu, which Esc should close too.
+          // The menu handles keys only when its keyboard option is on.
+          const menuHandlesEsc = window.Reveal?.getPlugin?.('menu')?.isOpen() &&
+            window.Reveal.getConfig().menu?.keyboard !== false;
+          if (!menuHandlesEsc) {
+            event.stopPropagation();
+          }
+          if (instance.popper.contains(window.document.activeElement)) {
+            // Disabled while refocusing so the focus trigger does not reopen it
+            instance.disable();
+            instance.reference.focus();
+            instance.enable();
+          }
+          dismiss();
+        };
+        const onFocusOut = (event) => {
+          const target = event.relatedTarget;
+          if (target && !instance.reference.contains(target) &&
+              !instance.popper.contains(target)) {
+            dismiss();
+          }
+        };
+        // On the trigger too: a click trigger (code-annotations: select) has no
+        // blur handling. Attached for the instance's lifetime so leaving the
+        // trigger also cancels a show still pending on the trigger delay.
+        instance.reference.addEventListener('focusout', onFocusOut);
+        return {
+          onShow() {
+            window.document.addEventListener('keydown', onKeyDown, true);
+            instance.popper.addEventListener('focusout', onFocusOut);
+          },
+          onHide() {
+            window.document.removeEventListener('keydown', onKeyDown, true);
+            instance.popper.removeEventListener('focusout', onFocusOut);
+          },
+          onDestroy() {
+            instance.reference.removeEventListener('focusout', onFocusOut);
+          },
+        };
+      },
+    };
     function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
       const config = {
         allowHTML: true,
@@ -1972,6 +2050,7 @@ empirical 94% coverage: 1.00  (nominal 0.94)</code></pre>
         interactiveBorder: 10,
         theme: 'quarto',
         placement: 'bottom-start',
+        plugins: [hideOnEscAndFocusOut],
       };
       if (contentFn) {
         config.content = contentFn;
@@ -2134,44 +2213,54 @@ empirical 94% coverage: 1.00  (nominal 0.94)</code></pre>
           const lineIds = lines.map((line) => {
             return targetCell + "-" + line;
           })
-          let top = null;
-          let height = null;
-          let parent = null;
+          // Each band is positioned against its own containing block, which is
+          // not the offsetParent of the lines, so place it from client rects.
+          const placeBand = (band, firstEl, lastEl, codeBlock) => {
+            const container = band.offsetParent;
+            if (container === null) {
+              return;
+            }
+            const containerRect = container.getBoundingClientRect();
+            // Reveal.js scales slides with a transform, so convert client
+            // pixels back to the CSS pixels of the container.
+            const scale = containerRect.height / container.offsetHeight || 1;
+            const firstRect = firstEl.getBoundingClientRect();
+            const lastRect = lastEl.getBoundingClientRect();
+            const top = (firstRect.top - containerRect.top) / scale - container.clientTop + container.scrollTop;
+            const height = (lastRect.bottom - firstRect.top) / scale;
+            band.style.top = top - 2 + "px";
+            band.style.height = height + 4 + "px";
+            if (codeBlock) {
+              // Without the copy button wrapper, the containing block is wider
+              // than the code block, so span the code block explicitly.
+              const blockRect = codeBlock.getBoundingClientRect();
+              band.style.left = (blockRect.left - containerRect.left) / scale - container.clientLeft + container.scrollLeft + "px";
+              band.style.width = blockRect.width / scale + "px";
+            }
+          };
           if (lineIds.length > 0) {
-              //compute the position of the single el (top and bottom and make a div)
-              const el = window.document.getElementById(lineIds[0]);
-              top = el.offsetTop;
-              height = el.offsetHeight;
-              parent = el.parentElement.parentElement;
-            if (lineIds.length > 1) {
-              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
-              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
-              height = bottom - top;
+            const el = window.document.getElementById(lineIds[0]);
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const parent = el.parentElement.parentElement;
+            // cook up a div (if necessary) and position it
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
             }
-            if (top !== null && height !== null && parent !== null) {
-              // cook up a div (if necessary) and position it 
-              let div = window.document.getElementById("code-annotation-line-highlight");
-              if (div === null) {
-                div = window.document.createElement("div");
-                div.setAttribute("id", "code-annotation-line-highlight");
-                div.style.position = 'absolute';
-                parent.appendChild(div);
-              }
-              div.style.top = top - 2 + "px";
-              div.style.height = height + 4 + "px";
-              div.style.left = 0;
-              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
-              if (gutterDiv === null) {
-                gutterDiv = window.document.createElement("div");
-                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
-                gutterDiv.style.position = 'absolute';
-                const codeCell = window.document.getElementById(targetCell);
-                const gutter = codeCell.querySelector('.code-annotation-gutter');
-                gutter.appendChild(gutterDiv);
-              }
-              gutterDiv.style.top = top - 2 + "px";
-              gutterDiv.style.height = height + 4 + "px";
+            placeBand(div, el, lastEl, parent.closest("div.sourceCode") || parent);
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
             }
+            placeBand(gutterDiv, el, lastEl);
             selectedAnnoteEl = annoteEl;
           }
         };
@@ -2270,7 +2359,10 @@ empirical 94% coverage: 1.00  (nominal 0.94)</code></pre>
     }
   });
   </script>
-<nav class="page-navigation">
+  <script type="application/javascript">
+  window.quartoScrollableRegionsLabels = {"code":"Scrollable code","output":"Scrollable output"};
+  </script>
+<nav class="page-navigation" aria-label="Page">
   <div class="nav-page nav-page-previous">
       <a href="../../docs/examples/m5_hierarchical_state_space.html" class="pagination-link" aria-label="M5 forecasting II: a hierarchical count state space model">
         <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">M5 forecasting II: a hierarchical count state space model</span>

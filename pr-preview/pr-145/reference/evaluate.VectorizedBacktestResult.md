@@ -57,6 +57,9 @@ to_dict()
 ```
 
 
+The view does not copy the arrays: `predictions`, `losses` and the window indices are the same objects as on the result. The `metrics` mapping is a shallow copy, so adding or replacing entries of the returned dictionary (or of that mapping) never changes the result. Use `copy.deepcopy(result.to_dict())` for an independent copy of the arrays.
+
+
 ##### Returns
 
 

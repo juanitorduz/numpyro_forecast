@@ -13,7 +13,7 @@ contrib.blackjax.pathfinder_samples(
 ```
 
 
-The returned dict has the sample axis leading and is ready to pass to [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) or NumPyro's `Predictive`, exactly like [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior). Chunking and device offload are delegated to the shared `_draw_chunked()` driver, so the same memory-bounding contract applies.
+The returned dict has the sample axis leading and is ready to pass to [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) or NumPyro's `Predictive`, exactly like [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior). Chunking and device offload are delegated to the shared `draw_chunked()` driver, so the same memory-bounding contract applies.
 
 PRNG: within each chunk (the whole draw, when unchunked), the chunk key is split into a model-initialization stream and a Pathfinder-sampling stream (the init param draws are unused, but the streams are kept isolated).
 
@@ -54,7 +54,7 @@ If `num_samples` or `batch_size` is not positive.
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
 
 `DevicePlatformError`  
-If `device` names a platform whose backend is not initialized (see `_resolve_device()`).
+If `device` names a platform whose backend is not initialized (see `resolve_device()`).
 
 
 ## Warns

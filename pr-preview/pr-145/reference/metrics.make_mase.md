@@ -15,7 +15,7 @@ metrics.make_mase(
 ```
 
 
-MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on `train_data`, `mean(|y_t - y_{t-seasonality}|)`. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)). `train_data` and the returned metric's `pred`/`truth` are all moved to device memory first (`_device_view()`), so any of them may be host-committed, e.g. draws sampled with `device="host"`.
+MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on `train_data`, `mean(|y_t - y_{t-seasonality}|)`. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)). `train_data` and the returned metric's `pred`/`truth` are all moved to device memory first (`device_view()`), so any of them may be host-committed, e.g. draws sampled with `device="host"`.
 
 
 ## Parameters
@@ -32,7 +32,7 @@ Seasonal period (`>= 1`); `1` is the random-walk naive baseline.
 
 
 `Metric`  
-A `(pred, truth)` callable computing MASE as a scalar array.
+A `(pred, truth)` callable computing MASE as a scalar array. It raises `ValueError` if `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).
 
 
 ## Raises

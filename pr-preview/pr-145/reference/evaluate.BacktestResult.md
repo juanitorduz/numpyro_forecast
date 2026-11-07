@@ -64,6 +64,9 @@ to_dict()
 ```
 
 
+The view does not copy the arrays: `prediction` is the same object as `self.prediction`, so an in-place write to a NumPy `prediction` changes the result. The `metrics` and `train_metrics` mappings are shallow copies, so adding or replacing entries of the returned dictionary (or of those mappings) never changes the result. Use `copy.deepcopy(result.to_dict())` for an independent copy of the arrays.
+
+
 ##### Returns
 
 

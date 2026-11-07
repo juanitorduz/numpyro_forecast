@@ -35,7 +35,7 @@ Largest lag to evaluate; must satisfy `1 <= max_lag < time`.
 
 
 `Float[Array, ``"*batch lags"]`  
-Autocorrelations for lags `0, 1, ..., max_lag` (`max_lag + 1` values; lag `0` is identically `1.0`).
+Autocorrelations for lags `0, 1, ..., max_lag` (`max_lag + 1` values; lag `0` is identically `1.0`; all NaN for a constant series).
 
 
 ## Raises
@@ -47,7 +47,7 @@ If `max_lag` is not in `[1, time)`.
 
 ## Notes
 
-A constant series has zero variance, so the result is meaningless: all NaN in eager execution (a `0 / 0`), while under `jax.jit()` the rounding of the mean can instead yield arbitrary finite values.
+A constant series has zero variance and no autocorrelation, so every lag, lag `0` included, is NaN (a `0 / 0`), with or without `jax.jit()`. The series is shifted by its first sample before centering, which makes a constant series exactly zero in floating point. NaN does not imply a constant series: a NaN or infinite sample also gives NaN at every lag, and in float32 a series whose deviations from the mean are near the underflow threshold (about `1e-19`) can give NaN or inaccurate values.
 
 
 ## References

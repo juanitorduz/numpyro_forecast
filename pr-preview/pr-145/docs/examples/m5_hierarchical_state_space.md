@@ -24,6 +24,10 @@ This is the second of the two M5 notebooks; the data loader, the hierarchy, the 
 
 ``` python
 import warnings
+
+# preliz warns at import time when PyMC is not installed; this example does not use PyMC.
+warnings.filterwarnings("ignore", message="PyMC not installed", category=UserWarning)
+
 from functools import partial
 from time import perf_counter
 
@@ -1786,5 +1790,3 @@ Two fairness notes. The model uses the `saled` flag over the horizon, that is, i
 - [Pyro M5 Starter Kit](https://github.com/pyro-ppl/Pyro-M5-Starter-Kit): the three baseline models and the WS-CRPS harness ported in the [M5 baselines notebook](m5_forecasting.md).
 - [Makridakis, Spiliotis and Assimakopoulos (2022), *The M5 uncertainty competition: results, findings and conclusions*](https://doi.org/10.1016/j.ijforecast.2021.10.009), for the WSPL metric and the competition results.
 - [NumPyro: stochastic variational inference with subsampling](https://num.pyro.ai/en/stable/svi.html), the `subsample` and `create_plates` mechanics used here.
-
-[Source: M5 forecasting II: a hierarchical count state space model with `numpyro_forecast`](_src/m5_hierarchical_state_space-preview.html#988d801c)

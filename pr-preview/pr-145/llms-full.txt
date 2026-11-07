@@ -118,6 +118,14 @@ Returns
 Array
     The latent over the full horizon with time at axis ``-2``.
 
+Raises
+------
+ValueError
+    If a given value of the ``name`` or ``f"{name}_future"`` site (for
+    example a posterior that ``Predictive`` substitutes) does not have
+    ``h.t_obs`` or ``h.future`` steps on its time plate: the usual cause is
+    a posterior drawn for a different training length.
+
 markov_series(h: numpyro_forecast.models.Horizon, name: str, init_carry: Carry, transition: Transition[Carry], xs: jaxtyping.PyTree[jax.Array] | None = None, *, advance: Advance[Carry] | None = None, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
 
 Sample a Markov (state-space) latent over the full horizon.
@@ -143,9 +151,12 @@ transition
     ``numpyro.sample`` statement.
 xs
     Optional exogenous inputs over the full horizon: a PyTree of arrays
-    with time at axis ``-2`` (a single array, a tuple, a dict, ...), moved
-    leaf by leaf into scan layout internally; ``None`` for autonomous
-    dynamics.
+    with time at axis ``-2`` and ``duration`` rows (a single array, a
+    tuple, a dict, ...), moved leaf by leaf into scan layout internally;
+    ``None`` for autonomous dynamics. Slice each leaf from ``covariates``,
+    which has ``duration`` rows in every model call (training included),
+    or extend an in-sample input with
+    `~~numpyro_forecast.arrays.pad_future()`.
 advance
     Optional ``(carry, z_t, x_t) -> carry`` (see `Advance`) that builds the
     next carry from the sampled latent; ``None`` means the carry *is* the
@@ -170,9 +181,11 @@ Raises
 ValueError
     If forecasting without observed data (only reachable with a hand-built
     `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
-    data), if the per-step shape lacks the observation dimension, if an
-    enclosing plate is detected, or if ``advance`` is omitted and
-    ``init_carry`` is not a single array with the shape and dtype of a draw.
+    data), if an ``xs`` leaf lacks the time or observation axis or does
+    not span ``h.duration`` rows, if the per-step shape lacks the
+    observation dimension, if an enclosing plate is detected, or if
+    ``advance`` is omitted and ``init_carry`` is not a single array with
+    the shape and dtype of a draw.
 
 ssoe(h: numpyro_forecast.models.Horizon, name: str, y: jax.Array | None, init_carry: Carry, mean: SSOEMean[Carry], update: SSOEUpdate[Carry], noise_dist: numpyro.distributions.distribution.Distribution, xs: jaxtyping.PyTree[jax.Array] | None = None) -> numpyro_forecast.models.SSOEResult
 
@@ -233,7 +246,8 @@ such: per-step error scales, if that is what you meant.
 **Composition.** Two channels are two calls sharing the same ``Horizon``;
 each opens its own ``time_future`` plate. Scoping a helper that contains the
 call is fine (``handlers.scope`` prefixes the error site and the plate; use
-``name="eps"`` inside a scoped helper so the site reads ``z_eps_future``);
+``name="eps"`` inside a scoped helper so the site reads ``z/eps_future``,
+or ``z_eps_future`` with ``divider="_"``);
 register ``"obs"`` and ``"forecast"`` outside any scope and build the
 forecast from the channels' ``y_future``.
 
@@ -263,7 +277,7 @@ update
     ``eps_t`` (not a recomputed ``y_t - mu_t``, which can differ by an ulp);
     when the update needs the mean, call ``mean(carry, x_t)`` inside it.
 noise_dist
-    Zero-centered per-step error distribution, either an elementwise family
+    Per-step error distribution with location ``0``, either an elementwise family
     (event rank 0) or a multivariate family over the observation axis (event
     rank 1, e.g. ``dist.MultivariateNormal(jnp.zeros(obs), scale_tril=L)``
     for shocks correlated across series, the VAR case). For a
@@ -273,7 +287,14 @@ noise_dist
     ``(B, 1, obs)`` and ``(B, 1)`` respectively. Either way the draw under
     the time plate (``dim=-2`` for event rank 0, ``dim=-1`` for event rank 1)
     is exactly ``(*batch, future, obs)`` with the dtype of the means; event
-    rank 2 or higher is rejected.
+    rank 2 or higher is rejected. Over the horizon ``y_t = mu_t + eps_t``,
+    so ``mu_t`` is the mean of ``y_t`` only when the errors have mean zero:
+    ``Gumbel`` errors with ``loc = 0`` have a nonzero mean, and
+    ``AsymmetricLaplace`` errors with ``loc = 0`` have a nonzero mean unless
+    ``asymmetry = 1`` (see `~~numpyro_forecast.surgery.shift_loc()` for the
+    offsets). That mean shifts each ``y_t`` away from ``mu_t``, and ``update``
+    carries the shift into the later means, so the forecast bias can grow
+    with the horizon. ``Cauchy`` errors have no mean.
 xs
     Optional exogenous inputs over the full horizon: a PyTree of arrays with
     time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a
@@ -398,10 +419,19 @@ Register the observation and forecast sites for the model.
 
 ``prediction`` is the deterministic predictor over the full horizon (time at
 axis ``-2``, shape ``(*batch, duration, obs)``). ``obs_dist`` takes one of
-two forms. A `numpyro.distributions.Distribution` is zero-centered
-observation noise (e.g. ``dist.StudentT(nu, 0.0, sigma)``) shifted onto the
-predictor with `~~numpyro_forecast.surgery.shift_loc()`, which also owns
-the multivariate-normal layout check. A callable is a link mapping the
+two forms. A `numpyro.distributions.Distribution` is observation noise with
+location ``0`` (e.g. ``dist.StudentT(nu, 0.0, sigma)``) whose location is
+shifted onto the predictor with `~~numpyro_forecast.surgery.shift_loc()`,
+which also owns the multivariate-normal layout: noise correlated over time,
+``dist.MultivariateNormal(jnp.zeros(h.duration), cov)``, gets the event shape
+``(time, 1)``, so ``"obs"`` scores each series jointly and the forecast
+keeps the observation axis. The predictor is then
+the location of the observation distribution: the mean for ``Normal``,
+``StudentT`` (``df > 1``), ``Laplace`` and ``MultivariateNormal`` noise,
+but the mode for ``Gumbel`` and ``AsymmetricLaplace`` noise, whose mean is
+offset from it (for ``AsymmetricLaplace`` unless ``asymmetry = 1``), and for
+``Cauchy`` noise, which has no mean (see
+`~~numpyro_forecast.surgery.shift_loc()`). A callable is a link mapping the
 predictor to the observation distribution directly (the GLM form, e.g.
 ``lambda eta: dist.Poisson(jnp.exp(eta))``). Either way, while training the
 observation site ``"obs"`` is observed; while forecasting the in-sample
@@ -411,18 +441,27 @@ and exposed as the ``"forecast"`` deterministic site that
 distribution must support time-axis surgery
 (`~~numpyro_forecast.surgery.slice_time()` /
 `~~numpyro_forecast.surgery.prefix_condition()`), i.e. an elementwise
-family or a registered one.
+family or a registered one. This also holds for a distribution wrapped in
+``Independent`` (e.g. by ``.to_event(1)``).
 
 Parameters
 ----------
 h
     The horizon for the current model call (see `Horizon`).
 obs_dist
-    Zero-centered noise distribution (shifted onto ``prediction``) or a
-    link callable from the full-horizon predictor to the observation
-    distribution.
+    Noise distribution with location ``0`` (its location is shifted onto
+    ``prediction``) or a link callable from the full-horizon predictor to
+    the observation distribution.
 prediction
-    The deterministic predictor over the full horizon, time at axis ``-2``.
+    The deterministic predictor over the full horizon, shape
+    ``(*batch, duration, obs)``: ``h.duration`` steps at axis ``-2`` and the
+    observation axis at ``-1``, so ``(duration, 1)`` for a univariate series
+    and ``(duration, n)`` for a panel of ``n`` series (or ``(duration, 1)``
+    inside a size-``n`` plate at ``dim=-1``). A 0-d or per-series
+    predictor also works when a parameter of an elementwise ``obs_dist``
+    carries the time axis, for example a constant mean with a
+    ``(duration, 1)`` noise scale; ``MultivariateNormal`` noise over time
+    needs the ``(duration, 1)`` predictor.
 
 Raises
 ------
@@ -432,8 +471,22 @@ TypeError
 RuntimeError
     If forecasting (``future > 0``) but no observed data is available.
 ValueError
-    If the observation distribution has discrete support but ``h.data`` is
-    not integer-dtyped (the usual mistake for count models).
+    If ``prediction`` has shape ``(duration,)`` (for example
+    ``covariates @ beta``, which needs ``[..., None]``); if the observation
+    distribution has fewer than two axes (as a bare ``MultivariateNormal``
+    over time does: its ``(time,)`` event has no observation axis); if
+    ``h.data`` is given and the observation distribution does not broadcast
+    against it or would score each observation more than once (for example
+    a ``(duration,)`` term added to a ``(duration, 1)`` predictor, a
+    ``(duration,)`` noise scale, a second ``[..., None]``, or a predictor
+    built from a posterior drawn for a shorter training window); or if the
+    observation distribution has discrete support but ``h.data`` is not
+    integer-dtyped (the usual mistake for count models). The shape checks
+    cannot tell a ``(duration,)`` term from a per-series one when ``h.data``
+    has ``h.duration`` series (a square panel in training), and they reject
+    a model whose discrete latents are enumerated (for example ``NUTS`` with
+    funsor installed), because the enumeration axes look like repeated
+    observations.
 
 PlateName(*values)
 
@@ -783,27 +836,71 @@ Time-axis operations on observation distributions, extensible via singledispatch
 
 shift_loc(noise_dist: numpyro.distributions.distribution.Distribution, loc: jax.Array) -> numpyro.distributions.distribution.Distribution
 
-Re-center a zero-centered noise distribution at ``loc``.
+Shift the location parameter of a noise distribution by ``loc``.
 
 This converts Pyro's ``obs = data - prediction`` idiom into an additive
-shift of the observation distribution's location.
+shift of the observation distribution's location: the result is
+``noise_dist`` with ``loc`` added to its location parameter and every other
+parameter unchanged. For noise with location ``0`` the result has its
+location at ``loc``, and that location is not the mean for every family:
+
+- ``Normal``, ``Laplace`` and ``MultivariateNormal``: ``loc`` is the mean
+  (and also the median and the mode).
+- ``StudentT``: ``loc`` is the mean when ``df > 1`` (and always the median
+  and the mode); for ``df <= 1`` there is no mean.
+- ``Cauchy``: ``loc`` is the mode (and the median); there is no mean.
+- ``Gumbel``: ``loc`` is the mode; the mean is
+  ``loc + np.euler_gamma * scale`` (about ``loc + 0.5772 * scale``).
+- ``AsymmetricLaplace``: ``loc`` is the mode; the mean is
+  ``loc + scale * (1 / asymmetry - asymmetry)``, which is ``loc`` only for
+  ``asymmetry = 1`` (the symmetric case).
+
+An ``Independent`` wrapper follows its base distribution. When the
+predictor must be the mean of a ``Gumbel`` or ``AsymmetricLaplace``
+observation, center the noise yourself, for example
+``dist.Gumbel(-np.euler_gamma * scale, scale)`` or
+``dist.AsymmetricLaplace(scale * (asymmetry - 1 / asymmetry), scale, asymmetry)``.
+
+A ``MultivariateNormal`` over time is noise correlated across the time
+steps of one series (``obs == 1``): a ``(*batch, time)`` location such as
+``jnp.zeros(h.duration)`` with a ``(*batch, time, time)`` covariance.
+Shifted by a predictor with the observation axis, ``(*batch, time, 1)`` as
+`~~numpyro_forecast.models.predict()` supplies it, the result is the same
+Gaussian with event shape ``(time, 1)``: ``log_prob`` of
+``(*batch, time, 1)`` data is the joint density over time, one value per
+series, and draws keep the observation axis. The series of a panel go in
+the batch, ``(series, time, 1)``, and a size-1 time axis, ``(*batch, 1, 1)``,
+shifts every time step by the same value. A ``(*batch, time)`` predictor,
+with no more axes than the noise location, keeps the ``(time,)`` event. A link
+callable for `~~numpyro_forecast.models.predict()` gets the
+``(time, 1)`` event with
+``lambda mu: shift_loc(dist.MultivariateNormal(jnp.zeros(h.duration), cov), mu)``.
 
 Parameters
 ----------
 noise_dist
-    A zero-centered location-family distribution.
+    A location-family noise distribution, usually with location ``0``.
 loc
-    The deterministic mean to add to the distribution's location.
+    The deterministic predictor to add to the distribution's location.
 
 Returns
 -------
 dist.Distribution
-    A distribution centered at ``loc``.
+    The same family with its location shifted by ``loc`` (the mean or the
+    mode, depending on the family, see above). For a ``MultivariateNormal``
+    and a ``(*batch, time, 1)`` predictor, a distribution with event shape
+    ``(time, 1)``: its ``mean`` and ``variance`` have the observation axis,
+    and its ``base_dist`` is the shifted ``MultivariateNormal`` (``loc``,
+    ``covariance_matrix``, ``entropy()``).
 
 Raises
 ------
 NotImplementedError
     If ``noise_dist`` is of an unsupported type.
+MVNLayoutError
+    If ``noise_dist`` is a ``MultivariateNormal`` and its location or
+    ``loc`` matches neither layout above, for example a ``(time, obs)``
+    predictor with ``obs > 1``.
 
 slice_time(noise_dist: numpyro.distributions.distribution.Distribution, index: slice) -> numpyro.distributions.distribution.Distribution
 
@@ -812,7 +909,10 @@ Slice an elementwise distribution along the time axis ``-2``.
 The default implementation handles registered elementwise families (empty
 ``event_shape``, ``batch_shape`` ending in ``(time, obs)``; e.g. ``Normal``,
 ``StudentT``, ``Poisson``) by slicing each broadcast parameter. Correlated
-families register a dedicated dispatch instead.
+families register a dedicated dispatch instead: a ``MultivariateNormal``
+over time slices its time axis and keeps its layout, so the event
+``(time, 1)`` returned by `shift_loc()` stays ``(steps, 1)`` and a bare
+``(time,)`` event stays ``(steps,)``.
 
 Parameters
 ----------
@@ -841,7 +941,18 @@ reduces to the forecast-horizon marginal, i.e. a time slice ``[t:]``. Only
 registered elementwise families take this path; correlated families (e.g.
 ``MultivariateNormal``) need a dedicated dispatch implementing a genuine
 Gaussian conditional, which is checked here rather than silently reduced to
-a slice (the R1 fix).
+a slice (the R1 fix). An ``Independent`` wrapper (e.g. from ``.to_event(1)``)
+conditions its base distribution and keeps its ``reinterpreted_batch_ndims``,
+so wrapping does not change the conditional. A ``MultivariateNormal`` over
+time keeps its layout: the event ``(time, 1)`` returned by `shift_loc()`
+gives a conditional with event ``(f, 1)``, and a bare ``(time,)`` event gives
+``(f,)``. Its conditional factors the full covariance once, after adding
+$10^{-6}$ (float32) or $10^{-8}$ (float64) times the variance of each time
+step to the diagonal. The jitter is relative, so the result does not depend
+on the scale of the covariance, overall or per time step, but it still
+inflates a forecast variance that is far below the marginal variance: for a
+smooth kernel, the jitter rather than the kernel can set the one-step
+forecast variance.
 
 Parameters
 ----------
@@ -858,8 +969,8 @@ dist.Distribution
 Raises
 ------
 NotImplementedError
-    If ``noise_dist`` is not a registered elementwise family (and has no
-    dedicated dispatch).
+    If ``noise_dist`` (or the base of an ``Independent`` wrapper) is not a
+    registered elementwise family (and has no dedicated dispatch).
 
 register_elementwise(cls: type[numpyro.distributions.distribution.Distribution]) -> type[numpyro.distributions.distribution.Distribution]
 
@@ -931,15 +1042,32 @@ ForecastModel
 Raises
 ------
 ValueError
-    If ``model`` is already the result of `time_reparam()`. Nesting is not
-    supported: the inner handler would turn the site into a deterministic
+    If ``model`` already contains the result of `time_reparam()`. Nesting is
+    not supported: the inner handler would turn the site into a deterministic
     before the outer one sees it, so the outer transform would silently be
-    a no-op.
+    a no-op. The check runs when wrapping and looks through any NumPyro
+    handlers around ``model`` (``scope``, ``seed``, ...). A nesting behind a
+    plain function or a `functools.partial()` raises when the model is first
+    traced (inside ``SVI``, ``MCMC``, `~~numpyro_forecast.predictive.forecast()`,
+    ...), if the outer transform finds no in-sample time latent of its own. A
+    composite model whose body calls a `time_reparam()` component next to its
+    own ``innovations`` time latents is valid: the outer transform applies to
+    those latents. A composite whose own time latents are never targeted
+    (``markov_series`` or ``ssoe`` sites, observed sites) also raises, because
+    the outer transform does nothing there either.
+
+    Also if an in-sample time latent is under a subsampled plate when the
+    model is traced: a plate opened with ``subsample_size`` smaller than its
+    size, or a full model plate that the guide subsamples through
+    ``create_plates``. See the Notes.
 
 Notes
 -----
-- Create the wrapped model once and reuse it: the drivers jit-compile with
-  the model as a static argument, so wrapping again inside a loop recompiles.
+- Hand the wrapped model, not the original, to the guide, the sampler and
+  the drivers: only the wrapped model has the auxiliary site that the
+  posterior holds. Creating it once is a convenience, not a requirement:
+  the drivers key nothing on the model object, so a rewrapped model gives
+  the same draws.
 - Apply it innermost. ``scope(time_reparam(model), prefix="a")`` yields
   ``a/drift_haar``; ``time_reparam(scope(model, "a"))`` yields
   ``a/a/drift_haar`` because the auxiliary sample passes through ``scope``
@@ -955,6 +1083,14 @@ Notes
   unaffected), the scan sites of
   `~~numpyro_forecast.models.markov_series()`, the error sites of
   `~~numpyro_forecast.models.ssoe()`, observed sites and discrete sites.
+- Time latents under a subsampled plate are not supported. The auxiliary
+  site is sampled outside every enclosing plate, so a subsampled plate
+  would apply no ``size / subsample_size`` scale to it and an ``AutoGuide``
+  would size its parameters to the minibatch. A time latent under such a
+  plate therefore raises ``ValueError``, also when the guide subsamples the
+  plate through ``create_plates``. Time latents outside the subsampled
+  plate (for example one level shared by all series) and a plate with
+  ``subsample_size`` equal to its size are accepted.
 - Posterior dictionaries from `~~numpyro_forecast.predictive.draw_posterior()`
   and ``mcmc.get_samples()`` contain both ``drift`` (deterministic) and
   ``drift_haar``; ``Predictive`` substitutes only the latter and recomputes
@@ -996,7 +1132,10 @@ The returned dict has the sample axis leading and is ready to pass to
 An ``AutoDelta`` guide is a MAP point estimate: it is drawn once and tiled to
 ``num_samples`` (`_ensure_sample_axis_for_delta()`), since it carries no
 posterior spread of its own. Every other ``AutoGuide`` is sampled through a
-jitted, per-guide-cached ``sample_posterior`` (`_jitted_sample_posterior()`).
+jitted ``sample_posterior`` (`_jitted_sample_posterior()`) that the call
+compiles once and shares across its chunks; nothing is cached across calls,
+so the draws (deterministic sites included) reflect the model as it is at
+call time.
 
 Parameters
 ----------
@@ -1063,10 +1202,10 @@ ValueError
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -1097,11 +1236,24 @@ rng_key
 model
     The forecasting model callable (the same one that produced ``posterior``).
 posterior
-    Posterior samples of the latent sites, sample axis leading. The output
-    of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
-    is accepted directly.
+    Posterior samples of the latent sites of the training run, sample axis
+    leading (``mcmc.get_samples()`` of the fit, or `draw_posterior()`). The
+    output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
+    leaves) is accepted directly. A forecast-horizon key with values (one
+    that ends in ``"_future"`` or contains ``"_future_"``, or
+    ``"forecast"``) raises ``ValueError``: it comes from a
+    ``numpyro.infer.Predictive`` call over a horizon, whose sample sites
+    would pin the horizon instead of drawing it from the prior, since the
+    driver substitutes every posterior sample site by name. Such a key with
+    an empty leaf (a site that the model registers on every call, recorded
+    by the training run with a size-0 time axis) is dropped, so the model
+    draws or computes the site as if the key were absent.
 data
-    Observed data with time at axis ``-2`` and length ``t``.
+    Observed data with time at axis ``-2`` and length ``t``. When
+    ``posterior`` holds in-sample time latents, ``t`` must be the training
+    length that ``posterior`` was drawn for; a
+    `~~numpyro_forecast.models.innovations()` site of another length
+    raises ``ValueError``.
 covariates
     Covariates with time at axis ``-2`` and length ``duration > t``.
 batch_size
@@ -1143,14 +1295,27 @@ Num[Array, " sample *batch future obs"]
 Raises
 ------
 ValueError
-    If ``covariates`` does not extend beyond ``data`` along the time axis.
+    If ``data`` or ``covariates`` has fewer than two axes (time must be at
+    axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
+    extend beyond ``data`` along the time axis, if ``posterior`` is
+    empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
+    on the sample-axis length, if a forecast-horizon key of ``posterior``
+    (one that ends in ``"_future"`` or contains ``"_future_"``, or
+    ``"forecast"``) has a non-empty leaf, if a ``posterior`` value of an
+    `~~numpyro_forecast.models.innovations()` site does not have ``t``
+    steps (a posterior drawn for a different training length), if the
+    ``"forecast"`` draws do not have time at axis ``-2`` with
+    ``duration - t`` steps, or if they do not have the other axes of
+    ``data`` (a predictor shared by the ``n`` series of ``data`` needs a
+    size-``n`` plate at ``dim=-1`` or shape ``(duration, n)``; without
+    either, the model draws one forecast for all series).
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -1163,9 +1328,18 @@ Notes
 Chunking is a memory knob, not a reproducibility knob: reproducibility is
 per ``(rng_key, batch_size)``. Every chunk shares the exact ``batch_size``
 shape (the final chunk wraps around to re-used draws that are discarded),
-so the underlying ``_predict`` compiles exactly once for a fixed shape, but
-changing ``batch_size`` changes the PRNG stream layout and therefore the
-exact draws. ``device`` never changes the draws, only where they live.
+so each call compiles the predictive exactly once, but changing
+``batch_size`` changes the PRNG stream layout and therefore the exact
+draws. ``device`` never changes the draws, only where they live.
+
+Each call traces and compiles the model once and keeps no compiled program
+afterwards. In exchange, like a plain ``numpyro.infer.Predictive`` call
+(which re-runs the model every time), the draws always reflect the model
+as it is at call time (a changed global, closure value or attribute it
+reads takes effect on the next call), and ``model`` can be any callable,
+hashable or not. A repeated call with the same model and shapes, for
+example in a scenario loop, therefore compiles again; so does
+`~~numpyro_forecast.convert.to_datatree()`, which runs the drivers itself.
 
 predict_in_sample(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch time obs'] | jaxtyping.Num[ndarray, 'sample *batch time obs']
 
@@ -1176,6 +1350,11 @@ latent draws. Unlike `forecast()` there is no forecast horizon: ``covariates``
 span only the observed window, so the model's ``obs`` site is sampled at every
 step. The number of predictive samples equals the leading (sample) axis of
 ``posterior`` (see `~~numpyro_forecast.predictive.draw_posterior()`).
+The model gets ``data=None``, so the draws have the axes that the model
+gives ``obs``, and the driver has no data to check them against: a
+predictor shared by ``n`` series without a size-``n`` plate at ``dim=-1``
+draws one column. `forecast()` and `~~numpyro_forecast.convert.to_datatree()`
+get ``data`` and raise ``ValueError`` in that case.
 
 Parameters
 ----------
@@ -1184,13 +1363,29 @@ rng_key
 model
     The forecasting model callable (the same one that produced ``posterior``).
 posterior
-    Posterior samples of the latent sites, sample axis leading. The output
-    of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
-    is accepted directly.
+    Posterior samples of the latent sites of the training run, sample axis
+    leading (``mcmc.get_samples()`` of the fit, or `draw_posterior()`). The
+    output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
+    leaves) is accepted directly. Forecast-horizon keys follow the rule of
+    `forecast()`: one with values raises ``ValueError``, because it marks
+    the output of a ``numpyro.infer.Predictive`` call over a horizon, and
+    one with an empty leaf is dropped. An ``"obs"`` key is dropped too, so
+    the draws come from the latent sites: ``Predictive`` substitutes every
+    posterior sample site by name, and an ``"obs"`` key (the output of a
+    ``Predictive`` call with ``data``, or of a prior predictive call) would
+    make every draw equal to it. Only ``"obs"`` is dropped: keep the other
+    sites that the model observes when it gets ``data`` (a second
+    likelihood) out of ``posterior``, or they are substituted.
 covariates
     Covariates with time at axis ``-2`` spanning the observed window. Its time
     length must match the data the ``posterior`` was fit on, since the in-sample
-    latent sites are sized to that window.
+    latent sites are sized to that window. An
+    `~~numpyro_forecast.models.innovations()` site of another length raises
+    ``ValueError`` however the model slices its ``"obs"`` site. For other
+    latents the driver checks only that the ``"obs"`` draws have one step
+    per row, and a `~~numpyro_forecast.models.markov_series()` latent
+    replays a shorter posterior as a prefix and draws the remaining steps
+    from the prior (a longer one raises NumPyro's ``RuntimeError``).
 batch_size
     Optional chunk size for sampling (caps peak memory).
 parallel
@@ -1225,19 +1420,37 @@ Num[Array, " sample *batch time obs"]
 
 Raises
 ------
+ValueError
+    If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
+    the leaves disagree on the sample-axis length, if a forecast-horizon
+    key of ``posterior`` (one that ends in ``"_future"`` or contains
+    ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if ``"obs"``
+    is the only key of ``posterior``, if
+    ``covariates`` has fewer than two axes (time must be at axis ``-2``)
+    or no time steps, if a ``posterior`` value of an
+    `~~numpyro_forecast.models.innovations()` site does not have one step
+    per ``covariates`` row (a posterior drawn for a different training
+    length), or if the ``"obs"`` draws do not have time at axis ``-2`` with
+    one step per ``covariates`` row.
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
 UserWarning
     If ``device="cpu"`` is requested and the JAX CPU backend is not
     initialized, so the draws take the NumPy path of ``"host"`` instead.
+
+Notes
+-----
+Like `forecast()`, each call compiles the predictive once (shared by every
+``batch_size`` chunk) and keeps no compiled program afterwards, so the draws
+reflect the model as it is at call time and ``model`` need not be hashable.
 
 
 ## Backtesting & evaluation
@@ -1318,7 +1531,11 @@ def forecast_fn(
 Parameters
 ----------
 rng_key
-    Base PRNG key (used for every window, matching Pyro).
+    Base PRNG key, used for every window (matching Pyro). Each window
+    splits it once, ``forecast_key, train_key = random.split(rng_key)``:
+    ``forecast_fn`` receives ``forecast_key`` and ``in_sample_fn`` receives
+    ``train_key``. The split does not depend on ``eval_train``, so turning
+    in-sample scoring on does not change the out-of-sample draws.
 model_fn
     Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
 data
@@ -1332,7 +1549,9 @@ forecast_fn
 in_sample_fn
     Optional closure that fits ``model`` on the training window and scores
     its in-sample fit (see `~~numpyro_forecast.typing.InSampleFn` and
-    the contract above). Required when ``eval_train=True``.
+    the contract above). Required when ``eval_train=True``. It receives
+    its own child of ``rng_key`` (see ``rng_key``), never a key that
+    ``forecast_fn`` can derive from its own.
 metrics
     Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
     Each function takes ``(pred, truth)`` and returns a scalar array (see
@@ -1372,7 +1591,13 @@ min_test_window
 stride
     Step between successive train/test splits.
 num_samples
-    Number of forecast samples per window.
+    Number of forecast samples per window. Must be positive, and at least
+    2 when ``metrics`` contains `eval_crps()` (as `DEFAULT_METRICS`
+    does) or a `functools.partial()` of it. Both rules are checked before
+    the first window is fitted. A CRPS inside another wrapper (a
+    ``lambda`` or a ``jax.jit`` function) or added by
+    ``per_window_metrics`` is not checked up front: it fails only when it
+    runs.
 batch_size
     Optional chunk size forwarded to ``forecast_fn`` and ``in_sample_fn``
     (see the contract above).
@@ -1387,10 +1612,14 @@ keep_predictions
 reuse_model
     When ``True`` (default) and the windowing strategy is rolling, the model
     instance returned by the first ``model_fn()`` call is reused for every
-    window so forecast/predict kernels can cache across windows. SVI still
-    recompiles per window; for a single fused fit over all windows use
-    `backtest_vectorized()`. Ignored for expanding windows and when
-    ``False``.
+    window, so ``model_fn`` runs once. Ignored for expanding windows and when
+    ``False`` (``model_fn`` then runs once per window). It does not cache
+    compiled programs: each `~~numpyro_forecast.predictive.forecast()` or
+    `~~numpyro_forecast.predictive.predict_in_sample()` call that
+    ``forecast_fn`` or ``in_sample_fn`` makes compiles once per window, and
+    so does an SVI fit; for a single fused fit and forecast over all
+    windows use `backtest_vectorized()`. Kept for API stability: it only
+    matters for a ``model_fn`` that is expensive or stateful.
 
 Returns
 -------
@@ -1400,8 +1629,10 @@ list[BacktestResult]
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
-    but ``in_sample_fn`` is ``None``.
+    If ``data`` or ``covariates`` has fewer than two axes (time must be at
+    axis ``-2``), if their durations differ, if ``eval_train=True`` but
+    ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small (see
+    ``num_samples``).
 BacktestWindowError
     If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
     ``train_window``, or ``"expanding"`` with one).
@@ -1410,16 +1641,30 @@ backtest_vectorized(rng_key: jax.Array, model_fn: collections.abc.Callable[[], n
 
 Rolling-window backtest with all windows fitted in one vmapped SVI run.
 
-Estimator-equivalent to `backtest()` with rolling windows; it differs
-only in PRNG stream layout and float reduction order, so the equivalence is
-statistical, not bitwise. Model, guide, and SVI compile once regardless of
-the number of windows, giving order-of-magnitude wall-clock wins for tens
-of windows on small models.
+Estimator-equivalent to `backtest()` with rolling windows and a fresh
+guide fitted on each window; it differs only in PRNG stream layout and
+float reduction order, so the equivalence is statistical, not bitwise.
+Model, guide, and SVI compile once regardless of the number of windows,
+giving order-of-magnitude wall-clock wins for tens of windows on small
+models.
 
-PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
-``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
-posterior-draw, and forecast subkeys (the parent itself is never consumed;
-see `_window_key_streams()`).
+Each window fits its own copy of ``guide``. An autoguide sets itself up
+at its first init and keeps state that depends on the data of that init:
+the support transform of every latent site, the deterministic sites, and
+for ``AutoLaplaceApproximation`` the loss whose Hessian gives the
+covariance. The copy of each window sets up on that window's training
+data, so all of this state comes from the window, as with a fresh guide
+per window in `backtest()`.
+
+PRNG: ``fold_in(rng_key, i)`` is the window-``i`` parent, split into
+SVI-init, posterior-draw, and forecast subkeys (the parent itself is
+never consumed; see `_window_key_streams()`). The SVI-init subkey keys
+the setup of the window's guide copy, so a random ``init_loc_fn`` (such
+as the default ``init_to_uniform``) starts each window from its own
+point, and so does a callable initializer in a hand-written guide, such
+as ``numpyro.param("loc", lambda key: random.normal(key))``. It also
+seeds the Monte Carlo ELBO estimate of every SVI step of the window
+(``svi.init`` keeps a key split from it in the SVI state).
 
 Parameters
 ----------
@@ -1443,13 +1688,23 @@ guide
     same object, sampled through its ``sample_posterior``, or a hand-written
     guide function with the model's signature, sampled through
     ``numpyro.infer.Predictive(guide, params=...)`` on each window's
-    training data. Either way one guide is shared by every window:
+    training data:
 
     ```python
     model = make_model()
     backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
     backtest_vectorized(..., model_fn=lambda: model, guide=my_guide_fn)
     ```
+
+    An autoguide must be a fresh instance that was never run or fitted:
+    each window fits its own copy of it, and the instance you pass is left
+    unchanged, so it can be passed again to a later call. Its
+    ``init_loc_fn`` runs inside the vmapped fit, so it must be traceable
+    by JAX (no NumPy conversion of the values it receives). The copy per
+    window applies only when ``guide`` itself is an autoguide: an autoguide
+    behind a handler (``handlers.scale(AutoNormal(model), ...)``) or called
+    from a guide function is shared by all windows and set up once, on
+    window 0, so its supports and Laplace covariance come from window 0.
 
 optim
     NumPyro optimizer; ``None`` uses ``numpyro.optim.Adam(0.01)``. For an
@@ -1459,7 +1714,12 @@ stride
 num_steps
     Number of SVI steps per window.
 num_samples
-    Number of forecast samples drawn per window.
+    Number of forecast samples drawn per window. Must be positive, and at
+    least 2 when ``metrics`` contains `eval_crps()` (as
+    `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
+    are checked before the fit. A CRPS inside another wrapper (a
+    ``lambda`` or a ``jax.jit`` function) is not checked up front: it
+    fails only after the fit.
 metrics
     Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
     Each metric is vmapped over the window axis, so any pure-JAX mapping,
@@ -1479,13 +1739,26 @@ VectorizedBacktestResult
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` durations differ.
+    If ``data`` or ``covariates`` has fewer than two axes (time must be at
+    axis ``-2``), if their durations differ, if ``num_samples`` is too
+    small (see ``num_samples``), if ``guide`` is an autoguide that is
+    already set up (see ``guide``), or if ``metrics`` is not empty and the
+    model's ``"forecast"`` site does not have the shape of ``data`` over
+    the test window.
 BacktestWindowError
     If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
     there is no room for a single window.
+RuntimeError
+    If the SVI loss of a window is not finite at the first step (no valid
+    start on that window), after the fit and before the forecasts. When an
+    eager init of the first such window gives NumPyro's own error (for
+    example no valid initial parameters), that error is raised instead;
+    an eager init of window 0 before the fit raises it for window 0.
 VectorizedMetricError
-    If a metric forces a host conversion under ``vmap`` (it is not a pure
-    JAX function).
+    If a metric is not a pure JAX function under ``vmap``: it forces a host
+    conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
+    indexing or a NumPy call on a traced value) or builds a value-dependent
+    shape (a boolean mask index such as ``x[x > 0]``).
 
 BacktestResult(t0: int, t1: int, t2: int, num_samples: int, walltime: float, metrics: dict[str, float], train_metrics: dict[str, float] = <factory>, prediction: jax.Array | numpy.ndarray | None = None) -> None
 
@@ -1586,6 +1859,12 @@ Returns
 dict[str, float]
     Each metric name mapped to its value.
 
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
+    check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
+
 results_to_dataframe(results: 'Sequence[BacktestResult] | VectorizedBacktestResult') -> 'pd.DataFrame'
 
 Flatten backtest results into a tidy one-row-per-window ``DataFrame``.
@@ -1642,7 +1921,7 @@ batch_size
     to float tolerance, not bitwise); at or above the cell count the
     single-pass path runs instead, which moves any host-committed operand
     back to device memory first
-    (`~~numpyro_forecast._offload._device_view()`) so either
+    (`~~numpyro_forecast.offload.device_view()`) so either
     ``pred`` or ``truth`` (or both) may be host-committed regardless of
     ``batch_size``. ``None`` (default) evaluates in one pass.
 
@@ -1651,13 +1930,18 @@ Returns
 Array
     The mean empirical CRPS as a scalar array.
 
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
+
 eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
 
 Mean absolute error using the forecast sample median as point estimate.
 
 A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 ``pred`` and ``truth`` are moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so either (or
+(`~~numpyro_forecast.offload.device_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -1672,13 +1956,18 @@ Returns
 Array
     The mean absolute error as a scalar array.
 
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
+
 eval_rmse(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
 
 Root mean squared error using the forecast sample mean as point estimate.
 
 A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 ``pred`` and ``truth`` are moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so either (or
+(`~~numpyro_forecast.offload.device_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -1692,6 +1981,11 @@ Returns
 -------
 Array
     The root mean squared error as a scalar array.
+
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9, batch_size: int | None = None) -> jax.Array
 
@@ -1719,7 +2013,7 @@ batch_size
     the identical count; only the precision of the final division differs
     from the single pass. Either path accepts a host-committed ``pred``
     or ``truth`` (or both); the single pass moves them to device memory
-    first (`~~numpyro_forecast._offload._device_view()`).
+    first (`~~numpyro_forecast.offload.device_view()`).
     ``None`` (default) evaluates in one pass.
 
 Returns
@@ -1731,7 +2025,8 @@ Array
 Raises
 ------
 ValueError
-    If ``alpha`` is not strictly inside ``(0, 1)``.
+    If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+    ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jaxtyping.Float[Array, '*batch']
 
@@ -1754,14 +2049,20 @@ pred
     Forecast samples with the sample axis first, shape ``(sample, *batch)``.
     May be host-committed (e.g. draws sampled with ``device="host"``),
     regardless of whether ``truth`` is: either operand is moved to device
-    memory first (`~~numpyro_forecast._offload._device_view()`).
+    memory first (`~~numpyro_forecast.offload.device_view()`).
 truth
-    Ground-truth values with shape ``(*batch)`` (broadcastable to ``pred``).
+    Ground-truth values with shape ``(*batch)`` (matching ``pred`` without the sample axis).
 
 Returns
 -------
 Float[Array, "*batch"]
     Elementwise CRPS, one value per ``batch`` location.
+
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`), or
+    ``pred`` has fewer than 2 samples.
 
 References
 ----------
@@ -1779,7 +2080,7 @@ data elements. At ``quantile=0.5`` it is half the mean absolute error. A
 pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`);
 ``quantile`` is static so each level specializes its own branch. ``pred``
 and ``truth`` are moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so either (or
+(`~~numpyro_forecast.offload.device_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -1799,7 +2100,8 @@ Array
 Raises
 ------
 ValueError
-    If ``quantile`` is not strictly inside ``(0, 1)``.
+    If ``quantile`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+    ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9) -> jax.Array
 
@@ -1812,7 +2114,7 @@ averaged over all data elements. It rewards narrow intervals and penalizes
 ground truth falling outside them; lower is better.
 A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 ``pred`` and ``truth`` are moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so either (or
+(`~~numpyro_forecast.offload.device_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -1832,7 +2134,8 @@ Array
 Raises
 ------
 ValueError
-    If ``alpha`` is not strictly inside ``(0, 1)``.
+    If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+    ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'] | jaxtyping.Float[ndarray, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], jax.Array]
 
@@ -1844,7 +2147,7 @@ the in-sample MAE of the seasonal-naive forecast on ``train_data``,
 time; the returned metric has the standard scalar-array signature (see
 `~~numpyro_forecast.typing.Metric`). ``train_data`` and the returned
 metric's ``pred``/``truth`` are all moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so any of
+(`~~numpyro_forecast.offload.device_view()`), so any of
 them may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -1858,7 +2161,8 @@ seasonality
 Returns
 -------
 Metric
-    A ``(pred, truth)`` callable computing MASE as a scalar array.
+    A ``(pred, truth)`` callable computing MASE as a scalar array. It raises ``ValueError`` if
+    ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 Raises
 ------
@@ -1873,7 +2177,7 @@ ValueError
 Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
-to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Collection[Any]] | None = None, time_coord: collections.abc.Collection[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Collection[str]] | None = None, covariate_dims: collections.abc.Collection[str] | None = None, obs_dims: collections.abc.Collection[str] | None = None) -> 'xarray.DataTree'
 
 Convert an already-drawn posterior into an ArviZ-schema `xarray.DataTree`.
 
@@ -1891,13 +2195,27 @@ rng_key
 model
     The forecasting model that produced ``posterior``.
 posterior
-    Posterior samples of the latent sites, with a single flattened sample
-    axis leading (NumPyro's ``mcmc.get_samples()`` order, or the output of
+    Posterior samples of the latent sites of the training run, with a
+    single flattened sample axis leading (NumPyro's ``mcmc.get_samples()``
+    order, or the output of
     `~~numpyro_forecast.predictive.draw_posterior()`).
     Host-committed leaves (the output of ``draw_posterior(...,
     device="host")``) and NumPy leaves are accepted directly.
+    Forecast-horizon keys follow the rule of
+    `~~numpyro_forecast.predictive.forecast()`: one with values (a key
+    that ends in ``"_future"`` or contains ``"_future_"``, or
+    ``"forecast"``) raises ``ValueError``. One with an empty leaf (a site
+    that the model registers on every call, recorded by the training run
+    with a size-0 time axis) is kept in the ``posterior`` group as a
+    size-0 variable, and the predictive drivers drop it. An ``"obs"``
+    key is dropped, as in
+    `~~numpyro_forecast.predictive.predict_in_sample()`: it is not in the
+    ``posterior`` group, and the in-sample draws come from the latent
+    sites.
 data
-    In-sample data with time at axis ``-2``.
+    In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
+    the observation dim at axis ``-1`` and any batch axes to the left
+    (``obs_dims`` names them).
 covariates
     Covariates with time at axis ``-2``. When ``covariates`` extends beyond
     ``data`` along the time axis (the package-wide shape convention for a
@@ -1912,7 +2230,8 @@ num_chains
     pseudo-chain, correct for a posterior with no chain structure, e.g.
     SVI or Pathfinder draws). For an MCMC posterior, pass the
     ``num_chains`` the sampler was run with; see `_reshape_chains()`
-    for the reshape contract and its divisibility requirement.
+    for the reshape contract and its divisibility requirement. Must be a
+    positive integer.
 batch_size
     Optional chunk size that bounds how many draws touch the accelerator
     at once, across both the in-sample and forecast predictive sampling.
@@ -1947,28 +2266,59 @@ coords
     ``time`` coordinate. They also propagate to the forecast groups, where
     the generated forecast ``time`` takes precedence instead (a user
     ``time`` entry covers the in-sample window; use ``time_coord`` for
-    explicit forecast time values).
+    explicit forecast time values). Each value is a one-dimensional
+    collection of labels (a list, a NumPy array, a pandas index) and is
+    stored as ``np.asarray(value)``, so the name of a pandas index is
+    dropped.
 time_coord
     Optional explicit time coordinate values. Without a forecast horizon it
     covers the in-sample window (defaults to ``range(n_time)``); with a
     horizon it must cover the full ``covariates`` length and is split into
     the in-sample and forecast time coordinates (the default is the integer
-    continuation).
+    continuation). Any one-dimensional collection is accepted (a list, a
+    NumPy array, a pandas index) and stored as ``np.asarray(time_coord)``.
+    A timezone-aware ``pd.DatetimeIndex`` keeps
+    its zone and clock time, as an object array of aware ``pd.Timestamp``
+    values (``arviz_base.dict_to_dataset()`` cannot store a zoned datetime
+    dtype). xarray does not treat that coordinate as a datetime: ``.dt``,
+    ``resample()`` and selection by a date string fail (select with a
+    ``pd.Timestamp``), and ``to_netcdf()`` cannot write it. For a datetime
+    coordinate pass ``index.tz_convert("UTC").tz_localize(None)`` (UTC
+    times), or ``index.tz_localize(None)`` (local clock times, which
+    repeat an hour when daylight saving time ends).
 posterior_dims
     Optional mapping from a posterior site name to its non-sample dimension
     names, e.g. ``{"drift": ["time"]}``. Sites listed here share the tree-wide
     ``time`` coordinate; unlisted sites keep ArviZ's auto-named dims. This is
     an explicit opt-in on purpose: inferring time-indexed sites from trace
     shapes is fragile (a coincidental ``n_params == n_time`` would misattribute
-    the axis).
+    the axis). Each value, like ``covariate_dims`` and ``obs_dims``, is any
+    ordered one-dimensional collection of ``str`` (a list, a tuple, a NumPy
+    array, a pandas index).
 covariate_dims
-    Optional dimension names for the stored covariates, one per axis;
-    defaults to the 2-D ``("time", "covariate_dim")`` layout. Use this when
+    Optional dimension names for the stored covariates, one per axis, as
+    any ordered one-dimensional collection of ``str``; defaults to the 2-D
+    ``("time", "covariate_dim")`` layout. Use this when
     ``covariates`` carries extra batch axes, e.g. a panel tensor shaped
     ``(channel, time, series)`` with ``covariate_dims=["channel", "time",
     "series"]``. The time axis is always ``-2`` (the package-wide
     convention), so its entry should be named ``"time"`` to share the
     tree-wide time coordinate.
+obs_dims
+    Optional dimension names for the ``obs`` variables of
+    ``observed_data``, ``posterior_predictive`` and ``predictions``, one per
+    ``data`` axis, as any ordered one-dimensional collection of ``str``.
+    Defaults to ``("time", "obs_dim")`` for 2-D ``data`` and
+    names the leading batch axes of a panel ``obs_batch_0``,
+    ``obs_batch_1``, ..., e.g. ``("obs_batch_0", "time", "obs_dim")`` for
+    ``(batch, time, obs)`` data. Give a batch axis the name of the
+    matching ``covariate_dims`` entry so the groups share it, e.g.
+    ``obs_dims=["origin", "time", "destin"]`` with
+    ``covariate_dims=["origin", "time", "covariate_dim"]``; ``coords``
+    labels and ``posterior_dims`` entries refer to the same names. Axis
+    ``-2`` must be named ``"time"`` (it carries the tree-wide time
+    coordinate), the names must be distinct, and ``"chain"`` and
+    ``"draw"`` are reserved for the sample dims.
 
 Returns
 -------
@@ -1978,24 +2328,53 @@ xarray.DataTree
     ``observed_data``, and ``constant_data`` groups. When ``covariates``
     extends beyond ``data``, also ``predictions`` and
     ``predictions_constant_data`` groups (sharing the same ``num_chains``
-    split).
+    split). The ``obs`` variable has dims ``obs_dims`` in
+    ``observed_data`` and ``(chain, draw, *obs_dims)`` in
+    ``posterior_predictive`` and ``predictions``.
 
 Raises
 ------
 ValueError
-    If ``covariates`` is shorter than ``data`` along the time axis, if
-    ``time_coord`` is given but its length does not match the in-sample
-    window plus the forecast horizon, or if ``posterior``'s sample count is
-    not evenly divisible by ``num_chains``.
+    If ``data`` or ``covariates`` has fewer than two axes (time must be at
+    axis ``-2``), if ``data`` has no time steps, if ``covariates`` is
+    shorter than ``data`` along the time axis, if a ``posterior`` leaf has
+    no sample axis, if a forecast-horizon key of ``posterior`` (one that
+    ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
+    has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
+    ``time_coord`` or a ``coords`` value is not a one-dimensional
+    collection of labels (a set, a dict, a scalar, a 2-D array, ragged
+    input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
+    (or aware and naive times), if ``obs_dims``, ``covariate_dims`` or a
+    ``posterior_dims`` value is not an ordered one-dimensional collection
+    (a set, a dict, a single ``str``), if ``time_coord`` is given but its
+    length does not match the in-sample window plus the forecast horizon,
+    if ``num_chains`` is not a positive integer (``bool`` included), if
+    ``posterior``'s sample count is not evenly divisible by
+    ``num_chains``, if a ``posterior`` value of an
+    `~~numpyro_forecast.models.innovations()` site does not have one step
+    per ``data`` row (a posterior drawn for a different training length),
+    or if the in-sample draws do not have one time step per ``data`` row or
+    the forecast draws one per ``covariates`` row past ``data`` (see
+    `~~numpyro_forecast.predictive.predict_in_sample()` and
+    `~~numpyro_forecast.predictive.forecast()`). Also if ``obs_dims`` does
+    not name every ``data`` axis, does not name axis ``-2`` ``"time"``,
+    repeats a name or uses ``"chain"`` or ``"draw"``, if the in-sample
+    or forecast draws do not have one axis per ``obs_dims`` name (the
+    model's ``obs`` site must have the layout of ``data``), or if an
+    in-sample draw does not have the shape of ``data`` (a predictor shared
+    by the series of ``data`` without a series plate draws one column).
+TypeError
+    If a name in ``obs_dims``, ``covariate_dims`` or a ``posterior_dims``
+    value is not a ``str``.
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that
     exposes no host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not
-    initialized (see `~~numpyro_forecast._offload._resolve_device()`).
+    initialized (see `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -2015,7 +2394,7 @@ manual control over the forecast draws, build the in-sample tree with
 matching-length covariates and attach the horizon with
 `add_forecast_groups()`.
 
-add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jaxtyping.Num[Array, 'sample future obs'] | jaxtyping.Num[ndarray, 'sample future obs'], covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jaxtyping.Num[Array, 'sample *batch future obs'] | jaxtyping.Num[ndarray, 'sample *batch future obs'], covariates_future: jax.Array, *, time_coord: collections.abc.Collection[Any] | None = None, covariate_dims: collections.abc.Collection[str] | None = None) -> 'xarray.DataTree'
 
 Attach out-of-sample forecast groups to a copy of ``tree``.
 
@@ -2024,32 +2403,66 @@ Adds a ``predictions`` group (the forecast ``obs`` draws) and a
 ``time`` coordinate continues the in-sample one: integer continuation by
 default, or explicit values via ``time_coord``. This is the step-by-step
 route for draws you produced yourself; `to_datatree()` attaches the same
-groups automatically when its ``covariates`` extend beyond ``data``.
+groups automatically when its ``covariates`` extend beyond ``data``. Both
+routes give the forecast groups the ``(chain, draw)`` layout of the
+posterior and the dimension names and labels of the in-sample ``obs`` and
+covariates on every non-time axis, so xarray aligns the forecast with the
+rest of the tree draw by draw and label by label.
 
 Parameters
 ----------
 tree
-    A tree from `to_datatree()` (its ``observed_data`` time coordinate is
-    continued).
+    A tree from `to_datatree()`. The forecast continues its
+    ``observed_data`` time coordinate, takes the ``(chain, draw)`` layout
+    and labels of its ``posterior`` group, and copies the labels of the
+    non-time axes of ``observed_data["obs"]`` and
+    ``constant_data["covariates"]`` to the same axes of ``predictions`` and
+    ``predictions_constant_data``.
 forecast_samples
-    Forecast draws shaped ``(num_samples, future, obs)`` from
-    `~~numpyro_forecast.predictive.forecast()`.
+    Forecast draws shaped ``(num_samples, *batch, future, obs)`` from
+    `~~numpyro_forecast.predictive.forecast()`, with the layout of the
+    tree's in-sample ``obs``, one per draw of the tree's ``posterior``
+    group as it is now, in the order of
+    ``tree["posterior"].stack(sample=("chain", "draw"))`` (for a tree
+    straight from `to_datatree()`, the order of the flattened posterior it
+    was built from). They are split into the ``(chain, draw)`` layout of
+    that group; a group without a ``chain`` dimension (for example after
+    ``tree.isel(chain=0)``) counts as one chain. A tree with no
+    ``posterior`` group uses its ``posterior_predictive`` group instead,
+    and a tree with neither gets one pseudo-chain. The ``predictions``
+    ``obs`` takes the dimension names and the non-time coordinate labels
+    of the tree's ``observed_data["obs"]`` (set by
+    ``to_datatree(obs_dims=..., coords=...)``), so each non-time axis must
+    have the size of the stored one. If the tree's stored ``obs`` is
+    missing or has no ``time`` axis at ``-2`` (an ``observed_data``
+    squeezed to one series), it takes the default names of
+    `to_datatree()` and no labels instead.
 covariates_future
     Future covariates shaped ``(future, covariate_dim)``, or any layout
-    with time at axis ``-2`` when ``covariate_dims`` names the axes.
+    with time at axis ``-2`` when ``covariate_dims`` names the axes, with
+    one time step per forecast step.
 time_coord
     Optional explicit forecast time coordinate; defaults to integer
     continuation of the in-sample time. Required when the in-sample time
     coordinate is non-integer (e.g. datetime64): auto-continuing would have
-    to guess the frequency, so explicit values are demanded instead.
+    to guess the frequency, so explicit values are demanded instead. Any
+    one-dimensional collection is accepted (a list, a NumPy array,
+    a pandas index) and stored as ``np.asarray(time_coord)``. A
+    timezone-aware ``pd.DatetimeIndex`` keeps its zone, as an object array
+    of aware timestamps that xarray does not treat as a datetime. The
+    forecast times must be of the same type as the in-sample ones
+    (numbers, ``datetime64``, or aware times in the same zone); see
+    ``time_coord`` of `to_datatree()` for the costs and the alternatives.
 covariate_dims
-    Optional dimension names for ``covariates_future``, one per axis. When
-    omitted, the names are inherited from the tree's
-    ``constant_data["covariates"]`` variable (falling back to
+    Optional dimension names for ``covariates_future``, one per axis, as
+    any ordered one-dimensional collection of ``str`` (a list, a tuple, a
+    NumPy array, a pandas index). When omitted, the names are inherited
+    from the tree's ``constant_data["covariates"]`` variable (falling back to
     ``("time", "covariate_dim")`` if the tree carries no stored
     covariates), so the forecast covariates always share the in-sample
     axis names. When given explicitly, the names must match the stored
-    ones. See `to_datatree()`.
+    ones. The future covariates also take the non-time coordinate labels
+    of the stored covariates. See `to_datatree()`.
 
 Returns
 -------
@@ -2060,16 +2473,31 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``time_coord`` is given but its length differs from the forecast
+    If ``forecast_samples`` does not have one draw per draw of the tree's
+    posterior (to attach fewer draws, subset the tree first, for example
+    with ``tree.isel(draw=...)``), if it does not have one axis per
+    inherited ``obs`` dimension name after the sample axis, if a non-time
+    axis of ``forecast_samples`` or ``covariates_future`` differs in size
+    from the same axis of the tree's in-sample ``obs`` or covariates, if
+    ``covariates_future`` does not have one time step per forecast step,
+    if ``time_coord`` is not a one-dimensional collection of labels (a
+    set, a dict, a scalar, a 2-D array, ragged input) or is a
+    ``pd.MultiIndex``, if it mixes time zones, if its time type (numbers,
+    ``datetime64``, aware times and their zone) differs from that of the
+    in-sample time coordinate, if ``covariate_dims`` is not an ordered
+    one-dimensional collection (a set, a dict, a single ``str``), if
+    ``time_coord`` is given but its length differs from the forecast
     horizon, or if it is omitted while the in-sample time coordinate is
     non-integer.
+TypeError
+    If a name in ``covariate_dims`` is not a ``str``.
 CovariateDimsError
     If the resolved ``covariate_dims`` (explicit or inherited) do not name
     every ``covariates_future`` axis, or if explicit names disagree with
     the dimension names already stored on the tree's
     ``constant_data["covariates"]``.
 
-predictions_to_datatree(predictions: jaxtyping.Float[Array, 'sample time series'] | jaxtyping.Float[ndarray, 'sample time series'], x: jaxtyping.Num[Array, 'time'] | jaxtyping.Num[ndarray, 'time'], series: collections.abc.Sequence[typing.Any], *, group: str = 'posterior_predictive', observed: jaxtyping.Float[Array, 'time series'] | jaxtyping.Float[ndarray, 'time series'] | None = None) -> 'xarray.DataTree'
+predictions_to_datatree(predictions: jaxtyping.Float[Array, 'sample time series'] | jaxtyping.Float[ndarray, 'sample time series'], x: jaxtyping.Num[Array, 'time'] | jaxtyping.Num[ndarray, 'time'], series: collections.abc.Collection[typing.Any], *, group: str = 'posterior_predictive', observed: jaxtyping.Float[Array, 'time series'] | jaxtyping.Float[ndarray, 'time series'] | None = None) -> 'xarray.DataTree'
 
 Pack prediction draws into a DataTree laid out for per-series ``plot_lm`` faceting.
 
@@ -2098,10 +2526,14 @@ x
     `matplotlib.dates.date2num()` floats and re-format the tick labels
     with `matplotlib.dates.ConciseDateFormatter`.
 series
-    One label per series, defining the ``series`` coordinate.
+    One label per series, defining the ``series`` coordinate. Any
+    one-dimensional collection is accepted (a list, a NumPy
+    array, a pandas index) and stored as ``np.asarray(series)``.
 group
     Predictive group to store the draws under (e.g. ``"prior_predictive"``,
-    ``"posterior_predictive"``, ``"predictions"``).
+    ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
+    ``"constant_data"`` are reserved: the function always writes those two
+    groups.
 observed
     Optional observations, shape ``(time, series)``, stored in
     ``observed_data``; when ``None`` a zeros placeholder is stored instead.
@@ -2116,21 +2548,25 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``series`` does not have one label per series in ``predictions``.
+    If ``group`` is ``"observed_data"`` or ``"constant_data"`` (reserved
+    names), if ``series`` is not a one-dimensional collection of labels
+    (a set, a dict, a scalar, a 2-D array, ragged input) or is a
+    ``pd.MultiIndex``, or if ``series`` does not have one label per
+    series in ``predictions``.
 
 
 ## Extensions (contrib)
 
-Optional backends behind pyproject extras (never imported by default).
+Optional backends behind pyproject extras (the backend library loads only on first use).
 
 
 BlackjaxNUTSKernel(model: numpyro_forecast.typing.ForecastModel | None = None, *, num_adaptation_steps: int = 500, target_acceptance_rate: float = 0.8) -> None
 
 BlackJAX NUTS with Stan-style window adaptation.
 
-Adaptation (step size and inverse mass matrix) runs once in
+Adaptation (step size and inverse mass matrix) runs once per chain in
 `_BlackjaxKernel.init()` via ``blackjax.window_adaptation``; each MCMC step
-is then a single tuned NUTS step.
+is then a single NUTS step with the tuned parameters of that chain.
 
 Run configuration
 -----------------
@@ -2141,6 +2577,16 @@ rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``ini
 rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
 ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
 package and shares the same single-key assumption.
+Each chain of a sequential run calls `_BlackjaxKernel.init()` and runs its own
+adaptation. The tuned parameters are part of the sampler state and
+`_BlackjaxKernel.sample()` builds the log density from the model arguments of
+the current run, so the chains are independent runs and a second ``mcmc.run``
+on new data (also with ``jit_model_args=True``) samples the new posterior. A run
+that continues from ``mcmc.post_warmup_state`` runs the adaptation again and
+discards the result, and starts from the blackjax state of the earlier data,
+which holds the log density of that data: on new data every proposal then loses
+against that stale value and the chain freezes on one point, with no warning.
+Leave ``post_warmup_state`` unset for a run on new data.
 Also pass **``num_warmup=0``**: adaptation runs once inside `_BlackjaxKernel.init()`
 (via ``blackjax.window_adaptation``), so any NumPyro-driven warmup steps on top
 of that are simply discarded work, not additional tuning.
@@ -2159,9 +2605,9 @@ BlackjaxMCLMCKernel(model: numpyro_forecast.typing.ForecastModel | None = None, 
 BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
 
 The step size, trajectory length ``L``, and diagonal preconditioner (inverse
-mass matrix) are tuned once in `_BlackjaxKernel.init()` via
+mass matrix) are tuned once per chain in `_BlackjaxKernel.init()` via
 ``blackjax.mclmc_find_L_and_step_size``; each MCMC step is then a single
-tuned MCLMC step.
+MCLMC step with the tuned parameters of that chain.
 
 Run configuration
 -----------------
@@ -2172,6 +2618,16 @@ rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``ini
 rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
 ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
 package and shares the same single-key assumption.
+Each chain of a sequential run calls `_BlackjaxKernel.init()` and runs its own
+tuning. The tuned parameters are part of the sampler state and
+`_BlackjaxKernel.sample()` builds the log density from the model arguments of
+the current run, so the chains are independent runs and a second ``mcmc.run``
+on new data (also with ``jit_model_args=True``) samples the new posterior. A run
+that continues from ``mcmc.post_warmup_state`` runs the tuning again and discards
+the result, and keeps the tuned parameters of the earlier run: on new data the
+chain samples the new posterior with the step size, ``L`` and mass matrix tuned
+on the old data, with no warning. Leave ``post_warmup_state`` unset for a run on
+new data.
 Also pass **``num_warmup=0``**: tuning runs once inside `_BlackjaxKernel.init()`
 (via ``blackjax.mclmc_find_L_and_step_size``), so any NumPyro-driven warmup steps
 on top of that are simply discarded work, not additional tuning.
@@ -2183,16 +2639,58 @@ model
 num_tuning_steps
     Number of tuning steps for ``L`` and the step size.
 
-BlackjaxCustomKernel(model: numpyro_forecast.typing.ForecastModel | None = None, *, build_fn: collections.abc.Callable[..., object]) -> None
+BlackjaxCustomKernel(model: numpyro_forecast.typing.ForecastModel | None = None, *, build_fn: collections.abc.Callable[..., object], step_fn: collections.abc.Callable[..., object]) -> None
 
-Adapt an arbitrary BlackJAX sampler via a user-supplied ``build_fn``.
+Adapt an arbitrary BlackJAX sampler via a user-supplied ``build_fn`` and ``step_fn``.
 
 The escape hatch for kernels without a dedicated wrapper. ``build_fn`` receives
-``(rng_key, logdensity_fn, position, num_warmup)`` and must return
-``(inner_state, step_fn)``, where ``inner_state`` exposes ``.position`` over the
-same sites as the model and ``step_fn`` has signature
-``(rng_key, inner_state) -> (inner_state, info)``. The base class validates the
-returned state's key set and raises `TypeError` if it is malformed.
+``(rng_key, logdensity_fn, position, num_warmup)``, runs the adaptation, and must
+return ``(inner_state, params)``, where ``inner_state`` exposes ``.position`` over
+the same sites as the model and ``params`` is a pytree of numeric arrays with the
+tuned parameters (use ``None`` for a sampler without tuning). ``step_fn`` receives
+``(rng_key, inner_state, logdensity_fn, params)`` and must return
+``(inner_state, info)``. The base class validates the returned state's key set
+and the ``params`` leaves, and raises `TypeError` if either is malformed.
+
+NumPyro compiles the sampling loop once and reuses it for all chains (and for
+re-runs with ``jit_model_args=True``), and the loop traces ``params``. Two rules
+follow:
+
+- ``step_fn`` must use the ``logdensity_fn`` and ``params`` it receives. A
+  closure over the log density or the tuned values of a ``build_fn`` call keeps
+  the values of the first call.
+- A static setting that blackjax needs as a concrete Python value (for example
+  ``max_num_doublings`` of NUTS) goes in ``step_fn``, as a closure or a
+  `functools.partial` argument, and not in ``params``. A closure over such static
+  configuration is fine. `TypeError` reports a Python or NumPy ``int`` or
+  ``bool`` scalar in ``params``.
+
+``blackjax.window_adaptation`` puts extra keyword arguments such as
+``max_num_doublings`` into ``result.parameters``, so remove them from ``params``
+and give them to the step instead. For BlackJAX NUTS with window adaptation:
+
+```python
+import blackjax
+
+MAX_NUM_DOUBLINGS = 6
+
+
+def build_fn(rng_key, logdensity_fn, position, num_warmup):
+    adapt = blackjax.window_adaptation(
+        blackjax.nuts, logdensity_fn, max_num_doublings=MAX_NUM_DOUBLINGS
+    )
+    result, _ = adapt.run(rng_key, position, num_steps=500)
+    params = {k: v for k, v in result.parameters.items() if k != "max_num_doublings"}
+    return result.state, params
+
+
+def step_fn(rng_key, inner_state, logdensity_fn, params):
+    nuts = blackjax.nuts(logdensity_fn, max_num_doublings=MAX_NUM_DOUBLINGS, **params)
+    return nuts.step(rng_key, inner_state)
+
+
+kernel = BlackjaxCustomKernel(model, build_fn=build_fn, step_fn=step_fn)
+```
 
 Run configuration
 -----------------
@@ -2203,6 +2701,16 @@ rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``ini
 rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
 ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
 package and shares the same single-key assumption.
+Each chain of a sequential run calls `_BlackjaxKernel.init()` and so ``build_fn``.
+The ``params`` it returns are part of the sampler state and
+`_BlackjaxKernel.sample()` builds the log density from the model arguments of
+the current run, so the chains are independent runs and a second ``mcmc.run`` on
+new data (also with ``jit_model_args=True``) samples the new posterior. A run
+that continues from ``mcmc.post_warmup_state`` calls ``build_fn`` again and
+discards the result, and starts from the blackjax state and the ``params`` of the
+earlier run, with no warning: on new data a sampler whose state holds the log
+density of the old data (NUTS, for example) can freeze on one point. Leave
+``post_warmup_state`` unset for a run on new data.
 Also pass **``num_warmup=0``**: whatever adaptation ``build_fn`` performs runs
 once inside `_BlackjaxKernel.init()`, so any NumPyro-driven warmup steps
 on top of that are simply discarded work, not additional tuning.
@@ -2213,6 +2721,8 @@ model
     The NumPyro model to sample from.
 build_fn
     The blackjax build callable described above.
+step_fn
+    The blackjax step callable described above.
 
 PathfinderFit(state: Any, model: numpyro_forecast.typing.ForecastModel, covariates: jax.Array, data: jax.Array, elbo: float) -> None
 
@@ -2236,7 +2746,7 @@ data
 elbo
     The evidence lower bound of the fitted approximation.
 
-fit_pathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.PathfinderFit
+fit_pathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, init_params: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex] | None = None) -> numpyro_forecast.contrib.blackjax.PathfinderFit
 
 Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
@@ -2303,7 +2813,7 @@ The returned dict has the sample axis leading and is ready to pass to
 `~~numpyro_forecast.predictive.forecast()` or NumPyro's
 ``Predictive``, exactly like `~~numpyro_forecast.predictive.draw_posterior()`.
 Chunking and device offload are delegated to the shared
-`~~numpyro_forecast._offload._draw_chunked()` driver, so the same
+`~~numpyro_forecast.offload.draw_chunked()` driver, so the same
 memory-bounding contract applies.
 
 PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
@@ -2342,10 +2852,10 @@ ValueError
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -2391,7 +2901,7 @@ pareto_k
     `multipathfinder_samples()` reads it to decide whether
     ``resample="auto"`` uses PSIS or ELBO-weighted path sampling.
 
-fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
+fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, init_params: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
 
 Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 
@@ -2494,7 +3004,7 @@ duplication. The output contract is identical to
 `pathfinder_samples()`: `~~numpyro_forecast.predictive.forecast()`
 and NumPyro's ``Predictive`` consume it unchanged. Chunking and device offload
 are delegated to the shared
-`~~numpyro_forecast._offload._draw_chunked()` driver, so the same
+`~~numpyro_forecast.offload.draw_chunked()` driver, so the same
 memory-bounding contract applies.
 
 Resampling strategies
@@ -2560,24 +3070,207 @@ dict[str, Array]
 Raises
 ------
 ValueError
-    If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
-    not one of ``"auto"``, ``"psis"``, ``"elbo"``.
+    If ``num_samples`` or ``batch_size`` is not positive (an unknown
+    ``resample`` is a type error under the package's runtime type checking,
+    and a ``ValueError`` only when that checking is disabled).
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
 UserWarning
-    In PSIS mode, if the ``pareto_k`` recomputed on this call's fresh draws
-    exceeds ``0.7``. This is a separate diagnostic from ``fit.pareto_k``,
-    which is computed once over the pool stored at fit time. Also if
-    ``device="cpu"`` is requested and the JAX CPU backend is not
-    initialized, so the draws take the NumPy path of ``"host"`` instead.
+    In PSIS mode, once per call, if the ``pareto_k`` recomputed on this
+    call's fresh draws exceeds ``0.7`` (with ``batch_size``, PSIS runs per
+    chunk and the warning reports the largest ``pareto_k`` and how many
+    chunks exceed the threshold). This is a separate diagnostic from
+    ``fit.pareto_k``, which is computed once over the pool stored at fit
+    time. Also if ``device="cpu"`` is requested and the JAX CPU backend is
+    not initialized, so the draws take the NumPy path of ``"host"`` instead.
+
+state_space(h: numpyro_forecast.models.Horizon, name: str, y: jaxtyping.Float[Array, 'time obs'], dynamics: Any, *, controls: jaxtyping.Float[Array, 'duration control'] | None = None) -> numpyro_forecast.contrib.dynestyx.StateSpaceResult
+
+Condition, forecast or predict in-sample a dynestyx model over the horizon.
+
+One ``dsx.sample`` call on the integer time grid ``0, ..., h.duration - 1``
+(``obs_times`` are the first ``h.t_obs`` steps, ``predict_times`` the rest,
+``ctrl_times`` the whole grid), interpreted by the dynestyx handlers active
+around the model call. What the block registers depends on the mode of the
+call, exactly as the other building blocks decide it from ``h``:
+
+- ``h.data`` given and ``h.future == 0`` (training): nothing. The active
+  ``Filter``, ``Smoother`` or ``LatentPathBuilder`` adds its likelihood
+  factor, which is what ``MCMC`` and ``SVI`` fit.
+- ``h.data`` given and ``h.future > 0`` (forecasting): the site
+  ``"forecast"``, shape ``(future, obs)``, read from the rollout of a
+  ``DiscreteTimeSimulator(n_simulations=1)`` placed outside the ``Filter``,
+  ``Smoother`` or ``LatentPathBuilder`` (the explicit simulator is the
+  recommended form; dynestyx 0.8 adds one itself when none is active). The
+  rollout starts from the conditioned state at the last observation: the
+  filtering or smoothing distribution at the parameters of each posterior
+  draw (the two coincide there), or the sampled final state of the path
+  under a ``LatentPathBuilder``, which therefore inherits the mixing of the
+  path. The block asks the simulator for ``predict_times`` starting at the
+  last observation and drops that first row, because dynestyx places the
+  rollout's initial state at the first predict time without a transition.
+- ``h.data is None`` (the in-sample predictive of
+  `~~numpyro_forecast.predictive.predict_in_sample()` and
+  `~~numpyro_forecast.convert.to_datatree()`): the site ``"obs"``, shape
+  ``(t_obs, obs)``, one observation draw per step from
+  ``dynamics.observation_model(x_t, u_t, t)`` at a draw of the in-sample
+  states: step-wise from the smoothing marginals under a ``Smoother``, the
+  posterior path itself under a ``LatentPathBuilder``. This is not a prior
+  predictive: the block still conditions on ``y`` from the covariates, so
+  ``Predictive(model, num_samples=...)(rng_key, covariates)`` returns draws
+  conditioned on the observed window at prior parameters. Simulate a prior
+  predictive with ``dsx.sample`` and ``predict_times`` under a
+  ``Simulator``, without ``obs_values``.
+
+Parameters
+----------
+h
+    The current call's horizon.
+name
+    Site prefix handed to ``dsx.sample`` (dynestyx registers its own sites as
+    ``f"{name}_..."``).
+y
+    The observed window, shape ``(h.t_obs, obs)``, read from the covariates
+    by the caller (``covariates[..., : h.t_obs, :1]`` for a series stored in
+    column 0) so that it is present when the drivers call the model with
+    ``data=None``. NaN entries are missing observations and must be in ``y``
+    (the likelihood never reads ``h.data``). The ``LatentPathBuilder`` and
+    the Kalman and ensemble Kalman filters and smoothers of the cuthbert
+    backend (``KFConfig``, ``EnKFConfig``, ``KFSmootherConfig``,
+    ``EnRTSSmootherConfig`` with ``filter_source="cuthbert"``, and the
+    default ``Filter()``, an ensemble Kalman filter) skip them. The other
+    configurations reject them, including the cd_dynamax backend (the default
+    of ``KFConfig``) and the default ``Smoother()``. The particle filter
+    returns a NaN log likelihood (its warning disappears inside the jitted
+    drivers), and dynestyx does not check the HMM filters. Under a
+    ``LatentPathBuilder``, a partly missing row of an observation family the
+    builder cannot marginalize adds a latent ``f"{name}_missing_obs_values"``
+    site.
+dynamics
+    A ``dynestyx.DynamicalModel`` with a vector state (one row of the path per
+    observed step). Its ``observation_model(x, u, t)`` must return a NumPyro
+    distribution for one time step (dynestyx's ``LinearGaussianObservation``
+    or any callable), which the in-sample predictive samples.
+controls
+    Optional control inputs over the whole horizon, shape
+    ``(h.duration, control)``; passed as ``ctrl_values`` with ``ctrl_times``
+    equal to the full grid, and sliced to the observed window for the
+    in-sample predictive.
+
+Returns
+-------
+StateSpaceResult
+    ``x_future`` while forecasting and ``x_in_sample`` when called without
+    data, ``None`` otherwise.
+
+Raises
+------
+ValueError
+    If no ``Filter``, ``Smoother`` or ``LatentPathBuilder`` is active; if
+    ``y`` or ``controls`` do not span the horizon; if the forecast runs with
+    ``n_simulations != 1``; if the in-sample predictive runs under a
+    ``Filter``, receives no per-step marginals, or gets a state path that is
+    not ``(t_obs, state)``; if a dynestyx site is missing (for example under
+    ``numpyro.handlers.scope``). A fresh ``LatentPathBuilder`` inside a jitted
+    driver raises dynestyx's own ``ValueError`` about the missingness pattern.
+RuntimeError
+    If the in-sample predictive runs without a seed handler.
+jax.errors.JaxRuntimeError
+    From dynestyx's layout check, when a traced call evaluates the likelihood
+    under a ``LatentPathBuilder`` whose cached missingness layout comes from a
+    later fit with another missingness pattern (see Notes).
+
+Notes
+-----
+- The ``Smoother`` in-sample draws are per-step marginals
+  $p(x_t \mid y_{1:T})$, independent across steps: exact for per-step bands
+  and metrics, not a joint path. The ``LatentPathBuilder`` draws are joint.
+  The smoother's marginals arrive as a Python list, so building the draws
+  costs trace time that grows with the length of the window.
+- A ``Filter`` and a ``Smoother`` that run the same forward filter add the
+  same marginal likelihood, so the draws of a ``Filter`` fit can be exported
+  under that ``Smoother`` without a refit: the Kalman filter with the Kalman
+  (Rauch-Tung-Striebel) smoother, and an approximate filter with the smoother
+  of the same configuration and seed. With an approximate filter, the
+  posterior is only as good as that filter's likelihood estimate.
+- Under a ``LatentPathBuilder`` the drivers need the posterior draws of
+  ``f"{name}_state_path_params"``, which only a fit under a builder has. A
+  posterior from a ``Filter`` or ``Smoother`` fit has no path, and the
+  builder then draws the path from its prior without an error: export such
+  fits under a ``Smoother``.
+- The ``LatentPathBuilder`` around a driver call must be the instance that
+  fitted the model: it caches the observation missingness layout per site
+  name and shape from the concrete observations of the fit, and the jitted
+  drivers hand it traced arrays. A later fit with the same site name and
+  shape and a different missingness pattern overwrites that layout. A traced
+  call for the earlier model that evaluates the likelihood (a fit,
+  ``log_density``) then raises dynestyx's ``JaxRuntimeError``; the predictive
+  drivers do not evaluate it and ran without error in our tests. Use one
+  builder per fitted model when the patterns differ. A fresh builder needs
+  its first model run eager.
+- ``mcmc.get_samples()`` also holds the deterministic sites dynestyx records
+  (``f"{name}_filtered_states_mean"`` and similar). The drivers ignore
+  deterministic sites, but `~~numpyro_forecast.convert.to_datatree()` stores
+  them in the posterior group; drop them for a smaller tree, and keep
+  ``f"{name}_state_path_params"`` under a ``LatentPathBuilder``.
+
+Examples
+--------
+A local level model, fitted with the Kalman filter and exported with the
+smoother around the driver call:
+
+```python
+def local_level(covariates, data=None):
+    h = Horizon.from_data(covariates, data)
+    y = covariates[..., : h.t_obs, :]  # the series travels in the covariates
+    q = numpyro.sample("q", dist.HalfNormal(1.0))
+    r = numpyro.sample("r", dist.HalfNormal(1.0))
+    dynamics = DynamicalModel(
+        initial_condition=dist.MultivariateNormal(jnp.zeros(1), jnp.eye(1)),
+        state_evolution=LinearGaussianStateEvolution(A=jnp.eye(1), cov=q**2 * jnp.eye(1)),
+        observation_model=LinearGaussianObservation(H=jnp.eye(1), R=r**2 * jnp.eye(1)),
+    )
+    state_space(h, "f", y, dynamics)
+
+
+rng_key, key_fit, key_export = random.split(rng_key, 3)
+with Filter(filter_config=KFConfig(filter_source="cuthbert")):
+    mcmc.run(key_fit, series[:t_obs], series[:t_obs])
+
+# the parameters only: the fit also recorded its filtered states (f_filtered_states_*)
+posterior = {k: v for k, v in mcmc.get_samples().items() if not k.startswith("f_")}
+smoother = Smoother(smoother_config=KFSmootherConfig(filter_source="cuthbert"))
+with DiscreteTimeSimulator(n_simulations=1), smoother:
+    tree = to_datatree(key_export, local_level, posterior, series[:t_obs], series)
+```
+
+StateSpaceResult(x_in_sample: jaxtyping.Float[Array, 'time state'] | None, x_future: jaxtyping.Float[Array, 'future state'] | None)
+
+Latent state draws of one `state_space()` call, ``None`` outside their mode.
+
+The block registers the ``"forecast"`` and ``"obs"`` sites itself; the states
+are returned so that a model can register its latent level (for example
+``numpyro.deterministic("level", result.x_in_sample)`` when ``h.data is None``)
+under any handler that serves the mode.
+
+Attributes
+----------
+x_in_sample
+    One draw of the in-sample states, shape ``(t_obs, state)``, when the model
+    is called without data: the draw behind the ``"obs"`` site (per-step
+    smoothing marginals under a ``Smoother``, the posterior path under a
+    ``LatentPathBuilder``). ``None`` otherwise.
+x_future
+    The Simulator's state rollout over the horizon, shape ``(future, state)``,
+    when forecasting; ``None`` otherwise.
 
 
 ## Typing
@@ -2680,6 +3373,8 @@ should use array creation routines offered in :mod:`jax.numpy`, such as
 
 Callable(*args, **kwargs)
 
+Callable(*args, **kwargs)
+
 
 ## Autocorrelation
 
@@ -2716,7 +3411,8 @@ Returns
 -------
 Float[Array, "*batch lags"]
     Autocorrelations for lags ``0, 1, ..., max_lag`` (``max_lag + 1``
-    values; lag ``0`` is identically ``1.0``).
+    values; lag ``0`` is identically ``1.0``; all NaN for a constant
+    series).
 
 Raises
 ------
@@ -2725,9 +3421,13 @@ ValueError
 
 Notes
 -----
-A constant series has zero variance, so the result is meaningless: all NaN
-in eager execution (a ``0 / 0``), while under `jax.jit()` the rounding
-of the mean can instead yield arbitrary finite values.
+A constant series has zero variance and no autocorrelation, so every lag,
+lag ``0`` included, is NaN (a ``0 / 0``), with or without `jax.jit()`.
+The series is shifted by its first sample before centering, which makes a
+constant series exactly zero in floating point. NaN does not imply a
+constant series: a NaN or infinite sample also gives NaN at every lag,
+and in float32 a series whose deviations from the mean are near the
+underflow threshold (about ``1e-19``) can give NaN or inaccurate values.
 
 References
 ----------
@@ -2766,7 +3466,8 @@ Returns
 -------
 Float[Array, "*batch lags"]
     Partial autocorrelations for lags ``0, 1, ..., max_lag``
-    (``max_lag + 1`` values; lag ``0`` is identically ``1.0``).
+    (``max_lag + 1`` values; lag ``0`` is identically ``1.0``; all NaN
+    for a constant series).
 
 Raises
 ------
@@ -2775,10 +3476,9 @@ ValueError
 
 Notes
 -----
-A constant series has zero variance, so the result is meaningless (see
-`acf()`); a near-deterministic series can likewise overflow the
-recursion (the denominator above approaches zero) and produce infinities
-or NaNs.
+A constant series gives NaN at every lag, as in `acf()`; a
+near-deterministic series can overflow the recursion (the denominator
+above approaches zero) and produce infinities or NaNs.
 
 References
 ----------
@@ -2794,6 +3494,12 @@ Fourier design matrices and seasonal tiling.
 fourier_features(duration: int, period: float, num_terms: int) -> jaxtyping.Float[Array, 'duration two_num_terms']
 
 Build a Fourier seasonality design matrix.
+
+Safe to call inside a model function (for example with ``h.duration`` of a
+`~~numpyro_forecast.models.Horizon`), also under `svi.run` or the jitted
+`~~numpyro_forecast.predictive.forecast()`. The matrix is computed in
+float64 and cached per argument tuple, then returned in the current
+default float dtype (``float64`` with x64 enabled, ``float32`` otherwise).
 
 Parameters
 ----------
@@ -2927,9 +3633,10 @@ training window followed by a ``test_weeks`` test window.
 Parameters
 ----------
 train_days
-    Number of training days (24 hours each).
+    Number of training days (24 hours each). Must be at least 1.
 test_weeks
-    Number of test weeks (``24 * 7`` hours each).
+    Number of test weeks (``24 * 7`` hours each). Must be non-negative;
+    ``0`` returns the training window only, with ``split == y.shape[1]``.
 
 Returns
 -------
@@ -2943,8 +3650,10 @@ stations : list[str]
 Raises
 ------
 ValueError
-    If the requested ``train_days`` + ``test_weeks`` window exceeds the
-    available history (which would otherwise wrap a negative slice index).
+    If ``train_days`` is less than 1 or ``test_weeks`` is negative (checked
+    before the download), or if the requested ``train_days`` + ``test_weeks``
+    window exceeds the available history (which would otherwise wrap a
+    negative slice index).
 
 load_victoria_electricity() -> tuple[jaxtyping.Float[Array, 'time 1'], jaxtyping.Float[Array, 'time']]
 
@@ -3089,9 +3798,11 @@ VectorizedMetricError(message: str | None = None) -> None
 A metric is not vmappable in the vectorized backtest.
 
 Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when a
-metric forces a host conversion (e.g. ``float(...)`` or ``numpy`` calls)
-under ``vmap``. Metrics must be pure JAX functions returning a scalar
-array; see `~~numpyro_forecast.typing.Metric`.
+metric forces a host conversion under ``vmap`` (``float(...)``,
+``int(...)``, ``range(...)``, Python list indexing or ``numpy`` calls on a
+traced value) or builds a value-dependent shape (a boolean mask index such
+as ``x[x > 0]``; use ``jnp.where`` instead). Metrics must be pure JAX
+functions returning a scalar array; see `~~numpyro_forecast.typing.Metric`.
 
 KernelConfigError(message: str | None = None) -> None
 
@@ -3126,7 +3837,9 @@ Raised by `~~numpyro_forecast.surgery.shift_loc()`,
 `~~numpyro_forecast.surgery.slice_time()`, and
 `~~numpyro_forecast.surgery.prefix_condition()` on MVN noise whose
 ``loc``/``covariance_matrix`` shapes do not match the supported
-time-leading layout.
+time-leading layout, and by `~~numpyro_forecast.surgery.shift_loc()` on a
+predictor that is neither ``(*batch, time, 1)`` (time may be ``1``) nor
+``(*batch, time)`` with no more axes than the noise location.
 
 DeviceMemoryError(message: str | None = None) -> None
 
@@ -3151,7 +3864,7 @@ HostMemoryKindError(message: str | None = None) -> None
 
 A device exposes no host memory kind for ``device="pinned_host"``.
 
-Raised by `~~numpyro_forecast._offload._host_memory_kind()`, reached from
+Raised by `~~numpyro_forecast.offload._host_memory_kind()`, reached from
 `~~numpyro_forecast.predictive.draw_posterior()`, the predictive drivers
 and everything built on them, when an explicit ``device="pinned_host"``
 targets a device whose addressable memories include neither
@@ -3163,7 +3876,7 @@ DevicePlatformError(message: str | None = None) -> None
 
 A ``device`` platform name has no initialized JAX backend.
 
-Raised by `~~numpyro_forecast._offload._resolve_device()` (reached from
+Raised by `~~numpyro_forecast.offload.resolve_device()` (reached from
 every function with a ``device`` parameter) when ``device`` names a platform,
 e.g. ``"tpu"``, whose backend is not initialized in this process. The
 message lists the available platforms and how to initialize the missing one

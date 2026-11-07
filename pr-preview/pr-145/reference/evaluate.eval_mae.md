@@ -14,7 +14,7 @@ evaluate.eval_mae(
 ```
 
 
-A pure JAX scalar kernel (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)). `pred` and `truth` are moved to device memory first (`_device_view()`), so either (or both) may be host-committed, e.g. draws sampled with `device="host"`.
+A pure JAX scalar kernel (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)). `pred` and `truth` are moved to device memory first (`device_view()`), so either (or both) may be host-committed, e.g. draws sampled with `device="host"`.
 
 
 ## Parameters
@@ -32,3 +32,10 @@ Ground-truth values (matching `pred` without the sample axis).
 
 `Array`  
 The mean absolute error as a scalar array.
+
+
+## Raises
+
+
+`ValueError`  
+If `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).
