@@ -170,7 +170,6 @@ def test_mvn_prefix_condition_is_exact_at_any_scale(step_scale: np.ndarray) -> N
     expected_cov = c[t:, t:] - gain @ c[:t, t:]
     expected_mean = m[t:] + gain @ (np.asarray(data[:, 0], dtype=np.float64) - m[:t])
     np.testing.assert_allclose(np.asarray(cond.covariance_matrix), expected_cov, rtol=1e-3)
-    # Each future mean is compared in units of its own step scale.
     future_scale = step_scale[t:]
     np.testing.assert_allclose(
         np.asarray(cond.loc) / future_scale, expected_mean / future_scale, rtol=1e-3, atol=1e-4
@@ -342,7 +341,7 @@ def test_predict_mvn_forecast_sites_keep_the_obs_axis() -> None:
     )
 
     c = np.asarray(_ar_covariance(t + future, rho), dtype=np.float64)
-    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T  # Sigma_fp @ inv(Sigma_pp)
+    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T
     in_sample = dist.MultivariateNormal(jnp.zeros(t), covariance_matrix=jnp.asarray(c[:t, :t]))
     conditional = dist.MultivariateNormal(
         jnp.asarray(gain @ np.asarray(data[:, 0], dtype=np.float64)),
@@ -389,8 +388,8 @@ def test_predict_mvn_panel_scores_each_series_jointly(wrap: bool) -> None:
     assert jnp.allclose(obs_log_density, expected, atol=1e-4)
     assert tr["obs_future"]["value"].shape == (series, future, 1)
     c = np.asarray(full_cov, dtype=np.float64)
-    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T  # Sigma_fp @ inv(Sigma_pp)
-    expected_mean = np.asarray(data[..., 0], dtype=np.float64) @ gain.T  # (series, future)
+    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T
+    expected_mean = np.asarray(data[..., 0], dtype=np.float64) @ gain.T
     assert jnp.allclose(tr["obs_future"]["fn"].mean, expected_mean[..., None], atol=1e-4)
 
 
@@ -427,8 +426,6 @@ def test_mvn_time_params_time_one_tiebreak() -> None:
     loc = jnp.zeros((3, 1))
     cov = jnp.broadcast_to(jnp.eye(1), (3, 1, 1))
     out_loc, _ = _mvn_time_params(_fake_mvn(loc, cov))
-    # The squeeze branch requires shape[-2] == time (3 != 1 here), so the
-    # loc falls through to the (*batch, time) branch and is kept unchanged.
     assert out_loc.shape == (3, 1)
 
 
@@ -460,7 +457,7 @@ def test_mvn_time_params_batch_cov_mismatch_raises() -> None:
 
 def test_mvn_time_params_rejects_mismatched_trailing_axis() -> None:
     """A loc whose trailing axis is neither time nor squeezable-1 raises."""
-    loc = jnp.zeros((3, 4))  # trailing 4 != time 6, not 1
+    loc = jnp.zeros((3, 4))
     cov = jnp.broadcast_to(jnp.eye(6), (3, 6, 6))
     with pytest.raises(MVNLayoutError, match="MultivariateNormal"):
         _mvn_time_params(_fake_mvn(loc, cov))
@@ -474,12 +471,11 @@ def test_shift_loc_mvn_batched() -> None:
     loc = random.normal(random.PRNGKey(0), (3, time))
     cov = jnp.broadcast_to(jnp.eye(time), (3, time, time))
     mvn = dist.MultivariateNormal(loc=loc, covariance_matrix=cov)
-    shift = jnp.ones((3, time, 1))  # (*batch, time, obs=1) as predict supplies
+    shift = jnp.ones((3, time, 1))
     shifted = shift_loc(mvn, shift)
     assert shifted.batch_shape == (3,)
     assert shifted.event_shape == (time, 1)
     assert jnp.allclose(shifted.mean, loc[..., None] + 1.0)
-    # A non-size-1 extra trailing axis is a layout error, not a silent truncation.
     with pytest.raises(MVNLayoutError, match=MVNLayoutError.default_message[:20]):
         shift_loc(mvn, jnp.ones((3, time, 2)))
 
@@ -518,10 +514,10 @@ def test_prefix_condition_independent_mvn_is_the_gaussian_conditional(depth: int
     MVN twice (numpyro does not merge nested ``Independent`` wrappers).
     """
     time, t = 6, 4
-    lead = (1,) * (depth - 1)  # one extra batch axis per extra wrapper
+    lead = (1,) * (depth - 1)
     cov = _ar_covariance(time, 0.9)
-    loc = jnp.stack([jnp.zeros(time), jnp.linspace(-1.0, 1.0, time)])  # two series
-    data = jnp.stack([jnp.ones((t, 1)), jnp.full((t, 1), -0.5)])  # (2, t, 1)
+    loc = jnp.stack([jnp.zeros(time), jnp.linspace(-1.0, 1.0, time)])
+    data = jnp.stack([jnp.ones((t, 1)), jnp.full((t, 1), -0.5)])
     noise: dist.Distribution = dist.MultivariateNormal(
         loc=loc.reshape(*lead, 2, time), covariance_matrix=cov
     )
@@ -533,7 +529,7 @@ def test_prefix_condition_independent_mvn_is_the_gaussian_conditional(depth: int
     c = np.asarray(cov, dtype=np.float64)
     mu = np.asarray(loc, dtype=np.float64)
     x = np.asarray(data[..., 0], dtype=np.float64)
-    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T  # Sigma_fp @ inv(Sigma_pp)
+    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T
     expected_mean = mu[:, t:] + (x - mu[:, :t]) @ gain.T
     expected_var = np.broadcast_to(np.diag(c[t:, t:] - gain @ c[:t, t:]), (2, time - t))
     assert isinstance(cond, dist.Independent)

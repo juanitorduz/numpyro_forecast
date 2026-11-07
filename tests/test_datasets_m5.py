@@ -40,7 +40,7 @@ def _synthetic_files() -> dict[str, str]:
         calendar.append(f"{date},{11101 + day // 7},Saturday,1,1,2011,{event},NA,NA,{day % 2},0,0")
     prices = ["store_id,item_id,wm_yr_wk,sell_price"]
     for week in range(N_WEEKS):
-        if week != 1:  # the second week of the first item has no listed price
+        if week != 1:
             prices.append(f"CA_1,HOBBIES_1_001,{11101 + week},{1.0 + week}")
         prices.append(f"TX_2,FOODS_3_090,{11101 + week},2.5")
     weights = ["Level_id,Agg_Level_1,Agg_Level_2,Dollar_Sales,weight", "Level1,Total,X,100.0,1.0"]
@@ -64,11 +64,8 @@ def test_load_m5_reads_extracted_files(tmp_path: Path) -> None:
     m5 = load_m5(cache_dir=tmp_path)
     assert m5.sales.shape == (M5_DAYS, 2)
     assert m5.sales.dtype == np.float32
-    assert (
-        m5.sales[1_941:, 1].tolist() == [20.0] * 28
-    )  # the evaluation days follow the training days
+    assert m5.sales[1_941:, 1].tolist() == [20.0] * 28
     assert m5.keys["id"].to_list() == ["HOBBIES_1_001_CA_1", "FOODS_3_090_TX_2"]
-    # the second Walmart week (days 7 to 13) of the first item has no price, the rest repeats weekly
     assert np.isnan(m5.price[7:14, 0]).all()
     assert m5.price[0:7, 0].tolist() == [1.0] * 7
     assert m5.price[14:21, 0].tolist() == [3.0] * 7
@@ -112,7 +109,7 @@ def test_load_m5_downloads_verifies_and_unpacks(
     assert m5.sales.shape == (M5_DAYS, 2)
     assert all((tmp_path / "good" / name).exists() for name in M5_FILES)
     load_m5(cache_dir=tmp_path / "good")
-    assert len(calls) == 2  # the second good call reads the cache
+    assert len(calls) == 2
 
 
 def test_load_m5_rejects_non_https_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

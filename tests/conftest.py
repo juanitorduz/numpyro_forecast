@@ -21,14 +21,6 @@ from numpyro_forecast.offload import _host_sharding
 from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.typing import ForecastFn, ForecastModel, InSampleFn
 
-# ---------------------------------------------------------------------------
-# Compile-count harness (roadmap §4.5). A single process-wide JAX monitoring
-# listener counts backend compilations; the ``count_compilations`` fixture
-# exposes a context manager that reports the delta over a tightly scoped block.
-# Pre-create every array OUTSIDE the block (array constructors compile too) and
-# call ``block_until_ready`` INSIDE it so the compile is attributed correctly.
-# ---------------------------------------------------------------------------
-
 _BACKEND_COMPILE_EVENT = "/jax/core/compile/backend_compile_duration"
 
 
@@ -53,7 +45,7 @@ def _install_compile_listener() -> None:
 
     try:
         jax.monitoring.register_event_duration_secs_listener(_listener)
-    except Exception:  # harness unavailability is non-fatal
+    except Exception:
         _HARNESS_AVAILABLE = False
     else:
         _HARNESS_AVAILABLE = True

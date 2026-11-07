@@ -30,7 +30,7 @@ def test_load_bart_hierarchical_rejects_oversized_window() -> None:
         load_bart_hierarchical(train_days=10**6)
 
 
-_FAKE_HOURS = 3 * datasets.HOURS_PER_WEEK + 5  # 509 hours of fake counts
+_FAKE_HOURS = 3 * datasets.HOURS_PER_WEEK + 5
 
 
 @pytest.fixture
@@ -96,7 +96,7 @@ def test_load_bart_hierarchical_rejects_oversized_window_fake_counts() -> None:
 def test_load_victoria_electricity_shapes_and_values() -> None:
     """The bundled CSV loads into aligned demand/temperature arrays."""
     demand, temperature = load_victoria_electricity()
-    assert demand.shape == (1_344, 1)  # eight weeks of hourly data
+    assert demand.shape == (1_344, 1)
     assert temperature.shape == (1_344,)
     assert float(demand[0, 0]) == pytest.approx(3.794, abs=1e-3)
     assert float(temperature[0]) == pytest.approx(18.05, abs=1e-3)
