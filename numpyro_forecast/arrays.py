@@ -7,9 +7,11 @@ constant forecast-horizon rows (the frozen-gate recipe of
 `numpyro_forecast.models.ssoe()`).
 """
 
+import operator
+
 import jax.numpy as jnp
 
-from numpyro_forecast.typing import Array
+from numpyro_forecast.typing import Array, IntScalar, RealScalar
 
 
 def zero_data_like(data: Array, covariates: Array) -> Array:
@@ -55,7 +57,7 @@ def concat_future(prefix: Array, suffix: Array, *, axis: int = -2) -> Array:
     return jnp.concatenate([prefix, suffix], axis=axis)
 
 
-def pad_future(x: Array, future: int, *, value: float = 0.0) -> Array:
+def pad_future(x: Array, future: IntScalar, *, value: RealScalar = 0.0) -> Array:
     """Append ``future`` rows filled with ``value`` along the time axis.
 
     The frozen-gate recipe of `numpyro_forecast.models.ssoe()`: an update
@@ -69,14 +71,25 @@ def pad_future(x: Array, future: int, *, value: float = 0.0) -> Array:
     x
         In-sample array with time at axis ``-2``, shape ``(*batch, t_obs, obs)``.
     future
-        Number of forecast rows to append.
+        Number of forecast rows to append, a non-negative Python or NumPy
+        integer (for example ``h.future`` or ``np.sum(mask)``).
     value
-        Fill value of the appended rows, cast to ``x.dtype``.
+        Fill value of the appended rows, a Python or NumPy integer or float,
+        cast to ``x.dtype`` by ``jnp.full`` (an integer fill stays exact).
 
     Returns
     -------
     Array
         ``x`` followed by ``future`` constant rows, shape ``(*batch, t_obs + future, obs)``.
+
+    Raises
+    ------
+    ValueError
+        If ``future`` is negative.
     """
-    suffix = jnp.full((*x.shape[:-2], future, x.shape[-1]), value, dtype=x.dtype)
+    rows = operator.index(future)
+    if rows < 0:
+        msg = f"future must be non-negative, got {rows}"
+        raise ValueError(msg)
+    suffix = jnp.full((*x.shape[:-2], rows, x.shape[-1]), value, dtype=x.dtype)
     return concat_future(x, suffix)

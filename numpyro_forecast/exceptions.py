@@ -43,6 +43,8 @@ class VectorizedMetricError(NumpyroForecastError, TypeError):
     traced value) or builds a value-dependent shape (a boolean mask index such
     as ``x[x > 0]``; use ``jnp.where`` instead). Metrics must be pure JAX
     functions returning a scalar array; see `~~numpyro_forecast.typing.Metric`.
+    The scoring is traced on the window shapes before the fit, so this error
+    comes before any window is fitted.
     """
 
     default_message = (

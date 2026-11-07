@@ -5,8 +5,16 @@ trace (`svi.run`, the jitted `~~numpyro_forecast.predictive.forecast()`).
 `fourier_features()` caches a host NumPy copy of its design matrix per argument
 tuple and converts it to a JAX array in the current default float dtype on every
 call, so the cache never holds a tracer and the dtype follows the x64 flag.
+
+The integer and real scalar arguments accept NumPy scalars as well as Python
+ones (`~~numpyro_forecast.typing.IntScalar`,
+`~~numpyro_forecast.typing.RealScalar`), for example a period or a duration
+read from a NumPy array or a DataFrame. Both helpers convert them to Python
+scalars at the boundary, so the memo is keyed by Python scalars only.
 """
 
+import math
+import operator
 from functools import lru_cache
 
 import jax.numpy as jnp
@@ -14,7 +22,7 @@ import numpy as np
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
-from numpyro_forecast.typing import Array
+from numpyro_forecast.typing import Array, IntScalar, RealScalar
 
 
 @lru_cache(maxsize=128)
@@ -40,9 +48,9 @@ def _fourier_features(
 
 
 def fourier_features(
-    duration: int,
-    period: float,
-    num_terms: int,
+    duration: IntScalar,
+    period: RealScalar,
+    num_terms: IntScalar,
 ) -> Float[Array, " duration two_num_terms"]:
     """Build a Fourier seasonality design matrix.
 
@@ -55,23 +63,45 @@ def fourier_features(
     Parameters
     ----------
     duration
-        Number of time steps.
+        Number of time steps, a non-negative Python or NumPy integer (not a
+        ``float``).
     period
-        Seasonal period (in time steps).
+        Seasonal period (in time steps): a positive, finite Python or NumPy
+        integer or float, for example ``7`` for daily data with a weekly season.
+        A NumPy float is used at its exact binary value, so ``np.float32(0.1)``
+        is the period ``0.10000000149011612``, not ``0.1``, and the two spellings
+        are two memo entries.
     num_terms
-        Number of harmonics; the output has ``2 * num_terms`` columns
-        (sine then cosine).
+        Number of harmonics, a non-negative Python or NumPy integer; the output
+        has ``2 * num_terms`` columns (sine then cosine), none for ``0``.
 
     Returns
     -------
     Float[Array, "duration two_num_terms"]
         The design matrix of shape ``(duration, 2 * num_terms)``.
+
+    Raises
+    ------
+    ValueError
+        If ``duration`` or ``num_terms`` is negative, or ``period`` is not
+        positive and finite (``0`` or ``nan`` would cache an all-``nan``
+        matrix without an error, and ``inf`` a constant one).
     """
-    design = _fourier_features(duration, float(period), num_terms)
+    n_steps, cycle, n_terms = operator.index(duration), float(period), operator.index(num_terms)
+    if n_steps < 0:
+        msg = f"duration must be non-negative, got {n_steps}"
+        raise ValueError(msg)
+    if not (math.isfinite(cycle) and cycle > 0.0):
+        msg = f"period must be positive and finite, got {cycle}"
+        raise ValueError(msg)
+    if n_terms < 0:
+        msg = f"num_terms must be non-negative, got {n_terms}"
+        raise ValueError(msg)
+    design = _fourier_features(n_steps, cycle, n_terms)
     return jnp.asarray(design, dtype=jnp.result_type(float))
 
 
-def periodic_repeat(x: ArrayLike, duration: int, *, axis: int = -1) -> Array:
+def periodic_repeat(x: ArrayLike, duration: IntScalar, *, axis: int = -1) -> Array:
     """Tile a seasonal pattern to cover ``duration`` time steps.
 
     Parameters
@@ -80,7 +110,8 @@ def periodic_repeat(x: ArrayLike, duration: int, *, axis: int = -1) -> Array:
         Seasonal pattern; the repeated axis has length equal to the period.
         Accepts any array-like (e.g. a raw ``numpyro.sample`` draw).
     duration
-        Target length along ``axis``.
+        Target length along ``axis``: a non-negative Python or NumPy integer
+        (not a ``float``).
     axis
         Axis to repeat along (defaults to ``-1``).
 
@@ -88,8 +119,17 @@ def periodic_repeat(x: ArrayLike, duration: int, *, axis: int = -1) -> Array:
     -------
     Array
         ``x`` periodically repeated to length ``duration`` along ``axis``.
+
+    Raises
+    ------
+    ValueError
+        If ``duration`` is negative.
     """
+    n_steps = operator.index(duration)
+    if n_steps < 0:
+        msg = f"duration must be non-negative, got {n_steps}"
+        raise ValueError(msg)
     array = jnp.asarray(x)
     period = array.shape[axis]
-    indices = jnp.arange(duration) % period
+    indices = jnp.arange(n_steps) % period
     return jnp.take(array, indices, axis=axis)

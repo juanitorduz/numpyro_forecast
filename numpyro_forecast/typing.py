@@ -13,6 +13,34 @@ import numpy as np
 Array = jax.Array
 """A JAX array (alias of `jax.Array`)."""
 
+IntScalar = int | np.integer
+"""A concrete integer scalar: a Python ``int`` or a NumPy integer scalar (``np.int64``, ...).
+
+``np.int64`` is not a subclass of ``int``, so a count read from NumPy or a
+DataFrame (``df["day"].max()``, ``np.sum(mask)``) fails a plain ``int`` hint.
+A package function with a parameter annotated
+`~~numpyro_forecast.typing.IntScalar` accepts it and converts it with
+``operator.index`` at the function boundary, so the function body works with a
+Python ``int`` (arbitrary precision, no NumPy overflow). A ``float`` such as
+``10.0`` and a JAX array (also a tracer) are rejected. Two members of the
+union are wider than a count: a Python ``bool`` is an ``int`` and is accepted
+as ``0`` or ``1``, and ``np.timedelta64`` is an ``np.integer`` (so it passes
+the hint) but has no ``__index__``, so ``operator.index`` raises ``TypeError``
+for it; convert a time difference to a count yourself (``delta // np.timedelta64(1, "D")``).
+"""
+
+RealScalar = IntScalar | float | np.floating
+"""A concrete real scalar: a Python ``float`` or ``int``, or a NumPy integer or floating scalar.
+
+A package function with a parameter annotated
+`~~numpyro_forecast.typing.RealScalar` accepts an integer value as it is and
+converts a NumPy float to a Python ``float`` where it needs one. The alias
+spells ``int``, so an integer passes it under any runtime configuration; it
+matters for NumPy scalars such as ``np.int64(7)`` or ``np.float32(7.0)``, which
+a plain ``float`` hint rejects. A JAX array (also a tracer) is rejected; a
+Python ``bool`` passes as ``0`` or ``1``.
+"""
+
 BlackjaxBuildFn = Callable[..., object]
 """A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.
 
@@ -49,6 +77,18 @@ the window axis. Parametrize by closure: ``functools.partial`` for keywords
 (e.g. ``partial(eval_coverage, alpha=0.5)``) or a factory like
 `~~numpyro_forecast.metrics.make_mase()`.
 
+Every driver checks each result on its own, so the outcome for one metric
+never depends on the other metrics in the mapping: a 0-d bool or integer
+result is converted to float, and any other shape or dtype (for example the
+per-cell values of `~~numpyro_forecast.metrics.crps_empirical()`, whose
+metric counterpart is `~~numpyro_forecast.evaluate.eval_crps()`) raises
+``ValueError`` with the name, shape and dtype of the metric.
+`~~numpyro_forecast.evaluate.evaluate_forecast()` and
+`~~numpyro_forecast.evaluate.backtest()` check the value they score;
+`~~numpyro_forecast.evaluate.backtest_vectorized()` checks the value of one
+window inside its ``vmap``, and traces the scoring on the window shapes
+before the fit, so the error comes before any window is fitted.
+
 The built-in metrics and `~~numpyro_forecast.evaluate.evaluate_forecast()`
 check that ``truth.shape`` is ``pred.shape[1:]`` and raise ``ValueError``
 otherwise. With the runtime type hook on (the default), the jaxtyping
@@ -56,6 +96,22 @@ annotations reject a mismatched array first and raise
 ``jaxtyping.TypeCheckError``. A Python or NumPy scalar ``truth`` passes the
 annotations, so the explicit check raises ``ValueError`` for it. Either way a
 mismatched ``truth`` never broadcasts into a wrong value.
+
+``pred`` and ``truth`` may have any real dtype. A count model (a discrete
+observation family in `~~numpyro_forecast.models.predict()`) needs integer
+data, so its forecast draws are integers. The built-in metrics cast an integer
+operand to the default float dtype (``float32``, or ``float64`` with x64
+enabled) before they compute, and keep a floating operand in its own dtype.
+``float32`` holds every integer up to $2^{24}$ exactly; larger counts round
+unless x64 is enabled.
+`~~numpyro_forecast.evaluate.evaluate_forecast()` (and with it
+`~~numpyro_forecast.evaluate.backtest()`) and
+`~~numpyro_forecast.evaluate.backtest_vectorized()` cast once before they
+call the metrics, so every metric receives floating arrays and can compute
+``jnp.abs(pred - truth)`` without integer wraparound; a custom metric that
+needs the integer draws must read them from the kept predictions
+(``keep_predictions=True``) or cast back inside the metric. The built-in
+metrics reject boolean and complex arrays.
 """
 
 

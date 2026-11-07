@@ -7,7 +7,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from conftest import commit_host, rw_model_factory, svi_forecast_fn, svi_in_sample_fn
+from conftest import (
+    commit_host,
+    poisson_counts,
+    poisson_model,
+    rw_model_factory,
+    svi_forecast_fn,
+    svi_in_sample_fn,
+)
 from jax import Array, random
 
 from numpyro_forecast.evaluate import (
@@ -28,7 +35,10 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.exceptions import BacktestWindowError, DeviceMemoryError
-from numpyro_forecast.typing import ForecastFn, ForecastModel
+from numpyro_forecast.metrics import crps_empirical, make_mase
+from numpyro_forecast.predictive import forecast, predict_in_sample
+from numpyro_forecast.typing import ForecastFn, ForecastModel, Metric
+from numpyro_forecast.validation import scalar_metric_value
 
 
 def _canned_forecast_fn(
@@ -389,6 +399,240 @@ def test_evaluate_forecast_multidim_batch() -> None:
     assert all(isinstance(value, float) for value in report.values())
 
 
+# --- Metric result contract (issue #194) -----------------------------------------------
+
+
+def _n_inside(pred: Array, truth: Array) -> Array:
+    """An integer-valued metric: the number of cells inside the range of the samples."""
+    return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).sum()
+
+
+def _all_inside(pred: Array, truth: Array) -> Array:
+    """A boolean-valued metric: whether every cell is inside the range of the samples."""
+    return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).all()
+
+
+def _complex_mae(pred: Array, truth: Array) -> Array:
+    """A 0-d metric with a complex dtype, which is not a real score."""
+    return jnp.abs(pred - truth).mean() + 0j
+
+
+@pytest.mark.parametrize(
+    "value",
+    [jnp.asarray(0.1), jnp.asarray(0.1, jnp.bfloat16), np.float64(0.1), 0.1],
+    ids=["jax_float32", "jax_bfloat16", "numpy_float64", "python_float"],
+)
+def test_scalar_metric_value_keeps_floating_values(value: object) -> None:
+    """A floating value keeps its value up to the default float dtype; a jax Array its object.
+
+    ``0.1`` is not exact in ``float32`` or ``bfloat16``, so a host value that is
+    canonicalized to the default dtype is only ``approx`` equal, which is what
+    the docstring of ``scalar_metric_value`` promises for host floats.
+    """
+    out = scalar_metric_value("m", value)
+    assert out.shape == ()
+    assert jnp.issubdtype(out.dtype, jnp.floating)
+    assert float(out) == pytest.approx(0.1, rel=float(jnp.finfo(out.dtype).eps))
+    if isinstance(value, jax.Array):
+        assert out is value  # no device op for a valid float metric
+    else:
+        assert out.dtype == jnp.result_type(float)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(jnp.asarray(3), 3.0), (jnp.asarray(True), 1.0), (np.int64(2), 2.0), (True, 1.0), (7, 7.0)],
+    ids=["jax_int", "jax_bool", "numpy_int", "python_bool", "python_int"],
+)
+def test_scalar_metric_value_casts_bool_and_integer_to_default_float(
+    value: object, expected: float
+) -> None:
+    out = scalar_metric_value("m", value)
+    assert out.shape == ()
+    assert out.dtype == jnp.result_type(float)
+    assert float(out) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "shape", "dtype"),
+    [
+        (jnp.zeros((4, 1)), r"\(4, 1\)", str(jnp.result_type(float))),
+        (jnp.zeros(1), r"\(1,\)", str(jnp.result_type(float))),
+        (jnp.asarray(1.0 + 2.0j), r"\(\)", str(jnp.result_type(complex))),
+        (random.key(0), r"\(\)", r"key<\w+>"),
+        (None, r"\(\)", "object"),
+        ("0.5", r"\(\)", "<U3"),
+        (np.timedelta64(1, "D"), r"\(\)", r"timedelta64\[D\]"),
+    ],
+    ids=["per_cell", "length_one", "complex", "prng_key", "none", "string", "timedelta"],
+)
+def test_scalar_metric_value_rejects_non_scalar_or_non_real(
+    value: object, shape: str, dtype: str
+) -> None:
+    """The error names the metric, its shape and dtype, and points at the Metric contract."""
+    match = rf"metric 'bad' returned shape {shape} and dtype {dtype};.*typing\.Metric"
+    with pytest.raises(ValueError, match=match):
+        scalar_metric_value("bad", value)
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [lambda p, t: (p, t), lambda p, t: (p.mean(0), t), lambda p, t: [p.mean(), t.mean()]],
+    ids=["pred_truth_pair", "same_shape_pair", "list_of_scalars"],
+)
+def test_evaluate_forecast_rejects_a_container_result_by_name(metric: Metric) -> None:
+    """A metric that returns a tuple or list is a bad result, in the message that names it.
+
+    The ragged ``(pred, truth)`` pair would otherwise surface NumPy's own error, and a
+    same-shape pair would be copied to the host before being rejected.
+    """
+    pred, truth = random.normal(random.PRNGKey(0), (50, 4, 1)), jnp.zeros((4, 1))
+    with pytest.raises(ValueError, match=r"metric 'two' returned a (tuple|list) of 2 values"):
+        evaluate_forecast(pred, truth, metrics={"two": metric})
+
+
+def test_scalar_metric_value_rejects_a_tuple_of_traced_values() -> None:
+    """Under ``vmap`` the same tuple result raises the same error, not a host conversion."""
+
+    def two_statistics(pred: Array, truth: Array) -> tuple[Array, Array]:
+        return pred.mean(), truth.mean()
+
+    pred, truth = jnp.zeros((3, 20, 4, 1)), jnp.zeros((3, 4, 1))
+    with pytest.raises(ValueError, match=r"metric 'two' returned a tuple of 2 values"):
+        jax.vmap(lambda p, t: scalar_metric_value("two", two_statistics(p, t)))(pred, truth)
+
+
+def test_evaluate_forecast_does_not_demote_a_result_next_to_a_bfloat16_metric() -> None:
+    """The stack joins the result dtypes, so a weak float32 result keeps its precision."""
+    pred, truth = random.normal(random.PRNGKey(0), (50, 4, 1)), jnp.zeros((4, 1))
+    metrics = {
+        "const": lambda p, t: jnp.asarray(0.1),
+        "half": lambda p, t: jnp.abs(p - t).mean().astype(jnp.bfloat16),
+    }
+    report = evaluate_forecast(pred, truth, metrics=metrics)
+    assert report["const"] == pytest.approx(0.1, rel=1e-6)
+    assert report["half"] == float(metrics["half"](pred, truth))
+
+
+def test_scalar_metric_value_reads_static_shapes_of_tracers() -> None:
+    """Under ``jit`` and ``vmap`` the check sees one window's value and needs no host value."""
+
+    def score(fn: Metric, pred: Array, truth: Array) -> Array:
+        return scalar_metric_value("score", fn(pred, truth))
+
+    pred = random.normal(random.PRNGKey(0), (3, 20, 4, 1))
+    truth = jnp.zeros((3, 4, 1))
+    counts = jax.jit(jax.vmap(partial(score, _n_inside)))(pred, truth)
+    assert counts.shape == (3,)
+    assert counts.dtype == jnp.result_type(float)
+    with pytest.raises(ValueError, match=r"metric 'score' returned shape \(4, 1\)"):
+        jax.jit(jax.vmap(partial(score, crps_empirical)))(pred, truth)
+
+
+@pytest.mark.parametrize("with_defaults", [False, True], ids=["alone", "with_defaults"])
+@pytest.mark.parametrize(
+    ("metric", "expected"), [(_n_inside, 4.0), (_all_inside, 1.0)], ids=["integer", "bool"]
+)
+def test_evaluate_forecast_converts_bool_and_integer_metrics_to_float(
+    metric: Metric, expected: float, with_defaults: bool
+) -> None:
+    """A bool or integer metric gives a Python float, whatever the other metrics are."""
+    pred = random.normal(random.PRNGKey(0), (50, 4, 1))
+    truth = jnp.zeros((4, 1))
+    metrics = {**DEFAULT_METRICS, "custom": metric} if with_defaults else {"custom": metric}
+    report = evaluate_forecast(pred, truth, metrics=metrics)
+    assert set(report) == set(metrics)
+    assert all(type(value) is float for value in report.values())
+    assert report["custom"] == expected
+    if with_defaults:  # the other metrics are not changed by the cast
+        assert report["crps"] == float(eval_crps(pred, truth))
+
+
+@pytest.mark.parametrize("with_defaults", [False, True], ids=["alone", "with_defaults"])
+@pytest.mark.parametrize(
+    ("metric", "shape", "dtype"),
+    [
+        (crps_empirical, r"\(4, 1\)", str(jnp.result_type(float))),
+        (_complex_mae, r"\(\)", str(jnp.result_type(complex))),
+    ],
+    ids=["per_cell", "complex"],
+)
+def test_evaluate_forecast_rejects_a_metric_that_breaks_the_contract(
+    metric: Metric, shape: str, dtype: str, with_defaults: bool
+) -> None:
+    """The same metric raises the same ``ValueError``, alone or next to the defaults."""
+    pred = random.normal(random.PRNGKey(0), (50, 4, 1))
+    truth = jnp.zeros((4, 1))
+    metrics = {**DEFAULT_METRICS, "bad": metric} if with_defaults else {"bad": metric}
+    match = rf"metric 'bad' returned shape {shape} and dtype {dtype}"
+    with pytest.raises(ValueError, match=match):
+        evaluate_forecast(pred, truth, metrics=metrics)
+
+
+def test_evaluate_forecast_accepts_host_metric_values() -> None:
+    """``backtest`` allows host-side metrics, so Python and NumPy scalars still pass."""
+    pred = random.normal(random.PRNGKey(0), (50, 4, 1))
+    truth = jnp.zeros((4, 1))
+    metrics: dict[str, Any] = {
+        "py_float": lambda p, t: float(jnp.abs(p - t).mean()),
+        "np_int": lambda p, t: np.int64(np.asarray(t).size),
+    }
+    report = evaluate_forecast(pred, truth, metrics=metrics)
+    assert report["py_float"] == pytest.approx(float(jnp.abs(pred - truth).mean()))
+    assert report["np_int"] == 4.0
+    assert all(type(value) is float for value in report.values())
+
+
+@pytest.mark.parametrize("eval_train", [False, True], ids=["test_metrics", "train_metrics"])
+def test_backtest_rejects_a_per_cell_metric_with_its_name(
+    rng_key: Array, eval_train: bool
+) -> None:
+    """``backtest`` scores each window with ``evaluate_forecast``, so it raises the same error."""
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    # The in-sample window has 12 steps and the test window 4; which one is scored
+    # first is an implementation detail, so either shape may be reported.
+    with pytest.raises(ValueError, match=r"metric 'crps_cells' returned shape \((12|4), 1\)"):
+        backtest(
+            rng_key,
+            rw_model_factory,
+            data,
+            covariates,
+            forecast_fn=_canned_forecast_fn,
+            in_sample_fn=_canned_in_sample_fn,
+            metrics={**DEFAULT_METRICS, "crps_cells": crps_empirical},
+            test_window=4,
+            min_train_window=12,
+            stride=4,
+            num_samples=10,
+            eval_train=eval_train,
+        )
+
+
+def test_backtest_converts_integer_metric_to_float(rng_key: Array) -> None:
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    results = backtest(
+        rng_key,
+        rw_model_factory,
+        data,
+        covariates,
+        forecast_fn=_canned_forecast_fn,
+        in_sample_fn=_canned_in_sample_fn,
+        metrics={"n_inside": _n_inside},
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=10,
+        eval_train=True,
+    )
+    assert results
+    for result in results:
+        assert type(result.metrics["n_inside"]) is float
+        assert type(result.train_metrics["n_inside"]) is float
+        assert 0.0 <= result.metrics["n_inside"] <= 4.0
+
+
 def test_backtest_expanding_window(rng_key: Array) -> None:
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
@@ -612,8 +856,6 @@ def test_backtest_defaults_leave_train_metrics_and_prediction_empty(rng_key: Arr
 
 
 def test_backtest_per_window_metrics_hook(rng_key: Array) -> None:
-    from numpyro_forecast.metrics import make_mase
-
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
 
@@ -1298,3 +1540,156 @@ def test_backtest_reuse_model_controls_model_fn_calls(
     shared = reuse_model and window_type == "rolling"
     assert len(calls) == (1 if shared else len(results))
     assert len(results) == (duration - train - test) // stride + 1
+
+
+# --- Integer (count) forecasts (#163) ---------------------------------------------
+
+_COUNT_POSTERIOR = {"log_rate": jnp.full((50,), jnp.log(3.0))}
+"""A fixed posterior for `poisson_model`: the closures below forecast without a fit."""
+
+
+def _count_forecast_fn(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    full_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array | np.ndarray:
+    del train_covariates, num_samples
+    return forecast(
+        rng_key, model, _COUNT_POSTERIOR, train_data, full_covariates, batch_size=batch_size
+    )
+
+
+def _count_in_sample_fn(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array | np.ndarray:
+    del train_data, num_samples
+    return predict_in_sample(
+        rng_key, model, _COUNT_POSTERIOR, train_covariates, batch_size=batch_size
+    )
+
+
+def _to_float(pred: Array, truth: Array) -> tuple[Array, Array]:
+    """The manual workaround before #163: cast the count draws and truth to float."""
+    return pred.astype(jnp.float32), truth.astype(jnp.float32)
+
+
+def test_evaluate_forecast_scores_count_model_draws() -> None:
+    """The reproduction of #163: the int32 draws of ``predict()`` score like their float cast."""
+    data, covariates = poisson_counts(24)
+    pred = forecast(random.PRNGKey(1), poisson_model, _COUNT_POSTERIOR, data[:20], covariates)
+    truth = data[20:]
+    assert jnp.issubdtype(pred.dtype, jnp.integer)
+    got = evaluate_forecast(pred, truth)
+    expected = evaluate_forecast(*_to_float(jnp.asarray(pred), truth))
+    assert got.keys() == expected.keys()
+    for name in expected:
+        np.testing.assert_allclose(got[name], expected[name], rtol=1e-6)
+
+
+def test_evaluate_forecast_hands_custom_metrics_floating_arrays() -> None:
+    """A custom metric never sees the integer dtype, so it cannot wrap (``|pred - truth|``)."""
+    seen: list[tuple[jnp.dtype, jnp.dtype]] = []
+
+    def max_abs_error(pred: Array, truth: Array) -> Array:
+        seen.append((pred.dtype, truth.dtype))
+        return jnp.abs(pred - truth).max()
+
+    pred = jnp.zeros((5, 3, 1), dtype=jnp.uint8)
+    truth = jnp.full((3, 1), 200, dtype=jnp.uint8)
+    report = evaluate_forecast(pred, truth, metrics={"max_abs_error": max_abs_error})
+    assert seen == [(jnp.result_type(float), jnp.result_type(float))]
+    assert report["max_abs_error"] == 200.0  # uint8 arithmetic would give 56
+
+
+@pytest.mark.parametrize("batch_size", [None, 2], ids=["single_pass", "chunked"])
+def test_backtest_scores_count_model_like_its_float_cast(batch_size: int | None) -> None:
+    """``backtest()`` over a Poisson model: metrics, train metrics and MASE (#163).
+
+    Before the fix every window raised ``TypeCheckError`` after the first fit.
+    The oracle is the same run with a ``transform`` that casts to float, the
+    manual workaround; ``keep_predictions`` keeps the draws after
+    ``transform``: the integer draws without one, the float cast with it.
+    """
+    data, covariates = poisson_counts(28)
+    metrics = {
+        **DEFAULT_METRICS,
+        "crps": partial(eval_crps, batch_size=batch_size),
+        "coverage": partial(eval_coverage, batch_size=batch_size),
+    }
+
+    def per_window(t0: int, t1: int, t2: int) -> dict[str, object]:
+        del t2
+        return {"mase": make_mase(data[..., t0:t1, :], seasonality=1)}  # integer train slice
+
+    def run(transform: Any) -> list[BacktestResult]:
+        return backtest(
+            random.PRNGKey(2),
+            lambda: poisson_model,
+            data,
+            covariates,
+            forecast_fn=_count_forecast_fn,
+            in_sample_fn=_count_in_sample_fn,
+            metrics=metrics,
+            per_window_metrics=cast("Any", per_window),
+            transform=transform,
+            eval_train=True,
+            keep_predictions=True,
+            min_train_window=16,
+            test_window=4,
+            stride=4,
+            num_samples=50,
+            batch_size=batch_size,
+        )
+
+    got, expected = run(None), run(_to_float)
+    assert len(got) == len(expected) == 3
+    for window, oracle in zip(got, expected, strict=True):
+        assert window.prediction is not None
+        assert oracle.prediction is not None
+        assert jnp.issubdtype(window.prediction.dtype, jnp.integer)
+        assert oracle.prediction.dtype == jnp.float32
+        np.testing.assert_array_equal(oracle.prediction, window.prediction.astype(jnp.float32))
+        assert window.metrics.keys() == {*DEFAULT_METRICS, "mase"}
+        for name, value in oracle.metrics.items():
+            np.testing.assert_allclose(window.metrics[name], value, rtol=1e-6)
+        assert window.train_metrics.keys() == oracle.train_metrics.keys()
+        for name, value in oracle.train_metrics.items():
+            np.testing.assert_allclose(window.train_metrics[name], value, rtol=1e-6)
+
+
+def test_backtest_scores_host_offloaded_count_draws() -> None:
+    """Count draws returned in host memory (``device="host"``) score like device ones."""
+    data, covariates = poisson_counts(24)
+
+    def host_forecast_fn(*args: Any, **kwargs: Any) -> Array | np.ndarray:
+        return commit_host(jnp.asarray(_count_forecast_fn(*args, **kwargs)), "pinned")
+
+    def run(forecast_fn: ForecastFn) -> list[BacktestResult]:
+        return backtest(
+            random.PRNGKey(3),
+            lambda: poisson_model,
+            data,
+            covariates,
+            forecast_fn=forecast_fn,
+            min_train_window=16,
+            test_window=4,
+            stride=4,
+            num_samples=50,
+        )
+
+    host, device = run(host_forecast_fn), run(_count_forecast_fn)
+    assert len(host) == len(device) == 2
+    for h, d in zip(host, device, strict=True):
+        for name in d.metrics:
+            np.testing.assert_allclose(h.metrics[name], d.metrics[name], rtol=1e-6)

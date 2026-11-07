@@ -24,16 +24,19 @@ from conftest import (
 )
 from jax import Array, random
 from jax.typing import ArrayLike
+from numpyro.handlers import scope
 from numpyro.infer import Predictive
 
 from numpyro_forecast.convert import (
+    _require_no_slash_in_site_names,
     _reshape_chains,
     add_forecast_groups,
     predictions_to_datatree,
     to_datatree,
 )
 from numpyro_forecast.models import Horizon, innovations, predict
-from numpyro_forecast.predictive import draw_posterior, forecast
+from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
+from numpyro_forecast.reparam import time_reparam
 from numpyro_forecast.typing import ForecastModel
 
 arviz_base = pytest.importorskip("arviz_base")
@@ -678,6 +681,180 @@ def test_to_datatree_rejects_horizon_sites_before_drawing(monkeypatch: pytest.Mo
     }
     with pytest.raises(ValueError, match=r"forecast-horizon sites \['drift_future'\]"):
         to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((6, 1)), empty_covariates(8))
+
+
+@pytest.mark.parametrize(
+    ("posterior", "offending"),
+    [
+        pytest.param(
+            {"trend/drift": jnp.zeros((4, 6, 1)), "sigma": jnp.ones(4)},
+            ["trend/drift"],
+            id="scoped-latent",
+        ),
+        pytest.param({"a/b/drift": jnp.zeros((4, 6, 1))}, ["a/b/drift"], id="nested-scopes"),
+        pytest.param(
+            {"a/drift_haar": jnp.zeros((4, 6, 1)), "a/drift": jnp.zeros((4, 6, 1))},
+            ["a/drift", "a/drift_haar"],
+            id="scoped-time-reparam",
+        ),
+        pytest.param(
+            {"trend/drift_future": jnp.zeros((4, 0, 1)), "sigma": jnp.ones(4)},
+            ["trend/drift_future"],
+            id="empty-scoped-horizon-key",
+        ),
+    ],
+)
+def test_require_no_slash_in_site_names_lists_every_offending_key(
+    posterior: dict[str, Array], offending: list[str]
+) -> None:
+    """Issue #238: the message names every key with ``/``, sorted, and the scope divider fix.
+
+    The advice is one change to the model and the posterior together: the
+    message must say so, because the drivers ignore a key that matches no
+    site and draw that site from the prior.
+    """
+    with pytest.raises(
+        ValueError, match=re.escape(f"posterior sites {offending} have names that contain '/'")
+    ) as excinfo:
+        _require_no_slash_in_site_names(posterior)
+    message = str(excinfo.value)
+    example = offending[0]
+    assert f"for example {example.replace('/', '_')!r} instead of {example!r}" in message
+    assert "divider='_'" in message
+    assert "the model and the posterior must change together" in message
+    assert "from the prior with no error" in message
+
+
+def test_require_no_slash_in_site_names_accepts_names_without_slash() -> None:
+    """Plain names and names scoped with ``divider="_"`` pass."""
+    _require_no_slash_in_site_names(
+        {"trend_drift": jnp.zeros((4, 6, 1)), "sigma": jnp.ones(4), "a_drift_haar": jnp.zeros(4)}
+    )
+
+
+def test_to_datatree_rejects_slash_in_site_names_before_the_host_transfer_and_the_draws(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #238: a ``/`` key raises before ``_reshape_chains``, both drivers and every group.
+
+    The patched names are ``_reshape_chains`` (the host transfer),
+    ``predict_in_sample`` and ``forecast`` (the draws) and
+    ``arviz_base.dict_to_dataset`` (the groups). xarray rejects the name only
+    when `to_datatree()` assembles the groups at the end, after both predictive
+    drivers have run. The coordinate helpers still run first.
+    """
+    import numpyro_forecast.convert as convert_mod
+
+    def fail(*args: object, **kwargs: object) -> object:
+        msg = "to_datatree touched the posterior arrays before it checked the site names"
+        raise AssertionError(msg)
+
+    for name in ("_reshape_chains", "predict_in_sample", "forecast"):
+        monkeypatch.setattr(convert_mod, name, fail)
+    monkeypatch.setattr(arviz_base, "dict_to_dataset", fail)
+    posterior = {
+        "drift_scale": jnp.ones(4),
+        "sigma": jnp.ones(4),
+        "trend/drift": jnp.zeros((4, 6, 1)),
+    }
+    with pytest.raises(ValueError, match=r"posterior sites \['trend/drift'\] have names"):
+        to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((6, 1)), empty_covariates(8))
+
+
+def _trend(covariates: Array, data: Array | None = None) -> Array:
+    """A latent random-walk building block, the scoped component of issue #238."""
+    h = Horizon.from_data(covariates, data)
+    return jnp.cumsum(innovations(h, "drift", dist.Normal(0.0, 1.0)), axis=-2)
+
+
+def _scoped_trend_model(divider: str) -> ForecastModel:
+    """The issue #238 model: only the latent block is scoped, ``predict`` stays outside."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        level = scope(_trend, prefix="trend", divider=divider)(covariates, data)
+        predict(h, dist.Normal(0.0, 0.1), level)
+
+    return model
+
+
+def test_to_datatree_scoped_latent_exports_with_the_advice_of_the_error() -> None:
+    """Issue #238: the default divider raises by name; the advice exports the same fit.
+
+    The message says to scope with ``divider="_"`` and rename the posterior
+    keys together instead of fitting again. The divider changes only the
+    names: the ``_`` model with the renamed posterior must give the in-sample
+    draws of the ``/`` model with the original posterior, which the drivers
+    accept with ``/`` names, and the export must hold the renamed variable.
+    """
+    key = random.PRNGKey(0)
+    posterior = {"trend/drift": random.normal(random.PRNGKey(1), (4, 6, 1))}
+    data, covariates = jnp.zeros((6, 1)), empty_covariates(6)
+    with pytest.raises(ValueError, match=r"divider='_'.*for example 'trend_drift'"):
+        to_datatree(key, _scoped_trend_model("/"), posterior, data, covariates)
+
+    renamed = {name.replace("/", "_"): value for name, value in posterior.items()}
+    good = predict_in_sample(key, _scoped_trend_model("_"), renamed, covariates)
+    np.testing.assert_array_equal(
+        good, predict_in_sample(key, _scoped_trend_model("/"), posterior, covariates)
+    )
+    # Two prior draws agree too (same seed, same site order): tie the draws to
+    # the posterior through the Normal(0.0, 0.1) observation noise.
+    np.testing.assert_allclose(good, jnp.cumsum(posterior["trend/drift"], axis=-2), atol=0.5)
+    tree = to_datatree(key, _scoped_trend_model("_"), renamed, data, covariates)
+    assert set(tree["posterior"].data_vars) == {"trend_drift"}
+    assert tree["posterior_predictive"]["obs"].shape == (1, 4, 6, 1)
+
+
+def _drift_component(covariates: Array, data: Array | None = None) -> None:
+    h = Horizon.from_data(covariates, data)
+    innovations(h, "drift", dist.Normal(0.0, 1.0))
+
+
+def _scoped_time_reparam_model(divider: str) -> ForecastModel:
+    """The ``time_reparam`` Notes example: a reparameterized component under a scope."""
+    component = scope(time_reparam(_drift_component, "haar"), prefix="a", divider=divider)
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        component(covariates, data)
+        predict(h, dist.Normal(0.0, 0.1), jnp.zeros((h.duration, 1)))
+
+    return model
+
+
+def _prior_draws(model: ForecastModel, names: list[str], data: Array) -> dict[str, Array]:
+    """Prior draws of the in-sample sites ``names``, as a posterior stand-in."""
+    covariates = empty_covariates(data.shape[-2])
+    draws = Predictive(model, num_samples=4)(random.PRNGKey(1), covariates, data)
+    return {name: draws[name] for name in names}
+
+
+def test_to_datatree_scoped_time_reparam_exports_with_the_underscore_divider() -> None:
+    """The ``time_reparam`` Notes example exports only with ``divider="_"``.
+
+    The transform finds the ``time`` plate by its own name, so it targets
+    ``drift`` under either divider; only the names of the two sites change.
+    """
+    data, covariates = jnp.zeros((6, 1)), empty_covariates(8)
+    slash_model = _scoped_time_reparam_model("/")
+    slash_names = ["a/drift", "a/drift_haar"]
+    with pytest.raises(ValueError, match=re.escape(f"posterior sites {slash_names} have names")):
+        to_datatree(
+            random.PRNGKey(0),
+            slash_model,
+            _prior_draws(slash_model, slash_names, data),
+            data,
+            covariates,
+        )
+
+    model = _scoped_time_reparam_model("_")
+    names = ["a_drift", "a_drift_haar"]
+    tree = to_datatree(
+        random.PRNGKey(0), model, _prior_draws(model, names, data), data, covariates
+    )
+    assert set(tree["posterior"].data_vars) == set(names)
+    assert {"predictions", "predictions_constant_data"} <= set(tree.children)
 
 
 def test_to_datatree_rejects_data_without_observations() -> None:
