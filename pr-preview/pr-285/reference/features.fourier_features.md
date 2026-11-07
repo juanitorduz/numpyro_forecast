@@ -28,7 +28,7 @@ Number of time steps, a non-negative Python or NumPy integer (not a `float`).
 Seasonal period (in time steps): a positive, finite Python or NumPy integer or float, for example `7` for daily data with a weekly season. A NumPy float is used at its exact binary value, so `np.float32(0.1)` is the period `0.10000000149011612`, not `0.1`, and the two spellings are two memo entries.
 
 `num_terms: IntScalar`  
-Number of harmonics, a non-negative Python or NumPy integer of at most `floor(period / 2)`; the output has `2 * num_terms` columns (sine then cosine), none for `0`. The matrix samples `t = 0, 1, ...`, so harmonic `k > period / 2` is above the Nyquist frequency of that grid and aliases onto the lower frequency `(period - k) / period`: same cosine samples, negated sine samples (harmonic `period - k` when `period` is an integer). For an even integer `period`, `num_terms == period / 2` is valid but its last sine column is zero up to rounding; the matching cosine column carries the period-2 pattern.
+Number of harmonics, a non-negative Python or NumPy integer of at most `floor(period / 2)`; the output has `2 * num_terms` columns (sine then cosine), none for `0`. The matrix samples `t = 0, 1, ...`, so harmonic `k > period / 2` is above the Nyquist frequency of that grid and aliases onto the lower frequency `(period - k) / period`: same cosine samples, negated sine samples (harmonic `period - k` when `period` is an integer). For an even integer `period`, `num_terms == period / 2` is valid but its last sine column is zero up to rounding; the matching cosine column alternates between `1` and `-1`.
 
 
 ## Returns
