@@ -1560,8 +1560,8 @@ metrics
     ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
     Each window is scored through `evaluate_forecast()`, so the integer
     draws of a count model need no cast and every metric receives
-    floating arrays. ``transform`` receives, and ``keep_predictions``
-    stores, the draws as ``forecast_fn`` returned them.
+    floating arrays. ``transform`` receives the draws as ``forecast_fn``
+    returned them; ``keep_predictions`` stores them after ``transform``.
 per_window_metrics
     Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
     extra metrics merged over ``metrics`` for each window. Use it for
@@ -1733,8 +1733,11 @@ metrics
     unsupported here; use `backtest()`, or ``keep_predictions=True``
     and score on the host. The integer draws of a count model need no
     cast: the forecasts and the truth windows are cast to the default
-    float dtype once before scoring, so every metric receives floating
-    arrays, while ``predictions`` keeps the dtype of the draws.
+    float dtype once before scoring, so every metric (a custom one
+    included) receives floating arrays, while ``predictions`` keeps the
+    dtype of the draws. A custom metric that needs the integer draws must
+    read them from ``predictions`` (``keep_predictions=True``) or cast
+    back inside the metric.
 keep_predictions
     If ``True``, retain the stacked forecast samples on the result.
 
@@ -3435,10 +3438,12 @@ Parameters
 ----------
 y
     Time series with time on the last axis, shape ``(*batch, time)``.
-    NumPy arrays are accepted directly. As for the metrics
-    (`~~numpyro_forecast.offload.float_view()`), integer counts are cast
-    to the default float dtype and host-committed draws (``device="host"``)
-    are moved to device memory before the computation.
+    NumPy arrays are accepted directly. Integer counts are cast to the
+    default float dtype where the series lives
+    (`~~numpyro_forecast.offload.float_cast_in_place()`): host-committed
+    draws (``device="host"``) stay on the CPU and are not moved to the
+    accelerator; a pinned series (``device="pinned_host"``) is copied
+    back onto its own device first.
 max_lag
     Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -3493,10 +3498,12 @@ Parameters
 ----------
 y
     Time series with time on the last axis, shape ``(*batch, time)``.
-    NumPy arrays are accepted directly. As for the metrics
-    (`~~numpyro_forecast.offload.float_view()`), integer counts are cast
-    to the default float dtype and host-committed draws (``device="host"``)
-    are moved to device memory before the computation.
+    NumPy arrays are accepted directly. Integer counts are cast to the
+    default float dtype where the series lives
+    (`~~numpyro_forecast.offload.float_cast_in_place()`): host-committed
+    draws (``device="host"``) stay on the CPU and are not moved to the
+    accelerator; a pinned series (``device="pinned_host"``) is copied
+    back onto its own device first.
 max_lag
     Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
