@@ -135,6 +135,21 @@ These conventions apply to every example notebook under `docs/examples/`. They c
 
 ## Writing
 
+### Storyline and clarity
+
+These patterns come from review rounds of notebook prose; they apply to every markdown cell and to PR descriptions.
+
+- **Connected story, not patched sentences.** Each section opens with what it does and why the reader needs it, and closes with the step that leads to the next one ("Now that the loss is defined, we fit the model to..."). A paragraph that reads like independent facts in a row needs a through-line or a split.
+- **Open with the point, explicitly.** No question headlines ("Why the margin?"), slogans ("We ask for a service level instead of a cost.") or abrupt verbs ("We minimize ...") as openers.
+- **Define before use.** Define every symbol, term and concept before its first use, and do not mention one that comes later. One symbol per meaning (no `x` next to `x_t`, no `S` next to `S_t`). Write a new concept in bold where it is defined.
+- **One idea per sentence.** Split a sentence that carries several numbers or several clauses. Put formulas in display math, not packed inline.
+- **Bullets for lists.** Results, comparisons, steps and reasons go in bullet points, and the items keep the same order everywhere (the order in which they were introduced, which is also the color order of the figures).
+- **Explain, do not assert.** Give the intuition or the derivation behind a claim (why a plan overstocks, where a formula comes from), and cite a reference for a result that the notebook does not derive.
+- **Plain words.** Spell out private shorthand ("within a divergence ball", "the level enters the rate through an exponential"); prefer standard statistical terms (right-skewed, point mass at zero).
+- **Read a figure, do not describe its construction.** Say why the figure is there and what it shows; the plotting function and the panel layout are in the code. Keep the takeaway, not a re-narration of every line in the plot.
+- **Cut what carries no information:** sentences that hedge without content ("we read this as a consistency check"), comparisons with models the notebook does not fit, and details the reader does not need for the next step.
+- **Name sections in italics** when the text refers to them, for example *The model*.
+
 ### No em-dashes
 
 Do not use em-dashes (`—`) in any prose. Use the most natural alternative for the grammatical role the dash was playing: a colon for an explanation or expansion, a comma (or pair of commas) for a parenthetical aside, parentheses for a softer aside, a semicolon for a closely-related independent clause, or a full stop to start a new sentence. Pick the form that reads most cleanly; do not just substitute one punctuation mark mechanically for another.
