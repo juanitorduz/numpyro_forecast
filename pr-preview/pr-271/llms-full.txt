@@ -1076,11 +1076,15 @@ Notes
   a second time (generic NumPyro reparam-under-scope behavior).
   `~~numpyro_forecast.convert.to_datatree()` raises ``ValueError`` for a
   posterior key that contains ``"/"``, because `xarray.DataTree` rejects
-  such a variable name: to export the fit, pass ``divider="_"``, so that
+  such a variable name: to export the fit, pass ``divider="_"`` to every
+  ``scope`` call, so that
   ``scope(time_reparam(model), prefix="a", divider="_")`` yields
   ``a_drift_haar`` and ``a_drift``. The transform finds the ``time``
   plate by its own name, so the divider does not change which sites it
-  targets.
+  targets, only their names; a posterior drawn under ``"/"`` exports
+  with its keys renamed the same way, under the model with ``divider="_"``
+  (the drivers ignore a key that matches no site and draw that site from
+  the prior).
 - It composes with the per-block ``reparam=`` hook: after
   ``innovations(..., reparam=LocScaleReparam(0))`` the site under the plate
   is ``drift_decentered``, so the auxiliary site is
@@ -2225,7 +2229,12 @@ posterior
     key that contains ``"/"`` raises ``ValueError`` before any draw.
     `numpyro.handlers.scope` joins its prefix and the site name with
     ``"/"`` by default (``trend/drift``): scope the latent building
-    blocks with ``divider="_"`` (``trend_drift``) to export the fit.
+    blocks with ``divider="_"`` on every ``scope`` call (``trend_drift``)
+    to export the fit. The divider changes only the names, so a posterior
+    drawn under ``"/"`` exports without a refit once its keys are renamed
+    the same way, but model and posterior must change together: the
+    drivers ignore a key that matches no site of the model and draw that
+    site from the prior with no error.
 data
     In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
     the observation dim at axis ``-1`` and any batch axes to the left
@@ -2356,7 +2365,10 @@ ValueError
     ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
     has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
     a ``posterior`` key contains ``"/"`` (a site scoped with the default
-    divider of `numpyro.handlers.scope`; pass ``divider="_"``), if
+    divider of `numpyro.handlers.scope`; pass ``divider="_"`` to every
+    ``scope`` call and rename the posterior keys the same way; an empty
+    forecast-horizon key counts, because the export keeps it as a
+    variable), if
     ``time_coord`` or a ``coords`` value is not a one-dimensional
     collection of labels (a set, a dict, a scalar, a 2-D array, ragged
     input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
