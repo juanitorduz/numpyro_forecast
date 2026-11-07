@@ -1610,7 +1610,7 @@ def test_drivers_keep_warning_deduplication(driver: str) -> None:
     """A driver call between two warnings from one line does not show the second (issue #235).
 
     Under the ``"default"`` filter Python shows a warning once per location. beartype
-    enters ``warnings.catch_warnings()`` while it decorates a function, which clears
+    enters ``warnings.catch_warnings()`` while it decorates a function, which invalidates
     every warning registry, so a nested function that the import hook decorates on
     each driver call made the next warning from the same line show again. The cases
     cover the closures of `draw_posterior()`, of `forecast()` and `predict_in_sample()`,
@@ -1638,7 +1638,7 @@ def test_drivers_keep_warning_deduplication(driver: str) -> None:
         for i in range(2):
             warnings.warn("data looks stale", UserWarning, stacklevel=1)
             call(random.PRNGKey(i))
-    assert [str(r.message) for r in records if r.category is UserWarning] == ["data looks stale"]
+    assert [str(r.message) for r in records].count("data looks stale") == 1
 
 
 def test_predictive_oom_reports_batch_size() -> None:

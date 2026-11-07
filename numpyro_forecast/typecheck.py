@@ -2,10 +2,7 @@
 
 ``numpyro_forecast/__init__.py`` installs the jaxtyping import hook with
 `typechecker`, so every package function and class is checked by beartype
-with `BEARTYPE_CONF` at call time. Nested functions are the exception: they
-carry ``@no_type_check``, because the hook would otherwise decorate them again
-on every call of the enclosing function, and each decoration clears Python's
-warning registries (issue #235). The configuration turns on the PEP 484
+with `BEARTYPE_CONF` at call time. The configuration turns on the PEP 484
 implicit numeric tower, which the static checker ``ty`` applies as well: a
 Python ``int`` satisfies a ``float`` hint (and an ``int`` or ``float`` a
 ``complex`` hint), so a call that type-checks never fails at runtime because
@@ -14,6 +11,12 @@ ftol=1)``, a ``BacktestResult`` built by hand with ``walltime=0``), and a
 ``-> float`` return may carry an ``int`` (issue #165). The tower is one-way:
 a ``float`` still fails an ``int`` hint, so a count is never truncated
 silently.
+
+Nested functions are the exception to the call-time checks: they carry
+``@no_type_check``. Without it the hook would decorate a nested function again
+on every call of the enclosing function, and beartype enters
+``warnings.catch_warnings()`` while it decorates, which invalidates Python's
+warning registries (issue #235).
 
 NumPy scalars are not part of the tower: ``np.int64`` is not a subclass of
 ``int``. A parameter that accepts them says so in its hint with
