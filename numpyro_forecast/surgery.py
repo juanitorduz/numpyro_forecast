@@ -157,6 +157,16 @@ def shift_loc(noise_dist: dist.Distribution, loc: Array) -> dist.Distribution:
     ``(time, 1)`` event with
     ``lambda mu: shift_loc(dist.MultivariateNormal(jnp.zeros(h.duration), cov), mu)``.
 
+    A ``MultivariateNormal`` across the series of a panel, with the
+    observation axis as its event (independent over time), is read as the
+    ``(*batch, time)`` layout above with the series as time, for example the
+    noise ``dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)`` with a
+    ``(duration, n)`` predictor. `slice_time()` and `prefix_condition()` then
+    slice the series, and the shapes cannot tell the two layouts apart when
+    the panel has ``time`` series. `~~numpyro_forecast.models.predict()`
+    scores it in training but raises
+    `~~numpyro_forecast.exceptions.MVNLayoutError` when it forecasts.
+
     Parameters
     ----------
     noise_dist
@@ -232,7 +242,9 @@ def slice_time(noise_dist: dist.Distribution, index: slice) -> dist.Distribution
     families register a dedicated dispatch instead: a ``MultivariateNormal``
     over time slices its time axis and keeps its layout, so the event
     ``(time, 1)`` returned by `shift_loc()` stays ``(steps, 1)`` and a bare
-    ``(time,)`` event stays ``(steps,)``.
+    ``(time,)`` event stays ``(steps,)``. Every ``MultivariateNormal`` event is
+    read as time, so one across the series of a panel gets its series sliced
+    (see `shift_loc()`).
 
     Parameters
     ----------
@@ -287,7 +299,8 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     on the scale of the covariance, overall or per time step, but it still
     inflates a forecast variance that is far below the marginal variance: for a
     smooth kernel, the jitter rather than the kernel can set the one-step
-    forecast variance.
+    forecast variance. Every ``MultivariateNormal`` event is read as time, so
+    one across the series of a panel is not supported (see `shift_loc()`).
 
     Parameters
     ----------
