@@ -25,7 +25,7 @@ The array-level counterpart of [to_datatree()](convert.to_datatree.md#numpyro_fo
 Prediction draws with the sample axis first, shape `(sample, time, series)`. Integer or floating; the integer draws of a count model are stored as they are, keeping their dtype (`plot_lm` draws them unchanged).
 
 `x: Num[ArrayLike, ``" time"]`  
-Independent-variable values, shape `(time,)`. Must be numeric: `plot_lm` cannot draw `datetime64` values (it concatenates `x` with the float predictions internally), so pass `matplotlib.dates.date2num()` floats and re-format the tick labels with `matplotlib.dates.ConciseDateFormatter`.
+Independent-variable values, shape `(time,)`. Must be numeric: `plot_lm` cannot draw `datetime64` values (it concatenates `x` with the predictions internally), so pass `matplotlib.dates.date2num()` floats and re-format the tick labels with `matplotlib.dates.ConciseDateFormatter`.
 
 `series: Collection[Any]`  
 One label per series, defining the `series` coordinate. Any one-dimensional collection is accepted (a list, a NumPy array, a pandas index) and stored as `np.asarray(series)`.
