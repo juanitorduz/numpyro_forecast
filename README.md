@@ -137,7 +137,7 @@ Every driver (`forecast`, `predict_in_sample`, `to_datatree`, `backtest`) takes 
 
 ## Backtesting and evaluation
 
-`backtest(rng_key, model_fn, data, covariates, forecast_fn=...)` runs the rolling or expanding window loop and scores every window. Fitting and forecasting are closures you write, so `backtest` does not depend on how a model is fit; `backtest_vectorized` fits every rolling window in one vmapped SVI run. The metrics are `eval_crps`, `eval_mae`, `eval_rmse` and `eval_coverage`, plus `crps_empirical`, `eval_pinball`, `eval_interval_score` and `make_mase` in `numpyro_forecast.metrics`; `evaluate_forecast` bundles them. `to_datatree` exports a posterior with its in-sample predictive, forecasts and observed data as an ArviZ-schema `xarray.DataTree` for diagnostics and plotting.
+`backtest(rng_key, model_fn, data, covariates, forecast_fn=...)` runs the rolling or expanding window loop and scores every window. Fitting and forecasting are closures you write, so `backtest` does not depend on how a model is fit; `backtest_vectorized` fits every rolling window in one vmapped SVI run. The metrics are `eval_crps`, `eval_mae`, `eval_rmse` and `eval_coverage`, plus `eval_pinball`, `eval_interval_score` and `make_mase` in `numpyro_forecast.metrics`; `evaluate_forecast` bundles them. Each metric returns one 0-d value; `crps_empirical` returns the per-cell CRPS that `eval_crps` averages, so it is not a metric itself. `to_datatree` exports a posterior with its in-sample predictive, forecasts and observed data as an ArviZ-schema `xarray.DataTree` for diagnostics and plotting.
 
 ![Rolling-origin backtest forecasts on weekly BART ridership](https://raw.githubusercontent.com/juanitorduz/numpyro_forecast/main/docs/images/backtest_univariate.png)
 
