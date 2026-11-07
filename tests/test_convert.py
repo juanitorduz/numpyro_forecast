@@ -947,21 +947,28 @@ def _drift_model(loc_scale: bool) -> ForecastModel:
 
 
 @pytest.mark.parametrize(
-    ("wrap", "key"),
-    [(False, "drift_decentered"), (True, "drift_decentered_haar")],
-    ids=["loc_scale", "loc_scale_and_time_reparam"],
+    ("wrap_fit", "wrap_export", "key", "site"),
+    [
+        (False, False, "drift_decentered", "drift"),
+        (True, False, "drift_decentered_haar", "drift"),
+        (True, True, "drift_decentered_haar", "drift_haar"),
+    ],
+    ids=["loc_scale", "loc_scale_and_time_reparam", "time_reparam_without_loc_scale"],
 )
 def test_to_datatree_rejects_the_guide_draws_of_a_loc_scale_fit_with_the_plain_model(
-    wrap: bool, key: str
+    wrap_fit: bool, wrap_export: bool, key: str, site: str
 ) -> None:
     """Issue #277: ``LocScaleReparam`` renames the latent to ``drift_decentered``.
 
     The guide draws of such a fit hold only ``drift_decentered`` (or
-    ``drift_decentered_haar`` under ``time_reparam``); a model without the
-    reparam has the site ``drift``, which would be drawn from the prior.
+    ``drift_decentered_haar`` under ``time_reparam``). A model without the
+    reparam has the site ``drift``, or ``drift_haar`` when it is wrapped with
+    ``time_reparam`` too, and that site would be drawn from the prior.
     """
     fit_model = _drift_model(loc_scale=True)
-    fit_model = time_reparam(fit_model, "haar") if wrap else fit_model
+    fit_model = time_reparam(fit_model, "haar") if wrap_fit else fit_model
+    export_model = _drift_model(loc_scale=False)
+    export_model = time_reparam(export_model, "haar") if wrap_export else export_model
     data, covariates = _series(), empty_covariates(18)
     guide = AutoNormal(fit_model)
     svi = SVI(fit_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
@@ -970,10 +977,23 @@ def test_to_datatree_rejects_the_guide_draws_of_a_loc_scale_fit_with_the_plain_m
         random.PRNGKey(2), covariates, data
     )
     assert set(posterior) == {key}
-    with pytest.raises(ValueError, match=rf"'{key}' for site 'drift'") as excinfo:
-        to_datatree(random.PRNGKey(0), _drift_model(loc_scale=False), posterior, data, covariates)
+    with pytest.raises(ValueError, match=rf"'{key}' for site '{site}'") as excinfo:
+        to_datatree(random.PRNGKey(0), export_model, posterior, data, covariates)
     assert "LocScaleReparam" in str(excinfo.value)
     to_datatree(random.PRNGKey(0), fit_model, posterior, data, covariates)
+
+
+def test_to_datatree_accepts_derived_keys_named_after_obs() -> None:
+    """Issue #277: ``obs`` is the likelihood, never a latent the posterior should hold.
+
+    The check traces the model without data, so ``obs`` is an unobserved site
+    with no posterior key; a derived key such as ``obs_decentered`` must not
+    be read as a reparameterized ``obs``.
+    """
+    posterior, data, covariates = _svi_posterior(8)
+    derived = {name: jnp.zeros((8,)) for name in ("obs_decentered", "obs_haar", "obs_dct")}
+    tree = to_datatree(random.PRNGKey(0), rw_model, {**posterior, **derived}, data, covariates)
+    assert set(derived) <= set(tree["posterior"].data_vars)
 
 
 def test_to_datatree_exports_a_loc_scale_posterior_that_holds_the_site() -> None:

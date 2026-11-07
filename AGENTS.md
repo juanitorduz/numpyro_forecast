@@ -50,8 +50,9 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
   matches no site and draw that site from the prior with no error, while
   `to_datatree` raises `ValueError` before any draw when such a key names a
   latent site that has no key (a half-applied rename, or a `time_reparam`
-  `_haar`/`_dct` key with the plain model; the `posterior` parameter of
-  `to_datatree` has the details).
+  `_haar`/`_dct` key or a `LocScaleReparam` `_decentered` key with a model
+  without that reparam; the `posterior` parameter of `to_datatree` has the
+  details).
 - **Functional style:** pure model functions, explicit `PRNGKey` threading,
   vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step
   drift), no global parameter store.

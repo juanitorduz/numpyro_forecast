@@ -62,10 +62,18 @@ def _candidate_site_names(key: str) -> set[str]:
 
     `~~numpyro_forecast.reparam.time_reparam()` adds the outer suffix
     (``drift_decentered_haar``) and ``LocScaleReparam`` the inner one
-    (``drift_decentered``), so the time suffix is removed first.
+    (``drift_decentered``). Removing either or both gives the site of a model
+    without that reparam: ``drift_decentered`` (no time suffix),
+    ``drift_haar`` (a ``time_reparam`` model without ``LocScaleReparam``) or
+    ``drift`` (neither).
     """
     names = {key}
-    names |= {key.removesuffix(s) for s in _TIME_REPARAM_SUFFIXES if key.endswith(s)}
+    for suffix in _TIME_REPARAM_SUFFIXES:
+        if key.endswith(suffix):
+            base = key.removesuffix(suffix)
+            names.add(base)
+            if base.endswith(_LOC_SCALE_SUFFIX):
+                names.add(base.removesuffix(_LOC_SCALE_SUFFIX) + suffix)
     names |= {
         name.removesuffix(_LOC_SCALE_SUFFIX) for name in names if name.endswith(_LOC_SCALE_SUFFIX)
     }
@@ -258,11 +266,11 @@ def _require_posterior_names_match_sites(
     Raises
     ------
     ValueError
-        If a key that is not a site of the model, or that key without a
-        trailing ``"_haar"`` or ``"_dct"`` and then without a trailing
-        ``"_decentered"``, equals the name of an unobserved ``sample`` site
-        with no posterior key once ``"/"`` is replaced by ``"_"`` in that
-        name. The message lists each such key with its site.
+        If a key that is not a site of the model, or that key with a trailing
+        ``"_haar"`` or ``"_dct"`` removed, with an inner ``"_decentered"``
+        removed, or both, equals the name of an unobserved ``sample`` site
+        other than ``"obs"`` with no posterior key once ``"/"`` is replaced by
+        ``"_"`` in that name. The message lists each such key with its site.
     """
     sites: dict[str, tuple[str, bool]] = {}
 
@@ -287,10 +295,12 @@ def _require_posterior_names_match_sites(
         for name, value in drop_empty_horizon_sites(posterior).items()
     }
     jax.eval_shape(record_sites, rng_key, covariates, draw)
+    # "obs" is the likelihood: the trace runs without data, so it is an unobserved site
+    # here, but no posterior key ever stands for it (to_datatree drops an "obs" key).
     missing = sorted(
         name
         for name, (site_type, observed) in sites.items()
-        if site_type == "sample" and not observed and name not in posterior
+        if site_type == "sample" and not observed and name != "obs" and name not in posterior
     )
     pairs = []
     for key in posterior:
@@ -307,9 +317,10 @@ def _require_posterior_names_match_sites(
             "'/' is a half-applied divider rename: pass the model scoped with divider='_' "
             "together with the renamed posterior. A key that ends in '_haar' or '_dct' is "
             "the auxiliary site of a time_reparam model: pass the model wrapped with "
-            "time_reparam that the posterior was fit with. A key that ends in "
-            "'_decentered' (before any '_haar' or '_dct') comes from innovations with "
-            "reparam=LocScaleReparam(...): pass the model with that reparam."
+            "time_reparam that the posterior was fit with. A key with '_decentered' "
+            "(drift_decentered, drift_decentered_haar) comes from a site reparameterized "
+            "with LocScaleReparam(...) (innovations(..., reparam=...), a markov_series "
+            "reparam_config or handlers.reparam): pass the model with that reparam."
         )
         raise ValueError(msg)
 
@@ -844,9 +855,10 @@ def to_datatree(
         ``"_dct"`` (the posterior of a
         `~~numpyro_forecast.reparam.time_reparam()` fit that holds
         ``drift_haar`` but no ``drift``, passed with the plain model) or
-        without a trailing ``"_decentered"`` (a fit whose innovations use
-        ``LocScaleReparam``, passed with a model that does not). Any
-        other key that matches no site, such as ``_auto_latent`` from
+        without an inner ``"_decentered"`` (a fit of a site reparameterized
+        with ``LocScaleReparam``, such as ``drift_decentered`` or
+        ``drift_decentered_haar``, passed with a model without that reparam).
+        Any other key that matches no site, such as ``_auto_latent`` from
         ``Predictive`` over an ``AutoContinuous`` guide or a derived quantity
         you add, is stored in the ``posterior`` group and changes no draw.
     data
@@ -982,9 +994,9 @@ def to_datatree(
         divider of `numpyro.handlers.scope`; an empty forecast-horizon key
         counts, because the export keeps it as a variable; see ``posterior``
         above), if a ``posterior`` key that matches no site of the model names
-        a latent site that has no key (a half-applied divider rename or a
-        `~~numpyro_forecast.reparam.time_reparam()` key with the plain model;
-        see ``posterior`` above), if
+        a latent site that has no key (a half-applied divider rename, or a
+        `~~numpyro_forecast.reparam.time_reparam()` or ``LocScaleReparam``
+        key with a model without that reparam; see ``posterior`` above), if
         ``time_coord`` or a ``coords`` value is not a one-dimensional
         collection of labels (a set, a dict, a scalar, a 2-D array, ragged
         input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
