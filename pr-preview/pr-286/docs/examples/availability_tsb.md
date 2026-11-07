@@ -327,26 +327,43 @@ beta_prior = pz.Beta(1.5, 3)
 mass_classical = float(beta_prior.cdf(0.3) - beta_prior.cdf(0.1))
 mass_above = float(1 - beta_prior.cdf(0.3))
 
-print(f"prior mass in [0.1, 0.3]: {mass_classical:.3f}, above 0.3: {mass_above:.3f}")
+grid = np.linspace(0.0, 1.0, 501)
+density = np.asarray(beta_prior.pdf(grid))
+in_classical = (grid >= 0.1) & (grid <= 0.3)
 
-fig, ax = plt.subplots(figsize=(10, 6))
-beta_prior.plot_pdf(ax=ax, color="C0")
-pz.Beta(10, 40).plot_pdf(ax=ax, alpha=0.7)
-ax.axvline(prior_mean, color="C1", ls="--", label="prior mean")
-ax.legend()
-ax.set(
-    title=r"Smoothing parameter prior: $\text{Beta}(1.5, 3)$ vs the blog post's $\text{Beta}(10, 40)$",
-    xlabel="smoothing parameter",
-    ylabel="density",
+fig, ax = plt.subplots(figsize=(10, 6), layout="constrained")
+beta_prior.plot_pdf(ax=ax, color="C0", legend=None)
+ax.fill_between(
+    grid,
+    density,
+    where=in_classical,
+    color="C0",
+    alpha=0.4,
+    label=rf"$\text{{Beta}}(1.5, 3)$: {mass_classical:.1%} in $[0.1, 0.3]$",
+)
+ax.fill_between(
+    grid,
+    density,
+    where=grid >= 0.3,
+    color="C0",
+    alpha=0.15,
+    label=rf"$\text{{Beta}}(1.5, 3)$: {mass_above:.1%} above $0.3$",
+)
+pz.Beta(10, 40).plot_pdf(ax=ax, color="C2", alpha=0.7, legend=None)
+ax.plot([], [], color="C2", label=r"$\text{Beta}(10, 40)$ (blog post)")
+ax.axvline(prior_mean, color="C1", ls="--", label=r"$\text{Beta}(1.5, 3)$ mean")
+ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2)
+ax.set(xlabel="smoothing parameter", ylabel="density")
+fig.suptitle(
+    r"Smoothing parameter prior: $\text{Beta}(1.5, 3)$ vs the blog post's $\text{Beta}(10, 40)$",
+    fontsize=16,
+    fontweight="bold",
 );
 ```
 
 
-    prior mass in [0.1, 0.3]: 0.365, above 0.3: 0.512
-
-
 <figure class="figure">
-<p><img src="availability_tsb_files/figure-html/_src-availability_tsb-cell-7-output-2.png" class="figure-img" width="831" height="558" /></p>
+<p><img src="availability_tsb_files/figure-html/_src-availability_tsb-cell-7-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -662,8 +679,8 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 
     mean ELBO loss over the last 100 steps: 56,657
-    CPU times: user 14.2 s, sys: 11.2 s, total: 25.4 s
-    Wall time: 9.66 s
+    CPU times: user 12.4 s, sys: 10.8 s, total: 23.1 s
+    Wall time: 7.6 s
 
 
 <figure class="figure">
@@ -1267,7 +1284,7 @@ Group: /
 │           z_noise            (chain, draw, z_noise_dim_0) float32 4MB 2.114 ... 1.463
 │           z_smoothing        (chain, draw, z_smoothing_dim_0) float32 4MB 0.1354 .....
 │       Attributes:
-│           created_at:                 2026-11-07T19:08:52.358693+00:00
+│           created_at:                 2026-11-07T19:15:02.500995+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1282,7 +1299,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 200MB -2.411 2.176 ... 3.494
 │       Attributes:
-│           created_at:                 2026-11-07T19:08:53.114848+00:00
+│           created_at:                 2026-11-07T19:15:03.105286+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1295,7 +1312,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 200kB 1.0 1.0 2.0 3.0 ... 2.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-11-07T19:08:53.115146+00:00
+│           created_at:                 2026-11-07T19:15:03.105539+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1309,7 +1326,7 @@ Group: /
 │       Data variables:
 │           covariates  (covariate, time, obs_dim) float32 400kB 1.0 1.0 2.0 ... 1.0 0.0
 │       Attributes:
-│           created_at:                 2026-11-07T19:08:53.115516+00:00
+│           created_at:                 2026-11-07T19:15:03.105845+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1324,7 +1341,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 40MB -0.0 1.284 ... -0.0 0.0
 │       Attributes:
-│           created_at:                 2026-11-07T19:08:53.581566+00:00
+│           created_at:                 2026-11-07T19:15:03.497722+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1338,7 +1355,7 @@ Group: /
         Data variables:
             covariates  (covariate, time, obs_dim) float32 80kB 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-11-07T19:08:53.581973+00:00
+            created_at:                 2026-11-07T19:15:03.498105+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1694,7 +1711,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:08:52.358693+00:00
+2026-11-07T19:15:02.500995+00:00
 
 creation_library :  
 ArviZ
@@ -1830,7 +1847,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:08:53.114848+00:00
+2026-11-07T19:15:03.105286+00:00
 
 creation_library :  
 ArviZ
@@ -1924,7 +1941,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:08:53.115146+00:00
+2026-11-07T19:15:03.105539+00:00
 
 creation_library :  
 ArviZ
@@ -2039,7 +2056,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:08:53.115516+00:00
+2026-11-07T19:15:03.105845+00:00
 
 creation_library :  
 ArviZ
@@ -2175,7 +2192,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:08:53.581566+00:00
+2026-11-07T19:15:03.497722+00:00
 
 creation_library :  
 ArviZ
@@ -2290,7 +2307,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:08:53.581973+00:00
+2026-11-07T19:15:03.498105+00:00
 
 creation_library :  
 ArviZ
@@ -2544,7 +2561,7 @@ ax.set(
 
 # Forecast
 
-The `predictions` group of the tree already holds the out-of-sample draws of the `"forecast"` site under the **realized-availability scenario**: the test window's actual stock-out pattern rode in on the covariates, so the forecast predicts zero sales in the periods the product is genuinely off the shelf and \hat{z} \hat{p} plus noise elsewhere. That is the right object to score against the observed test sales. We score it with the CRPS and the central-interval coverages on the on-shelf test cells only. In the off-shelf cells every draw and the observed sales are exactly zero, so these cells are always covered and have CRPS 0: they say nothing about calibration. We print the panel-wide scores on a final line for comparison.
+The `predictions` group of the tree already holds the out-of-sample draws of the `"forecast"` site under the **realized-availability scenario**: the test window's actual stock-out pattern rode in on the covariates, so the forecast predicts zero sales in the periods the product is genuinely off the shelf and \hat{z} \hat{p} plus noise elsewhere. That is the right object to score against the observed test sales. We score it with the CRPS and the central-interval coverages on the on-shelf test cells only. In the off-shelf cells every draw and the observed sales are exactly zero, so these cells are always covered and have CRPS 0: they say nothing about calibration. The figure below puts the panel-wide scores next to them for comparison.
 
 
 ``` python
@@ -2553,38 +2570,62 @@ test_np = np.asarray(test_data)
 
 # on-shelf mask over the (time, series) test window
 on_shelf = np.asarray(available_test) == 1
+off_shelf_share = float(1 - on_shelf.mean())
 
-print(f"off-shelf share of the test cells: {1 - on_shelf.mean():.3f}")
+# score the on-shelf cells (headline) and all cells (comparison)
+views = {
+    "on-shelf cells": (forecast_pp[:, on_shelf], test_np[on_shelf]),
+    "all cells": (forecast_pp, test_np),
+}
+nominal_levels = (0.5, 0.94)
+coverage = {
+    view: [float(eval_coverage(draws, obs, alpha=level)) for level in nominal_levels]
+    for view, (draws, obs) in views.items()
+}
+crps = {view: float(eval_crps(draws, obs)) for view, (draws, obs) in views.items()}
 
-# headline scores on the on-shelf cells
-crps_on_shelf = float(eval_crps(forecast_pp[:, on_shelf], test_np[on_shelf]))
-cov_50 = float(eval_coverage(forecast_pp[:, on_shelf], test_np[on_shelf], alpha=0.5))
-cov_94 = float(eval_coverage(forecast_pp[:, on_shelf], test_np[on_shelf], alpha=0.94))
-
-print(f"on-shelf test CRPS (realized availability): {crps_on_shelf:.4f}")
-print(f"on-shelf empirical 50% coverage: {cov_50:.3f}  (nominal 0.50)")
-print(f"on-shelf empirical 94% coverage: {cov_94:.3f}  (nominal 0.94)")
-
-# panel-wide scores for comparison
-crps_panel = float(eval_crps(forecast_pp, test_np))
-cov_50_panel = float(eval_coverage(forecast_pp, test_np, alpha=0.5))
-cov_94_panel = float(eval_coverage(forecast_pp, test_np, alpha=0.94))
-
-print(
-    f"panel (all cells): CRPS {crps_panel:.4f}, "
-    f"50% coverage {cov_50_panel:.3f}, 94% coverage {cov_94_panel:.3f}"
+fig, (ax_cov, ax_crps) = plt.subplots(
+    1, 2, figsize=(12, 5), layout="constrained", width_ratios=[2, 1]
 )
+x = np.arange(len(nominal_levels))
+width = 0.35
+for k, (view, color) in enumerate(zip(views, ["C0", "C1"], strict=True)):
+    bars = ax_cov.bar(x + (k - 0.5) * width, coverage[view], width, color=color, label=view)
+    ax_cov.bar_label(bars, fmt="{:.1%}", fontsize=11, padding=8)
+    crps_bar = ax_crps.bar(view, crps[view], color=color)
+    ax_crps.bar_label(crps_bar, fmt="{:.4f}", fontsize=11)
+for k, level in enumerate(nominal_levels):
+    ax_cov.hlines(
+        level,
+        k - width * 1.2,
+        k + width * 1.2,
+        color="black",
+        ls="--",
+        label="nominal level" if k == 0 else None,
+    )
+ax_cov.set(
+    xticks=x,
+    xticklabels=[f"{level:.0%} interval" for level in nominal_levels],
+    ylabel="empirical coverage",
+    ylim=(0, 1.1),
+    title="Central-interval coverage",
+)
+ax_crps.set(ylabel="CRPS", title="Test CRPS")
+fig.legend(*ax_cov.get_legend_handles_labels(), loc="outside lower center", ncol=3)
+fig.suptitle(
+    f"Realized-availability forecast scores ({off_shelf_share:.1%} of test cells off the shelf)",
+    fontsize=16,
+    fontweight="bold",
+);
 ```
 
 
-    off-shelf share of the test cells: 0.401
-    on-shelf test CRPS (realized availability): 0.9122
-    on-shelf empirical 50% coverage: 0.493  (nominal 0.50)
-    on-shelf empirical 94% coverage: 0.959  (nominal 0.94)
-    panel (all cells): CRPS 0.5467, 50% coverage 0.696, 94% coverage 0.975
+<figure class="figure">
+<p><img src="availability_tsb_files/figure-html/_src-availability_tsb-cell-19-output-1.png" class="figure-img" width="1211" height="506" /></p>
+</figure>
 
 
-On the on-shelf cells the forecast is close to nominal at the 50\\ level and slightly wide at the 94\\ level:
+In the figure, on the on-shelf cells the forecast is close to nominal at the 50\\ level and slightly wide at the 94\\ level:
 
 - On-shelf cells: 50\\ coverage 49.3\\, 94\\ coverage 95.9\\, CRPS 0.9122.
 - All cells: 50\\ coverage 69.6\\, 94\\ coverage 97.5\\, CRPS 0.5467.
