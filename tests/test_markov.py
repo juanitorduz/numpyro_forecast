@@ -48,9 +48,6 @@ def test_ar1_forecast_matches_closed_form(fitter: str, rng_key: Array) -> None:
         state = svi.run(key_fit, 400, cov[:t_obs], data, progress_bar=False)
         post = draw_posterior(key_draw, guide, state.params, 200)
     else:
-        # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(),
-        # with no draw_posterior step (that's guide-based only); fit for exactly
-        # the wanted draw count instead of thinning/resampling after the fact.
         mcmc = MCMC(
             NUTS(_ar1_model),
             num_warmup=100,

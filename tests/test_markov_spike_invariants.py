@@ -107,8 +107,6 @@ def test_carry_threading_tracks_closed_form_extreme_state() -> None:
 
 def _batched_body(site: str, size: int) -> Callable[[Array, None], tuple[Any, Any]]:
     def body(carry: Array, _: None) -> tuple[Any, Any]:
-        # The batch plate sits at dim=-2 so the trailing obs dim (-1) stays put:
-        # per-step shape is (*plate_batch, obs) = (size, 1).
         with numpyro.plate("series", size, dim=-2):
             z = numpyro.sample(site, dist.Normal(PHI * carry, DRIFT_SIGMA))
         return z, z

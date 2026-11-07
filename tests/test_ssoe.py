@@ -55,9 +55,6 @@ def _sites(tr: dict[str, Any]) -> set[str]:
     return {name for name, site in tr.items() if site["type"] != "plate"}
 
 
-# --- ARMA(1,1): the hand-rolled notebook reference and the ssoe form -------------
-
-
 def _arma_params() -> tuple[Array, Array, Array, Array]:
     mu = jnp.asarray(numpyro.sample("mu", dist.Normal(0.0, 1.0)))
     phi = jnp.asarray(numpyro.sample("phi", dist.Uniform(-1.0, 1.0)))
@@ -122,7 +119,6 @@ def _arma_ssoe_body(h: Horizon, covariates: Array) -> SSOEResult:
 ARMA_REFERENCE = as_model(_arma_reference_body)
 ARMA_SSOE, _ = _capture(_arma_ssoe_body)
 
-# --- ETS-shaped body: tuple carry with scalar leaves, a Python-float init leaf ---
 
 PHI_ETS = 0.9
 EtsCarry = tuple[Any, Any, Array]
@@ -152,9 +148,6 @@ def _ets_body(h: Horizon, covariates: Array) -> SSOEResult:
     if h.future > 0:
         numpyro.deterministic("forecast", r.y_future)
     return r
-
-
-# --- 1. sites while training vs forecasting ----------------------------------------
 
 
 @pytest.mark.parametrize("future", [0, 5])
@@ -188,9 +181,6 @@ def test_sites_training_vs_forecast(body: Body, future: int) -> None:
         assert jnp.array_equal(tr["forecast"]["value"], r.y_future)
 
 
-# --- 2. the ssoe form reproduces the hand-rolled notebook filter -------------------
-
-
 @pytest.mark.parametrize("future", [0, 6])
 def test_arma_matches_hand_rolled_reference(future: int) -> None:
     t_obs = 24
@@ -213,9 +203,6 @@ def test_arma_matches_hand_rolled_reference(future: int) -> None:
         assert jnp.allclose(
             ref["forecast"]["value"], new["forecast"]["value"], rtol=1e-5, atol=1e-6
         )
-
-
-# --- 3. a frozen gate gives a flat forecast (panel and batched layouts) -------------
 
 
 @pytest.mark.parametrize("layout", ["panel", "batched"])
@@ -250,9 +237,6 @@ def test_frozen_gate_forecast_is_flat(layout: str) -> None:
     assert jnp.array_equal(r.mu_future, jnp.broadcast_to(r.mu_future[..., :1, :], expected))
     assert jnp.array_equal(r.y_future, r.mu_future + eps)
     assert bool(jnp.any(r.y_future != r.mu_future))
-
-
-# --- 4. two channels compose through the drivers -----------------------------------
 
 
 def _intermittent(t: int) -> Array:
@@ -314,9 +298,6 @@ def test_two_channels_compose(rng_key: Array, fast_mcmc: dict[str, int]) -> None
     assert "forecast" not in samples
     assert "rate_future" not in samples
     assert "z_eps_future" not in samples
-
-
-# --- 5. the forecast scan feeds the drawn errors; clips act on the carry only ---------
 
 
 def test_forecast_scan_feeds_drawn_errors_and_clips_carry() -> None:
@@ -384,7 +365,7 @@ def test_xs_pytree_reaches_mean_and_update_and_censored_obs_samples_under_data_n
             assert x_t is not None
             _, available_t, censored_t = x_t
             lag_1, _ = carry
-            pred = mean(carry, x_t)  # same ops, same operands: bit-identical to the filter's mu_t
+            pred = mean(carry, x_t)
             on_shelf = jnp.where(censored_t == 1, jnp.maximum(y_t, pred), y_t)
             return jnp.clip(jnp.where(available_t == 1, on_shelf, pred), 0.0), lag_1
 
@@ -413,9 +394,6 @@ def test_xs_pytree_reaches_mean_and_update_and_censored_obs_samples_under_data_n
     in_sample = predict_in_sample(random.PRNGKey(0), model, posterior, covariates[:t_obs])
     assert in_sample.shape == (3, t_obs, 1)
     assert bool(jnp.all(jnp.isfinite(in_sample)))
-
-
-# --- 6. validation messages ------------------------------------------------------------
 
 
 T_OBS, FUTURE = 6, 2
@@ -539,9 +517,6 @@ def _carry_dtype(h: Horizon) -> None:
 def test_validation_messages(body: Callable[[Horizon], None], match: str) -> None:
     with pytest.raises(ValueError, match=match):
         run_horizon_body(body, T_OBS, FUTURE)
-
-
-# --- 7. the future-error shape is enforced; mean and update must not sample ------------
 
 
 @pytest.mark.parametrize(
@@ -681,9 +656,6 @@ def test_mean_must_not_sample() -> None:
         run_horizon_body(body, T_OBS, 0)
 
 
-# --- 8. backtest with the series as covariate; the frozen gate survives real rows --------
-
-
 def test_backtest_with_series_as_covariate(rng_key: Array) -> None:
     series = _series(40, key=9)
     results = backtest(
@@ -709,7 +681,7 @@ def test_backtest_with_series_as_covariate(rng_key: Array) -> None:
 
     t_obs, future = 16, 4
     full = _intermittent(t_obs + future)
-    assert bool(jnp.any(full[t_obs:] > 0))  # real future rows carry demand
+    assert bool(jnp.any(full[t_obs:] > 0))
     data = full[:t_obs]
     tr = get_trace(croston_model, full[:t_obs], data)
     posterior = {
@@ -722,9 +694,6 @@ def test_backtest_with_series_as_covariate(rng_key: Array) -> None:
     rate_future = predictive(rng_key, full, data)["rate_future"]
     assert rate_future.shape == (4, future, 1)
     assert jnp.array_equal(rate_future, jnp.broadcast_to(rate_future[:, :1], rate_future.shape))
-
-
-# --- 9. AR(1) round trip against the closed form -------------------------------------
 
 
 PHI_AR = 0.8
@@ -784,14 +753,10 @@ def test_ar1_round_trip_closed_form(fitter: str, rng_key: Array) -> None:
     assert abs(float(phi.mean()) - PHI_AR) < 0.15
     powers = jnp.arange(1, future + 1)
     closed = (phi[:, None] ** powers).mean(axis=0) * data[-1, 0]
-    # With the future errors zeroed the recursion is exactly phi^k * y_last per draw, so the
-    # posterior-mean forecast must match the closed form to float precision.
     zero_errors = substitute(AR1_SSOE, data={"eps_future": jnp.zeros((future, 1))})
     exact = Predictive(zero_errors, posterior_samples=post, return_sites=["forecast"])
     det = exact(random.PRNGKey(2), series, data)["forecast"]
     assert jnp.allclose(det.mean(axis=0)[:, 0], closed, rtol=1e-4, atol=1e-6)
-    # The real forecast adds Monte Carlo noise from 400 sampled error paths (about 0.01 at
-    # the far end), hence the absolute tolerance.
     preds = forecast(random.PRNGKey(2), AR1_SSOE, post, data, series, batch_size=100)
     mean_fc = preds.mean(axis=0)[:, 0]
     assert jnp.allclose(mean_fc, closed, rtol=0.05, atol=0.03)

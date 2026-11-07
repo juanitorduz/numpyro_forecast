@@ -26,6 +26,7 @@ from conftest import (
 )
 from jax import Array, random
 from jax.typing import ArrayLike
+from jaxtyping import TypeCheckError
 from numpyro.handlers import scope
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoDiagonalNormal, AutoNormal
@@ -2188,3 +2189,68 @@ def test_predictions_to_datatree_plot_lm_smoke() -> None:
     band = pc.viz["ci_band"]["t"].sel(series=labels[-1], prob=0.94).item()
     assert band is not None
     assert pc.get_target("t", {"series": labels[0]}) is not None
+
+
+def test_predictions_to_datatree_keeps_integer_count_draws() -> None:
+    """Issue #278: integer draws and observations of a count model export as they are."""
+    _, x, labels = _prediction_draws()
+    rng = np.random.default_rng(1)
+    predictions = rng.poisson(3.0, size=(40, x.shape[0], len(labels))).astype(np.int32)
+    observed = rng.poisson(3.0, size=predictions.shape[1:]).astype(np.int32)
+    tree = predictions_to_datatree(predictions, x, labels, observed=observed)
+    draws = tree["posterior_predictive"]["obs"]
+    assert draws.dtype == np.int32
+    np.testing.assert_array_equal(np.asarray(draws)[0], predictions)
+    assert tree["observed_data"]["obs"].dtype == np.int32
+    np.testing.assert_array_equal(np.asarray(tree["observed_data"]["obs"]), observed)
+
+
+def test_predictions_to_datatree_integer_draws_with_float_observed() -> None:
+    _, x, labels = _prediction_draws()
+    predictions = np.ones((10, x.shape[0], len(labels)), dtype=np.int32)
+    observed = np.full(predictions.shape[1:], 0.5)
+    tree = predictions_to_datatree(predictions, x, labels, observed=observed)
+    np.testing.assert_array_equal(np.asarray(tree["posterior_predictive"]["obs"])[0], predictions)
+    np.testing.assert_array_equal(np.asarray(tree["observed_data"]["obs"]), observed)
+
+
+def test_predictions_to_datatree_rejects_bool_and_complex_arrays() -> None:
+    predictions, x, labels = _prediction_draws()
+    with pytest.raises(TypeCheckError):
+        predictions_to_datatree(predictions > 1.0, x, labels)
+    with pytest.raises(TypeCheckError):
+        predictions_to_datatree(predictions, x, labels, observed=predictions[0] > 1.0)
+    with pytest.raises(TypeCheckError):
+        predictions_to_datatree(predictions + 0j, x, labels)
+    with pytest.raises(TypeCheckError):
+        predictions_to_datatree(predictions, x, labels, observed=predictions[0] + 0j)
+
+
+def test_predictions_to_datatree_plot_lm_integer_smoke() -> None:
+    """az.plot_lm draws an integer count tree, observation scatter included."""
+    pytest.importorskip("arviz_plots")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import arviz as az
+
+    _, x, labels = _prediction_draws()
+    rng = np.random.default_rng(2)
+    predictions = rng.poisson(3.0, size=(40, x.shape[0], len(labels))).astype(np.int32)
+    observed = rng.poisson(3.0, size=predictions.shape[1:]).astype(np.int32)
+    tree = predictions_to_datatree(predictions, x, labels, observed=observed)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        pc = az.plot_lm(
+            tree,
+            y="obs",
+            x="t",
+            plot_dim="time",
+            ci_kind="hdi",
+            ci_prob=(0.5, 0.94),
+            smooth=False,
+            point_estimate="mean",
+            col_wrap=1,
+            visuals={"ci_band": {"color": "C0"}, "pe_line": {"color": "C0"}},
+        )
+    assert pc.viz["ci_band"]["t"].sel(series=labels[-1], prob=0.94).item() is not None

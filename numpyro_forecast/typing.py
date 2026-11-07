@@ -79,10 +79,12 @@ the window axis. Parametrize by closure: ``functools.partial`` for keywords
 
 Every driver checks each result on its own, so the outcome for one metric
 never depends on the other metrics in the mapping: a 0-d bool or integer
-result is converted to float, and any other shape or dtype (for example the
-per-cell values of `~~numpyro_forecast.metrics.crps_empirical()`, whose
-metric counterpart is `~~numpyro_forecast.evaluate.eval_crps()`) raises
-``ValueError`` with the name, shape and dtype of the metric.
+result, or a ``float8`` or ``float4`` one, is converted to the default float
+dtype (a ``float6`` one keeps its dtype: XLA on CPU cannot convert it), and
+any other shape or dtype (for example the per-cell values of
+`~~numpyro_forecast.metrics.crps_empirical()`, whose metric counterpart is
+`~~numpyro_forecast.evaluate.eval_crps()`) raises ``ValueError`` with the
+name, shape and dtype of the metric.
 `~~numpyro_forecast.evaluate.evaluate_forecast()` and
 `~~numpyro_forecast.evaluate.backtest()` check the value they score;
 `~~numpyro_forecast.evaluate.backtest_vectorized()` checks the value of one
