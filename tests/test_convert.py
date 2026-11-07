@@ -29,6 +29,7 @@ from jax.typing import ArrayLike
 from numpyro.handlers import scope
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoDiagonalNormal, AutoNormal
+from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.convert import (
     _require_no_slash_in_site_names,
@@ -728,6 +729,8 @@ def test_require_no_slash_in_site_names_lists_every_offending_key(
     assert "divider='_'" in message
     assert "the model and the posterior must change together" in message
     assert "from the prior with no error" in message
+    # Scoping the whole model renames "obs" too, which the drivers read by name.
+    assert "keep predict outside every scope" in message
 
 
 def test_require_no_slash_in_site_names_accepts_names_without_slash() -> None:
@@ -929,6 +932,67 @@ def test_to_datatree_rejects_a_scoped_time_reparam_key_with_the_plain_scoped_mod
             data,
             covariates,
         )
+
+
+def _drift_model(loc_scale: bool) -> ForecastModel:
+    """A random walk whose ``drift`` innovations use ``LocScaleReparam(0)`` or not."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        reparam = LocScaleReparam(0) if loc_scale else None
+        drift = innovations(h, "drift", dist.Normal(0.0, 0.1), reparam=reparam)
+        predict(h, dist.Normal(0.0, 0.1), jnp.cumsum(drift, axis=-2))
+
+    return model
+
+
+@pytest.mark.parametrize(
+    ("wrap", "key"),
+    [(False, "drift_decentered"), (True, "drift_decentered_haar")],
+    ids=["loc_scale", "loc_scale_and_time_reparam"],
+)
+def test_to_datatree_rejects_the_guide_draws_of_a_loc_scale_fit_with_the_plain_model(
+    wrap: bool, key: str
+) -> None:
+    """Issue #277: ``LocScaleReparam`` renames the latent to ``drift_decentered``.
+
+    The guide draws of such a fit hold only ``drift_decentered`` (or
+    ``drift_decentered_haar`` under ``time_reparam``); a model without the
+    reparam has the site ``drift``, which would be drawn from the prior.
+    """
+    fit_model = _drift_model(loc_scale=True)
+    fit_model = time_reparam(fit_model, "haar") if wrap else fit_model
+    data, covariates = _series(), empty_covariates(18)
+    guide = AutoNormal(fit_model)
+    svi = SVI(fit_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    params = svi.run(random.PRNGKey(1), 20, covariates, data, progress_bar=False).params
+    posterior = Predictive(guide, params=params, num_samples=4)(
+        random.PRNGKey(2), covariates, data
+    )
+    assert set(posterior) == {key}
+    with pytest.raises(ValueError, match=rf"'{key}' for site 'drift'") as excinfo:
+        to_datatree(random.PRNGKey(0), _drift_model(loc_scale=False), posterior, data, covariates)
+    assert "LocScaleReparam" in str(excinfo.value)
+    to_datatree(random.PRNGKey(0), fit_model, posterior, data, covariates)
+
+
+def test_to_datatree_exports_a_loc_scale_posterior_that_holds_the_site() -> None:
+    """Issue #277: ``draw_posterior`` also holds the deterministic ``drift``, so nothing raises."""
+    fit_model = _drift_model(loc_scale=True)
+    data, covariates = _series(), empty_covariates(18)
+    guide = AutoNormal(fit_model)
+    svi = SVI(fit_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    params = svi.run(random.PRNGKey(1), 20, covariates, data, progress_bar=False).params
+    posterior = cast(
+        "dict[str, Array]", draw_posterior(random.PRNGKey(3), guide, params, 4, device=None)
+    )
+    assert {"drift", "drift_decentered"} <= set(posterior)
+    plain = _drift_model(loc_scale=False)
+    tree = to_datatree(random.PRNGKey(0), plain, posterior, data, covariates)
+    np.testing.assert_array_equal(
+        tree["posterior_predictive"]["obs"].to_numpy()[0],
+        predict_in_sample(random.PRNGKey(0), plain, posterior, covariates),
+    )
 
 
 def test_to_datatree_exports_a_time_reparam_posterior_with_the_plain_model() -> None:

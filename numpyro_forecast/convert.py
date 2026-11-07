@@ -53,6 +53,24 @@ _RESERVED_PREDICTION_GROUPS = frozenset({"observed_data", "constant_data"})
 _TIME_REPARAM_SUFFIXES = tuple(f"_{transform}" for transform in get_args(TimeTransform))
 """The suffixes of the auxiliary sites of `~~numpyro_forecast.reparam.time_reparam()`."""
 
+_LOC_SCALE_SUFFIX = "_decentered"
+"""The suffix ``numpyro.infer.reparam.LocScaleReparam`` gives the site it samples."""
+
+
+def _candidate_site_names(key: str) -> set[str]:
+    """Return ``key`` and the site names it can stand for once reparam suffixes are removed.
+
+    `~~numpyro_forecast.reparam.time_reparam()` adds the outer suffix
+    (``drift_decentered_haar``) and ``LocScaleReparam`` the inner one
+    (``drift_decentered``), so the time suffix is removed first.
+    """
+    names = {key}
+    names |= {key.removesuffix(s) for s in _TIME_REPARAM_SUFFIXES if key.endswith(s)}
+    names |= {
+        name.removesuffix(_LOC_SCALE_SUFFIX) for name in names if name.endswith(_LOC_SCALE_SUFFIX)
+    }
+    return names
+
 
 def _resolve_covariate_dims(covariates: Array, covariate_dims: Sequence[str] | None) -> list[str]:
     """Validate and normalize the covariate dimension names.
@@ -179,7 +197,9 @@ def _require_no_slash_in_site_names(posterior: Mapping[str, ArrayLike]) -> None:
             "numpyro.handlers.scope joins its prefix and the site name with '/' by default: "
             f"pass divider='_' to every scope call (for example "
             f"{example.replace('/', '_')!r} instead of {example!r}), or rename a site that "
-            "you named with '/' yourself. The divider changes only the site names, so you do "
+            "you named with '/' yourself. Scope the latent building blocks only and keep "
+            "predict outside every scope: the drivers read the 'obs' and 'forecast' sites by "
+            "name. The divider changes only the site names, so you do "
             "not have to fit the model again, but the model and the posterior must change "
             "together: pass the model scoped with divider='_' and the posterior with its keys "
             "renamed the same way: to_datatree() raises for a renamed key that matches no "
@@ -199,12 +219,14 @@ def _require_posterior_names_match_sites(
 
     The drivers substitute posterior sites by name and ignore a key that
     matches no site, so the site it was meant for is drawn from the prior
-    with no error (issue #277). Two realistic mistakes produce that: a
+    with no error (issue #277). Three realistic mistakes produce that: a
     half-applied divider rename (the keys renamed to ``trend_drift`` while
-    the model still scopes with ``"/"``, issue #238) and the posterior of a
+    the model still scopes with ``"/"``, issue #238), the posterior of a
     `~~numpyro_forecast.reparam.time_reparam()` fit passed with the plain
-    model (a ``drift_haar`` key and no ``drift``). Extra keys are otherwise
-    legitimate: ``_auto_latent`` from ``Predictive`` over an
+    model (a ``drift_haar`` key and no ``drift``), and the posterior of a fit
+    whose innovations use ``LocScaleReparam`` passed with a model that does
+    not (a ``drift_decentered`` key and no ``drift``). Extra keys are
+    otherwise legitimate: ``_auto_latent`` from ``Predictive`` over an
     ``AutoContinuous`` guide, the ``f_filtered_states_*`` keys of a dynestyx
     Filter fit exported under a Smoother, and derived quantities. So only a
     key that names a missing site raises.
@@ -237,9 +259,10 @@ def _require_posterior_names_match_sites(
     ------
     ValueError
         If a key that is not a site of the model, or that key without a
-        trailing ``"_haar"`` or ``"_dct"``, equals the name of an unobserved
-        ``sample`` site with no posterior key once ``"/"`` is replaced by
-        ``"_"`` in that name. The message lists each such key with its site.
+        trailing ``"_haar"`` or ``"_dct"`` and then without a trailing
+        ``"_decentered"``, equals the name of an unobserved ``sample`` site
+        with no posterior key once ``"/"`` is replaced by ``"_"`` in that
+        name. The message lists each such key with its site.
     """
     sites: dict[str, tuple[str, bool]] = {}
 
@@ -273,7 +296,7 @@ def _require_posterior_names_match_sites(
     for key in posterior:
         if key in sites:
             continue
-        stems = {key, *(key.removesuffix(s) for s in _TIME_REPARAM_SUFFIXES if key.endswith(s))}
+        stems = _candidate_site_names(key)
         pairs.extend((key, site) for site in missing if site.replace("/", "_") in stems)
     if pairs:
         listed = ", ".join(f"{key!r} for site {site!r}" for key, site in pairs)
@@ -284,7 +307,9 @@ def _require_posterior_names_match_sites(
             "'/' is a half-applied divider rename: pass the model scoped with divider='_' "
             "together with the renamed posterior. A key that ends in '_haar' or '_dct' is "
             "the auxiliary site of a time_reparam model: pass the model wrapped with "
-            "time_reparam that the posterior was fit with."
+            "time_reparam that the posterior was fit with. A key that ends in "
+            "'_decentered' (before any '_haar' or '_dct') comes from innovations with "
+            "reparam=LocScaleReparam(...): pass the model with that reparam."
         )
         raise ValueError(msg)
 
@@ -818,7 +843,9 @@ def to_datatree(
         ``trend/drift``), or does so without a trailing ``"_haar"`` or
         ``"_dct"`` (the posterior of a
         `~~numpyro_forecast.reparam.time_reparam()` fit that holds
-        ``drift_haar`` but no ``drift``, passed with the plain model). Any
+        ``drift_haar`` but no ``drift``, passed with the plain model) or
+        without a trailing ``"_decentered"`` (a fit whose innovations use
+        ``LocScaleReparam``, passed with a model that does not). Any
         other key that matches no site, such as ``_auto_latent`` from
         ``Predictive`` over an ``AutoContinuous`` guide or a derived quantity
         you add, is stored in the ``posterior`` group and changes no draw.
