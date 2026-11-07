@@ -895,7 +895,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/predictive.py#L130-L250" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/predictive.py#L130-L254" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">predictive</span><span class="op">.</span><span class="sig-name">draw_posterior</span>(</span>
@@ -917,9 +917,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>The fitted variational guide, e.g.&nbsp;the <code>AutoGuide</code> instance passed to <code>SVI</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">params</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
+<dt><code><span class="doc-parameter-name">params</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, PyTree[Array]]</span></code></dt>
 <dd>
-<p>The learned variational parameters, e.g.&nbsp;the trained parameters from <code>svi.run</code>’s result.</p>
+<p>The learned variational parameters, e.g.&nbsp;the trained parameters from <code>svi.run</code>’s result. A value may be any pytree of arrays, not only an array: the flow weights of <code>AutoIAFNormal</code> and <code>AutoBNAFNormal</code> are lists of per-layer tuples of arrays, with an empty tuple for each parameter-free layer. <code>params</code> only reaches the guide’s <code>sample_posterior</code>; <code>device</code> and <code>batch_size</code> act on the draws.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">num_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>
