@@ -740,6 +740,25 @@ def test_float_view_casts_a_pinned_integer_leaf_on_the_host(
     np.testing.assert_array_equal(viewed, np.arange(4.0))
 
 
+@pytest.mark.parametrize("error", [ValueError, NotImplementedError])
+def test_float_view_falls_back_when_device_put_rejects_pinned(
+    monkeypatch: pytest.MonkeyPatch,
+    error: type[Exception],
+) -> None:
+    """A pinned integer leaf whose move back to device memory fails is staged via NumPy."""
+    hosted = commit_host(jnp.arange(4, dtype=jnp.int32), "pinned")
+
+    def _reject(*_: object, **__: object) -> Array:
+        raise error("no memory-kind move")
+
+    monkeypatch.setattr(jax, "device_put", _reject)
+    viewed = float_view(hosted)
+    assert isinstance(viewed, jax.Array)
+    assert viewed.dtype == jnp.result_type(float)
+    assert viewed.sharding.memory_kind == "device"
+    np.testing.assert_array_equal(viewed, np.arange(4.0))
+
+
 def test_float_view_casts_a_cpu_committed_integer_leaf_on_the_host(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
