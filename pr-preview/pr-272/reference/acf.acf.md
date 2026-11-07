@@ -25,7 +25,7 @@ computed for all lags at once via the FFT of the centered series (the Wiener-Khi
 
 
 `y: Real[ArrayLike, ``" *batch time"]`  
-Time series with time on the last axis, shape `(*batch, time)`. NumPy arrays are accepted directly. Integer counts are cast to the default float dtype where the series lives (`float_view_resident()`): host-committed draws (`device="host"`) stay on the CPU and are not moved to the accelerator; a pinned series (`device="pinned_host"`) is copied back onto its own device first.
+Time series with time on the last axis, shape `(*batch, time)`. NumPy arrays are accepted directly; integer counts are cast to the default float dtype (`float_view_resident()`). A CPU-committed series (`device="host"` draws with the CPU backend initialized, see [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)) stays on the CPU; a pinned series, floating or integer, is copied back onto its own device first.
 
 `max_lag: int`  
 Largest lag to evaluate; must satisfy `1 <= max_lag < time`.
