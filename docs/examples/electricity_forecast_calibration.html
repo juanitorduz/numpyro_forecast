@@ -394,7 +394,7 @@ window.Quarto = {
 <p>Throughout the package, time lives at axis <code>-2</code> and the observation dimension at <code>-1</code>, and the forecast horizon is inferred from the covariates being longer than the data.</p>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
-<div id="f17ff016" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:10.974628Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:10.974276Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:13.694494Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:13.693679Z&quot;}}" data-execution_count="1">
+<div id="f17ff016" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:15.992135Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:15.991972Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:17.877165Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:17.876617Z&quot;}}" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> warnings</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># preliz warns at import time when PyMC is not installed; this example does not use PyMC.</span></span>
@@ -452,7 +452,7 @@ window.Quarto = {
 <blockquote class="blockquote">
 <p><em>“Victoria electricity demand dataset, as presented at https://otexts.com/fpp2/scatterplots.html and downloaded from https://github.com/robjhyndman/fpp2-package/blob/master/data/elecdaily.rda . This series contains the first eight weeks (starting Jan 1). The original dataset was half-hourly data; here we’ve downsampled to hourly data by taking every other timestep.”</em></p>
 </blockquote>
-<div id="40f97b71" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:13.697005Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:13.696725Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:13.751843Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:13.751299Z&quot;}}" data-execution_count="2">
+<div id="40f97b71" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:17.878577Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:17.878416Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:17.916574Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:17.915986Z&quot;}}" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>demand, temperature <span class="op">=</span> load_victoria_electricity()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>duration <span class="op">=</span> demand.shape[<span class="dv">0</span>]</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -471,7 +471,7 @@ temperature shape: (1344,)</code></pre>
 </div>
 </div>
 <p>Let’s visualize the data:</p>
-<div id="84c32ee4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:13.753620Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:13.753497Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:14.063433Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:14.062679Z&quot;}}" data-execution_count="3">
+<div id="84c32ee4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:17.917740Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:17.917643Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:18.175439Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:18.174887Z&quot;}}" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">2</span>, ncols<span class="op">=</span><span class="dv">1</span>, sharex<span class="op">=</span><span class="va">True</span>, sharey<span class="op">=</span><span class="va">False</span>, layout<span class="op">=</span><span class="st">"constrained"</span>)</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].plot(demand_dates, demand_values, c<span class="op">=</span><span class="st">"C0"</span>)</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].<span class="bu">set</span>(</span>
@@ -491,7 +491,7 @@ temperature shape: (1344,)</code></pre>
 </div>
 </div>
 <p>As in the baseline example, there is a clear positive correlation between temperature and demand, and the relationship is non-linear. The scatter plot below motivates the calibration: at the high end of the temperature range the air-conditioning effect dominates and the per-degree effect on demand settles around a stable value. This is exactly the regime where we will anchor the model with domain knowledge.</p>
-<div id="7ba7e9d4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:14.065684Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:14.065532Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:14.235411Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:14.234470Z&quot;}}" data-execution_count="4">
+<div id="7ba7e9d4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:18.177558Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:18.177419Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:18.323401Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:18.322598Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>ax.scatter(temperature_values, demand_values)</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>ax.axvline(x<span class="op">=</span><span class="fl">32.0</span>, color<span class="op">=</span><span class="st">"C3"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"32 °C threshold"</span>)</span>
@@ -509,7 +509,7 @@ temperature shape: (1344,)</code></pre>
 <section id="training-and-test-data" class="level1">
 <h1>Training and test data</h1>
 <p>We split the data as in the original example, holding out the last two weeks. We build the exogenous inputs the model needs and pack them into a single <code>covariates</code> array with time at axis <code>-2</code>: the temperature and a <code>day_of_week</code> index. The forecast horizon is inferred later from <code>covariates</code> being longer than the training data.</p>
-<div id="cccd2976" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:14.237454Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:14.237320Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:14.344292Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:14.343513Z&quot;}}" data-execution_count="5">
+<div id="cccd2976" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:18.324540Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:18.324434Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:18.410288Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:18.409295Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>num_forecast_steps <span class="op">=</span> <span class="dv">24</span> <span class="op">*</span> <span class="dv">7</span> <span class="op">*</span> <span class="dv">2</span>  <span class="co"># two weeks</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>t_train <span class="op">=</span> duration <span class="op">-</span> num_forecast_steps</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -557,115 +557,122 @@ covariates shape: (1344, 2)</code></pre>
 </section>
 <section id="gp-prior-parameters" class="level2">
 <h2 class="anchored" data-anchor-id="gp-prior-parameters">GP prior parameters</h2>
-<p>As in the baseline example, we set the Gaussian Process amplitude and length-scale priors with <code>preliz</code> by assuming both come from an Inverse-Gamma distribution and specifying the support.</p>
-<div id="941286aa" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:14.346028Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:14.345906Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:14.784107Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:14.781490Z&quot;}}" data-execution_count="6">
+<p>As in the baseline example, we set the Gaussian Process amplitude and length-scale priors with <code>preliz</code> by assuming both come from an Inverse-Gamma distribution and specifying the support. We also pass <code>mass=0.94</code> explicitly, so the priors do not depend on the default of the installed preliz version.</p>
+<div id="941286aa" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:18.412333Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:18.412203Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:18.739402Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:18.738866Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># For the amplitude, we set the values inspired on the range of the demand / temperature</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ratio.</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>_ <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="fl">0.1</span>, upper<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>amplitude_params, ax <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="fl">0.1</span>, upper<span class="op">=</span><span class="fl">0.5</span>, mass<span class="op">=</span><span class="fl">0.94</span>)</span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-7-output-1.png" width="1410" height="582" class="figure-img"></p>
+<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-7-output-1.png" width="1441" height="582" class="figure-img"></p>
 </figure>
 </div>
 </div>
 </div>
-<div id="1e2c04b3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:14.786900Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:14.786559Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:14.902692Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:14.902054Z&quot;}}" data-execution_count="7">
+<div id="1e2c04b3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:18.741108Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:18.740872Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:18.855241Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:18.853364Z&quot;}}" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># As we want to use the GP to model the temperature effect, we need to set the length</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># scale parameter. We expect these effects to be seen at the order of units or tens of</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co"># units, so we expect the length scale to be between 3 and 10.</span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>_ <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="dv">3</span>, upper<span class="op">=</span><span class="dv">10</span>)</span></code></pre></div>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>length_scale_params, ax <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="dv">3</span>, upper<span class="op">=</span><span class="dv">10</span>, mass<span class="op">=</span><span class="fl">0.94</span>)</span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-8-output-1.png" width="1410" height="582" class="figure-img"></p>
+<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-8-output-1.png" width="1404" height="582" class="figure-img"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>These two <code>maxent</code> calls return the Inverse-Gamma parameters we plug into the model below. The model is identical to the baseline, with the masked calibration likelihood added just after the <code>beta_temperature</code> deterministic site. The HSGP settings and the three calibration numbers (threshold, target mean, target scale) are module constants, so the plots below can read them back.</p>
-<div id="55151e36" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:14.904344Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:14.904227Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:14.931266Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:14.930554Z&quot;}}" data-execution_count="8">
+<p>These two <code>maxent</code> calls return the fitted Inverse-Gamma distributions, and the model below builds its amplitude and length-scale priors from their <code>alpha</code> and <code>beta</code> parameters, so the priors in the model are the priors in the plots above. The model is identical to the baseline, with the masked calibration likelihood added just after the <code>beta_temperature</code> deterministic site. The HSGP settings and the three calibration numbers (threshold, target mean, target scale) are module constants, so the plots below can read them back.</p>
+<div id="55151e36" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:18.860042Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:18.859893Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:18.884760Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:18.883624Z&quot;}}" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>ELL <span class="op">=</span> <span class="fl">55.0</span>  <span class="co"># HSGP boundary factor</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>M <span class="op">=</span> <span class="dv">25</span>  <span class="co"># number of HSGP basis functions</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>TEMP_THRESHOLD <span class="op">=</span> <span class="fl">32.0</span>  <span class="co"># temperature (°C) above which the calibration likelihood applies</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>PRIOR_MEAN <span class="op">=</span> <span class="fl">0.13</span>  <span class="co"># domain-knowledge mean of the temperature effect above the threshold</span></span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>PRIOR_SCALE <span class="op">=</span> <span class="fl">0.01</span>  <span class="co"># scale (uncertainty) of the calibration likelihood</span></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> calibrated_electricity_model(covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
-<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""HSGP temperature effect with hour/day seasonality and a calibration likelihood.</span></span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="co">    Same model as ``electricity_model`` in the baseline example, plus a masked</span></span>
-<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="co">    Normal likelihood on the latent temperature effect that anchors it to a</span></span>
-<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="co">    domain-knowledge value in the high-temperature regime.</span></span>
-<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
-<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    duration <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">2</span>]</span>
-<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>    temperature <span class="op">=</span> covariates[..., <span class="dv">0</span>]</span>
-<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>    day_of_week <span class="op">=</span> covariates[..., <span class="dv">1</span>].astype(<span class="st">"int32"</span>)</span>
-<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Intercept.</span></span>
-<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>    intercept <span class="op">=</span> numpyro.sample(<span class="st">"intercept"</span>, dist.Normal(loc<span class="op">=</span><span class="fl">0.0</span>, scale<span class="op">=</span><span class="fl">2.0</span>))</span>
-<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>    <span class="co"># GP parameters (amplitude and length-scale priors are the preliz maxent fits).</span></span>
-<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>    alpha <span class="op">=</span> numpyro.sample(<span class="st">"alpha"</span>, dist.InverseGamma(concentration<span class="op">=</span><span class="fl">6.66</span>, rate<span class="op">=</span><span class="fl">1.57</span>))</span>
-<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>    length_scale <span class="op">=</span> numpyro.sample(<span class="st">"length_scale"</span>, dist.InverseGamma(concentration<span class="op">=</span><span class="fl">11.0</span>, rate<span class="op">=</span><span class="fl">62.2</span>))</span>
-<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>    scale_factor <span class="op">=</span> numpyro.sample(<span class="st">"scale"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
-<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Degrees of freedom for the Student-t likelihood.</span></span>
-<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>    nu <span class="op">=</span> numpyro.sample(<span class="st">"nu"</span>, dist.Gamma(concentration<span class="op">=</span><span class="fl">8.0</span>, rate<span class="op">=</span><span class="fl">3.0</span>))</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co"># GP priors from the maxent fits above (preliz alpha, beta are NumPyro concentration, rate).</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>AMPLITUDE_PRIOR <span class="op">=</span> dist.InverseGamma(</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    concentration<span class="op">=</span>amplitude_params.alpha, rate<span class="op">=</span>amplitude_params.beta</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>LENGTH_SCALE_PRIOR <span class="op">=</span> dist.InverseGamma(</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    concentration<span class="op">=</span>length_scale_params.alpha, rate<span class="op">=</span>length_scale_params.beta</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>TEMP_THRESHOLD <span class="op">=</span> <span class="fl">32.0</span>  <span class="co"># temperature (°C) above which the calibration likelihood applies</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>PRIOR_MEAN <span class="op">=</span> <span class="fl">0.13</span>  <span class="co"># domain-knowledge mean of the temperature effect above the threshold</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>PRIOR_SCALE <span class="op">=</span> <span class="fl">0.01</span>  <span class="co"># scale (uncertainty) of the calibration likelihood</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> calibrated_electricity_model(covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""HSGP temperature effect with hour/day seasonality and a calibration likelihood.</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a><span class="co">    Same model as ``electricity_model`` in the baseline example, plus a masked</span></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a><span class="co">    Normal likelihood on the latent temperature effect that anchors it to a</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a><span class="co">    domain-knowledge value in the high-temperature regime.</span></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>    duration <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">2</span>]</span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>    temperature <span class="op">=</span> covariates[..., <span class="dv">0</span>]</span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>    day_of_week <span class="op">=</span> covariates[..., <span class="dv">1</span>].astype(<span class="st">"int32"</span>)</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Intercept.</span></span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>    intercept <span class="op">=</span> numpyro.sample(<span class="st">"intercept"</span>, dist.Normal(loc<span class="op">=</span><span class="fl">0.0</span>, scale<span class="op">=</span><span class="fl">2.0</span>))</span>
 <span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Non-linear temperature effect as a Matérn 5/2 HSGP. ``hsgp_matern`` is</span></span>
-<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>    <span class="co"># annotated for float hyperparameters, so we cast the sampled scalars.</span></span>
-<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>    beta_temperature <span class="op">=</span> hsgp_matern(</span>
-<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>        x<span class="op">=</span>temperature,</span>
-<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a>        nu<span class="op">=</span><span class="dv">5</span> <span class="op">/</span> <span class="dv">2</span>,</span>
-<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>        alpha<span class="op">=</span>cast(<span class="st">"float"</span>, alpha),</span>
-<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>        length<span class="op">=</span>cast(<span class="st">"float"</span>, length_scale),</span>
-<span id="cb11-37"><a href="#cb11-37" aria-hidden="true" tabindex="-1"></a>        ell<span class="op">=</span>ELL,</span>
-<span id="cb11-38"><a href="#cb11-38" aria-hidden="true" tabindex="-1"></a>        m<span class="op">=</span>M,</span>
-<span id="cb11-39"><a href="#cb11-39" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb11-40"><a href="#cb11-40" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"beta_temperature"</span>, beta_temperature)</span>
-<span id="cb11-41"><a href="#cb11-41" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-42"><a href="#cb11-42" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Calibration likelihood: anchor the latent temperature effect to the</span></span>
-<span id="cb11-43"><a href="#cb11-43" aria-hidden="true" tabindex="-1"></a>    <span class="co"># domain-knowledge value where temperature exceeds the threshold. The mask</span></span>
-<span id="cb11-44"><a href="#cb11-44" aria-hidden="true" tabindex="-1"></a>    <span class="co"># keeps only the high-temperature contributions, matching the blog's</span></span>
-<span id="cb11-45"><a href="#cb11-45" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ``beta_temperature[temperature_prior_idx]`` indexing.</span></span>
-<span id="cb11-46"><a href="#cb11-46" aria-hidden="true" tabindex="-1"></a>    high_temp_mask <span class="op">=</span> temperature <span class="op">&gt;</span> TEMP_THRESHOLD</span>
-<span id="cb11-47"><a href="#cb11-47" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> numpyro.handlers.mask(mask<span class="op">=</span>high_temp_mask):</span>
-<span id="cb11-48"><a href="#cb11-48" aria-hidden="true" tabindex="-1"></a>        numpyro.sample(</span>
-<span id="cb11-49"><a href="#cb11-49" aria-hidden="true" tabindex="-1"></a>            <span class="st">"temperature_prior"</span>,</span>
-<span id="cb11-50"><a href="#cb11-50" aria-hidden="true" tabindex="-1"></a>            dist.Normal(loc<span class="op">=</span>PRIOR_MEAN, scale<span class="op">=</span>PRIOR_SCALE),</span>
-<span id="cb11-51"><a href="#cb11-51" aria-hidden="true" tabindex="-1"></a>            obs<span class="op">=</span>beta_temperature,</span>
-<span id="cb11-52"><a href="#cb11-52" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb11-53"><a href="#cb11-53" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-54"><a href="#cb11-54" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Hour-of-day effect, tiled over the horizon with periodic_repeat.</span></span>
-<span id="cb11-55"><a href="#cb11-55" aria-hidden="true" tabindex="-1"></a>    scale_hour_of_day <span class="op">=</span> numpyro.sample(<span class="st">"scale_hour_of_day"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
-<span id="cb11-56"><a href="#cb11-56" aria-hidden="true" tabindex="-1"></a>    hour_of_day_effect <span class="op">=</span> numpyro.sample(</span>
-<span id="cb11-57"><a href="#cb11-57" aria-hidden="true" tabindex="-1"></a>        <span class="st">"hour_of_day_effect"</span>,</span>
-<span id="cb11-58"><a href="#cb11-58" aria-hidden="true" tabindex="-1"></a>        dist.ZeroSumNormal(scale<span class="op">=</span>scale_hour_of_day, event_shape<span class="op">=</span>(<span class="dv">24</span>,)),</span>
-<span id="cb11-59"><a href="#cb11-59" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb11-60"><a href="#cb11-60" aria-hidden="true" tabindex="-1"></a>    hour_of_day_effect <span class="op">=</span> periodic_repeat(hour_of_day_effect, duration, axis<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb11-61"><a href="#cb11-61" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-62"><a href="#cb11-62" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Day-of-week effect, indexed by the calendar covariate.</span></span>
-<span id="cb11-63"><a href="#cb11-63" aria-hidden="true" tabindex="-1"></a>    scale_day_of_week <span class="op">=</span> numpyro.sample(<span class="st">"scale_day_of_week"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
-<span id="cb11-64"><a href="#cb11-64" aria-hidden="true" tabindex="-1"></a>    day_of_week_effect <span class="op">=</span> numpyro.sample(</span>
-<span id="cb11-65"><a href="#cb11-65" aria-hidden="true" tabindex="-1"></a>        <span class="st">"day_of_week_effect"</span>,</span>
-<span id="cb11-66"><a href="#cb11-66" aria-hidden="true" tabindex="-1"></a>        dist.ZeroSumNormal(scale<span class="op">=</span>scale_day_of_week, event_shape<span class="op">=</span>(<span class="dv">7</span>,)),</span>
-<span id="cb11-67"><a href="#cb11-67" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>    <span class="co"># GP parameters (amplitude and length-scale priors are the preliz maxent fits).</span></span>
+<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>    alpha <span class="op">=</span> numpyro.sample(<span class="st">"alpha"</span>, AMPLITUDE_PRIOR)</span>
+<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>    length_scale <span class="op">=</span> numpyro.sample(<span class="st">"length_scale"</span>, LENGTH_SCALE_PRIOR)</span>
+<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>    scale_factor <span class="op">=</span> numpyro.sample(<span class="st">"scale"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
+<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Degrees of freedom for the Student-t likelihood.</span></span>
+<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>    nu <span class="op">=</span> numpyro.sample(<span class="st">"nu"</span>, dist.Gamma(concentration<span class="op">=</span><span class="fl">8.0</span>, rate<span class="op">=</span><span class="fl">3.0</span>))</span>
+<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-37"><a href="#cb11-37" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Non-linear temperature effect as a Matérn 5/2 HSGP. ``hsgp_matern`` is</span></span>
+<span id="cb11-38"><a href="#cb11-38" aria-hidden="true" tabindex="-1"></a>    <span class="co"># annotated for float hyperparameters, so we cast the sampled scalars.</span></span>
+<span id="cb11-39"><a href="#cb11-39" aria-hidden="true" tabindex="-1"></a>    beta_temperature <span class="op">=</span> hsgp_matern(</span>
+<span id="cb11-40"><a href="#cb11-40" aria-hidden="true" tabindex="-1"></a>        x<span class="op">=</span>temperature,</span>
+<span id="cb11-41"><a href="#cb11-41" aria-hidden="true" tabindex="-1"></a>        nu<span class="op">=</span><span class="dv">5</span> <span class="op">/</span> <span class="dv">2</span>,</span>
+<span id="cb11-42"><a href="#cb11-42" aria-hidden="true" tabindex="-1"></a>        alpha<span class="op">=</span>cast(<span class="st">"float"</span>, alpha),</span>
+<span id="cb11-43"><a href="#cb11-43" aria-hidden="true" tabindex="-1"></a>        length<span class="op">=</span>cast(<span class="st">"float"</span>, length_scale),</span>
+<span id="cb11-44"><a href="#cb11-44" aria-hidden="true" tabindex="-1"></a>        ell<span class="op">=</span>ELL,</span>
+<span id="cb11-45"><a href="#cb11-45" aria-hidden="true" tabindex="-1"></a>        m<span class="op">=</span>M,</span>
+<span id="cb11-46"><a href="#cb11-46" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-47"><a href="#cb11-47" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"beta_temperature"</span>, beta_temperature)</span>
+<span id="cb11-48"><a href="#cb11-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-49"><a href="#cb11-49" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Calibration likelihood: anchor the latent temperature effect to the</span></span>
+<span id="cb11-50"><a href="#cb11-50" aria-hidden="true" tabindex="-1"></a>    <span class="co"># domain-knowledge value where temperature exceeds the threshold. The mask</span></span>
+<span id="cb11-51"><a href="#cb11-51" aria-hidden="true" tabindex="-1"></a>    <span class="co"># keeps only the high-temperature contributions, matching the blog's</span></span>
+<span id="cb11-52"><a href="#cb11-52" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ``beta_temperature[temperature_prior_idx]`` indexing.</span></span>
+<span id="cb11-53"><a href="#cb11-53" aria-hidden="true" tabindex="-1"></a>    high_temp_mask <span class="op">=</span> temperature <span class="op">&gt;</span> TEMP_THRESHOLD</span>
+<span id="cb11-54"><a href="#cb11-54" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> numpyro.handlers.mask(mask<span class="op">=</span>high_temp_mask):</span>
+<span id="cb11-55"><a href="#cb11-55" aria-hidden="true" tabindex="-1"></a>        numpyro.sample(</span>
+<span id="cb11-56"><a href="#cb11-56" aria-hidden="true" tabindex="-1"></a>            <span class="st">"temperature_prior"</span>,</span>
+<span id="cb11-57"><a href="#cb11-57" aria-hidden="true" tabindex="-1"></a>            dist.Normal(loc<span class="op">=</span>PRIOR_MEAN, scale<span class="op">=</span>PRIOR_SCALE),</span>
+<span id="cb11-58"><a href="#cb11-58" aria-hidden="true" tabindex="-1"></a>            obs<span class="op">=</span>beta_temperature,</span>
+<span id="cb11-59"><a href="#cb11-59" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb11-60"><a href="#cb11-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-61"><a href="#cb11-61" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Hour-of-day effect, tiled over the horizon with periodic_repeat.</span></span>
+<span id="cb11-62"><a href="#cb11-62" aria-hidden="true" tabindex="-1"></a>    scale_hour_of_day <span class="op">=</span> numpyro.sample(<span class="st">"scale_hour_of_day"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
+<span id="cb11-63"><a href="#cb11-63" aria-hidden="true" tabindex="-1"></a>    hour_of_day_effect <span class="op">=</span> numpyro.sample(</span>
+<span id="cb11-64"><a href="#cb11-64" aria-hidden="true" tabindex="-1"></a>        <span class="st">"hour_of_day_effect"</span>,</span>
+<span id="cb11-65"><a href="#cb11-65" aria-hidden="true" tabindex="-1"></a>        dist.ZeroSumNormal(scale<span class="op">=</span>scale_hour_of_day, event_shape<span class="op">=</span>(<span class="dv">24</span>,)),</span>
+<span id="cb11-66"><a href="#cb11-66" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-67"><a href="#cb11-67" aria-hidden="true" tabindex="-1"></a>    hour_of_day_effect <span class="op">=</span> periodic_repeat(hour_of_day_effect, duration, axis<span class="op">=-</span><span class="dv">1</span>)</span>
 <span id="cb11-68"><a href="#cb11-68" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-69"><a href="#cb11-69" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Expected demand and a temperature-dependent Student-t noise scale.</span></span>
-<span id="cb11-70"><a href="#cb11-70" aria-hidden="true" tabindex="-1"></a>    mu <span class="op">=</span> (</span>
-<span id="cb11-71"><a href="#cb11-71" aria-hidden="true" tabindex="-1"></a>        beta_temperature <span class="op">*</span> temperature</span>
-<span id="cb11-72"><a href="#cb11-72" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> intercept</span>
-<span id="cb11-73"><a href="#cb11-73" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> hour_of_day_effect</span>
-<span id="cb11-74"><a href="#cb11-74" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> jnp.take(day_of_week_effect, day_of_week)</span>
-<span id="cb11-75"><a href="#cb11-75" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb11-76"><a href="#cb11-76" aria-hidden="true" tabindex="-1"></a>    scale <span class="op">=</span> scale_factor <span class="op">*</span> jnp.sqrt(temperature)</span>
-<span id="cb11-77"><a href="#cb11-77" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-78"><a href="#cb11-78" aria-hidden="true" tabindex="-1"></a>    predict(h, dist.StudentT(df<span class="op">=</span>nu, loc<span class="op">=</span><span class="fl">0.0</span>, scale<span class="op">=</span>scale[..., <span class="va">None</span>]), mu[..., <span class="va">None</span>])</span></code></pre></div>
+<span id="cb11-69"><a href="#cb11-69" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Day-of-week effect, indexed by the calendar covariate.</span></span>
+<span id="cb11-70"><a href="#cb11-70" aria-hidden="true" tabindex="-1"></a>    scale_day_of_week <span class="op">=</span> numpyro.sample(<span class="st">"scale_day_of_week"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
+<span id="cb11-71"><a href="#cb11-71" aria-hidden="true" tabindex="-1"></a>    day_of_week_effect <span class="op">=</span> numpyro.sample(</span>
+<span id="cb11-72"><a href="#cb11-72" aria-hidden="true" tabindex="-1"></a>        <span class="st">"day_of_week_effect"</span>,</span>
+<span id="cb11-73"><a href="#cb11-73" aria-hidden="true" tabindex="-1"></a>        dist.ZeroSumNormal(scale<span class="op">=</span>scale_day_of_week, event_shape<span class="op">=</span>(<span class="dv">7</span>,)),</span>
+<span id="cb11-74"><a href="#cb11-74" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-75"><a href="#cb11-75" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-76"><a href="#cb11-76" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Expected demand and a temperature-dependent Student-t noise scale.</span></span>
+<span id="cb11-77"><a href="#cb11-77" aria-hidden="true" tabindex="-1"></a>    mu <span class="op">=</span> (</span>
+<span id="cb11-78"><a href="#cb11-78" aria-hidden="true" tabindex="-1"></a>        beta_temperature <span class="op">*</span> temperature</span>
+<span id="cb11-79"><a href="#cb11-79" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> intercept</span>
+<span id="cb11-80"><a href="#cb11-80" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> hour_of_day_effect</span>
+<span id="cb11-81"><a href="#cb11-81" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> jnp.take(day_of_week_effect, day_of_week)</span>
+<span id="cb11-82"><a href="#cb11-82" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-83"><a href="#cb11-83" aria-hidden="true" tabindex="-1"></a>    scale <span class="op">=</span> scale_factor <span class="op">*</span> jnp.sqrt(temperature)</span>
+<span id="cb11-84"><a href="#cb11-84" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-85"><a href="#cb11-85" aria-hidden="true" tabindex="-1"></a>    predict(h, dist.StudentT(df<span class="op">=</span>nu, loc<span class="op">=</span><span class="fl">0.0</span>, scale<span class="op">=</span>scale[..., <span class="va">None</span>]), mu[..., <span class="va">None</span>])</span></code></pre></div>
 </div>
 <p>The model function is a plain NumPyro model callable <code>(covariates, data=None)</code>, so we can render its structure directly. The rendered graph shows the new observed <code>temperature_prior</code> node next to the demand <code>obs</code> node.</p>
-<div id="a4af4d4b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:14.933236Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:14.933111Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:15.223426Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:15.222234Z&quot;}}" data-execution_count="9">
+<div id="a4af4d4b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:18.886887Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:18.886759Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:19.094473Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:19.093928Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>numpyro.render_model(</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    calibrated_electricity_model,</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    model_args<span class="op">=</span>(covariates_train, data_train),</span>
@@ -685,7 +692,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="prior-predictive-checks" class="level1">
 <h1>Prior predictive checks</h1>
 <p>Before we fit the model, let’s visualize the prior predictive distribution. The model function is a plain NumPyro model, so we hand it to <code>Predictive</code> directly. We draw the bands with ArviZ’s <code>plot_lm</code>, which computes the <span class="math inline">50\%</span> and <span class="math inline">94\%</span> HDI internally; since the time axis is a <code>datetime64</code> array we pass it as matplotlib date numbers (<code>mdates.date2num</code>) and restore the date formatter on the returned axis.</p>
-<div id="85f468b0" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:15.225539Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:15.225388Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:17.903297Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:17.902640Z&quot;}}" data-execution_count="10">
+<div id="85f468b0" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:19.095797Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:19.095724Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:21.507414Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:21.506475Z&quot;}}" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>prior_predictive <span class="op">=</span> Predictive(</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    calibrated_electricity_model, num_samples<span class="op">=</span><span class="dv">2_000</span>, return_sites<span class="op">=</span>[<span class="st">"obs"</span>]</span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>)</span>
@@ -738,7 +745,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="inference-with-svi" class="level1">
 <h1>Inference with SVI</h1>
 <p>We fit the model with plain NumPyro stochastic variational inference: an <code>AutoNormal</code> guide, <code>Adam</code>, and <code>SVI.run</code>, which returns the fitted <code>params</code> and the ELBO <code>losses</code>. As in the baseline example, the posterior is multimodal: the multiplicative <code>beta_temperature * temperature</code> term trades off against the overall level, so a guide initialized at random can settle on a monotonic temperature effect. We initialize the guide at a feasible point (<code>init_to_feasible</code>), which reliably recovers the heating-and-cooling (U-shaped) effect. We keep the same optimizer (<code>Adam(step_size=0.005)</code>) and number of steps (<code>50_000</code>) as the blog post.</p>
-<div id="c29496a4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:17.904956Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:17.904817Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:28.773368Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:28.767181Z&quot;}}" data-execution_count="11">
+<div id="c29496a4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:21.508885Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:21.508775Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:31.803575Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:31.802797Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>guide <span class="op">=</span> AutoNormal(calibrated_electricity_model, init_loc_fn<span class="op">=</span>init_to_feasible)</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>svi <span class="op">=</span> SVI(calibrated_electricity_model, guide, Adam(step_size<span class="op">=</span><span class="fl">0.005</span>), Trace_ELBO())</span>
@@ -761,7 +768,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="posterior-predictive-checks" class="level1">
 <h1>Posterior predictive checks</h1>
 <p>We now draw posterior latents from the fitted guide with <a href="../../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior</a>, push them through the model over the training window with <a href="../../reference/predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample</a>, and forecast the held-out two weeks with <a href="../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast</a> and the full-horizon covariates. <a href="../../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior</a> returns the deterministic sites along with the latents, so the posterior dictionary already carries <code>beta_temperature</code> for the calibrated temperature-effect plot later.</p>
-<div id="48526693" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:28.775978Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:28.775817Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:30.430581Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:30.429170Z&quot;}}" data-execution_count="12">
+<div id="48526693" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:31.806533Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:31.806244Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:33.394979Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:33.393696Z&quot;}}" data-execution_count="12">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>num_posterior_samples <span class="op">=</span> <span class="dv">5_000</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>rng_key, key_post, key_pp, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">4</span>)</span>
@@ -772,7 +779,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="forecast-evaluation" class="level2">
 <h2 class="anchored" data-anchor-id="forecast-evaluation">Forecast evaluation</h2>
 <p>We score the train and test forecasts with <a href="../../reference/evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast</a>, which reports several metrics at once: CRPS (the <a href="https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score">Continuous Ranked Probability Score</a>), mean absolute error, root mean squared error, and the empirical coverage of the central <span class="math inline">90\%</span> prediction interval. The scores should land close to the uncalibrated baseline: the calibration term refines the temperature effect in the high-temperature regime without hurting overall forecast accuracy.</p>
-<div id="fad46ff5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:30.434085Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:30.433713Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:33.992815Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:33.992006Z&quot;}}" data-execution_count="13">
+<div id="fad46ff5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:33.397412Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:33.397237Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:34.602351Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:34.599074Z&quot;}}" data-execution_count="13">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>train_metrics <span class="op">=</span> evaluate_forecast(train_pp, data_train)</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>test_metrics <span class="op">=</span> evaluate_forecast(forecast_draws, data_test)</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -792,18 +799,18 @@ covariates shape: (1344, 2)</code></pre>
   <tbody>
     <tr>
       <th>mae</th>
-      <td>0.389393</td>
-      <td>0.263976</td>
+      <td>0.389398</td>
+      <td>0.263977</td>
     </tr>
     <tr>
       <th>rmse</th>
-      <td>0.520497</td>
-      <td>0.334185</td>
+      <td>0.520501</td>
+      <td>0.334188</td>
     </tr>
     <tr>
       <th>crps</th>
-      <td>0.280632</td>
-      <td>0.192164</td>
+      <td>0.280635</td>
+      <td>0.192166</td>
     </tr>
     <tr>
       <th>coverage</th>
@@ -815,7 +822,7 @@ covariates shape: (1344, 2)</code></pre>
 </div>
 </div>
 </div>
-<div id="ca095dba" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:33.994600Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:33.994490Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:34.434295Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:34.433803Z&quot;}}" data-execution_count="14">
+<div id="ca095dba" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:34.603843Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:34.603682Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:35.046332Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:35.045803Z&quot;}}" data-execution_count="14">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>train_obs <span class="op">=</span> train_pp[..., <span class="dv">0</span>]</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>forecast_obs <span class="op">=</span> forecast_draws[..., <span class="dv">0</span>]</span>
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -902,7 +909,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="temperature-effect-on-demand" class="level2">
 <h2 class="anchored" data-anchor-id="temperature-effect-on-demand">Temperature effect on demand</h2>
 <p>This is where the calibration shows up. We plot the posterior distribution of the Gaussian Process component <code>beta_temperature</code> against temperature, sorting by temperature so the HDI band reads cleanly. The vertical line marks the <code>32 °C</code> threshold and the shaded band shows the calibration target of <code>0.13 ± 0.01</code> for temperatures above it.</p>
-<div id="eace5648" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:34.435980Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:34.435887Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:34.792135Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:34.791664Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="15">
+<div id="eace5648" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:43:35.048579Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:43:35.048492Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:43:35.426732Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:43:35.426297Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="15">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>temperature_train <span class="op">=</span> np.asarray(temperature[:t_train])</span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>order <span class="op">=</span> np.argsort(temperature_train)</span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>beta_temperature <span class="op">=</span> posterior[<span class="st">"beta_temperature"</span>]</span>
