@@ -256,6 +256,12 @@ A zero-argument callable returning a fresh `ForecastModel` instance.
 [typing.Array](typing.Array.md#numpyro_forecast.typing.Array)  
 A JAX array (alias of `jax.Array`).
 
+[typing.IntScalar](typing.IntScalar.md#numpyro_forecast.typing.IntScalar)  
+A concrete integer scalar: a Python `int` or a NumPy integer scalar (`np.int64`, …).
+
+[typing.RealScalar](typing.RealScalar.md#numpyro_forecast.typing.RealScalar)  
+A concrete real scalar: a Python `float` or `int`, or a NumPy integer or floating scalar.
+
 [typing.BlackjaxBuildFn](typing.BlackjaxBuildFn.md#numpyro_forecast.typing.BlackjaxBuildFn)  
 A blackjax sampler build function `(rng_key, logdensity_fn, position, num_warmup)`.
 

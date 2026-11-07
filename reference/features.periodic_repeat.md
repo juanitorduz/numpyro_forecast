@@ -22,8 +22,8 @@ features.periodic_repeat(
 `x: ArrayLike`  
 Seasonal pattern; the repeated axis has length equal to the period. Accepts any array-like (e.g. a raw `numpyro.sample` draw).
 
-`duration: int`  
-Target length along `axis`.
+`duration: IntScalar`  
+Target length along `axis`: a non-negative Python or NumPy integer (not a `float`).
 
 `axis: int = ``-1`  
 Axis to repeat along (defaults to `-1`).
@@ -34,3 +34,10 @@ Axis to repeat along (defaults to `-1`).
 
 `Array`  
 `x` periodically repeated to length `duration` along `axis`.
+
+
+## Raises
+
+
+`ValueError`  
+If `duration` is negative.
