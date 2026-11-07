@@ -20,6 +20,8 @@ series seed the recursion without any reversal. Batch axes broadcast: a shared
 windows, or posterior draws ``(S, lags, obs, obs)`` against a single window.
 """
 
+from typing import no_type_check
+
 import jax
 import jax.numpy as jnp
 from jaxtyping import Float, PyTree
@@ -162,6 +164,7 @@ def var_step(
     """
     n_lags, n_obs = phi.shape[-3], phi.shape[-1]
 
+    @no_type_check
     def mean(
         carry: Float[Array, " *batch lags obs"], x_t: PyTree[Array] | None
     ) -> Float[Array, " *batch obs"]:
@@ -174,6 +177,7 @@ def var_step(
             raise ValueError(msg)
         return var_mean(phi, carry, intercept)
 
+    @no_type_check
     def update(
         carry: Float[Array, " *batch lags obs"],
         y_t: Float[Array, " *batch obs"],
@@ -335,6 +339,7 @@ def impulse_response(
     # last (the same layout as a lag window), so the ``min(h, p)`` bound needs no mask.
     init = jnp.zeros((*batch, n_lags, n_obs, n_obs), phi.dtype).at[..., -1, :, :].set(eye)
 
+    @no_type_check
     def body(hist: Array, _: None) -> tuple[Array, Array]:
         psi_h = jnp.einsum("...ljk,...lkm->...jm", phi, hist[..., ::-1, :, :])
         return jnp.concatenate([hist[..., 1:, :, :], psi_h[..., None, :, :]], axis=-3), psi_h

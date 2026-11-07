@@ -6,6 +6,7 @@ import sys
 import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from functools import partial
 from unittest import mock
 
 import jax
@@ -21,6 +22,8 @@ from conftest import (
     commit_host,
     empty_covariates,
     fail_devices_for,
+    identity_mean,
+    keep_carry,
     rw_model,
     svi_guide_params,
 )
@@ -32,7 +35,7 @@ from numpyro.infer.reparam import LocScaleReparam
 
 import numpyro_forecast
 from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
-from numpyro_forecast.models import Horizon, innovations, predict
+from numpyro_forecast.models import Horizon, innovations, predict, ssoe
 from numpyro_forecast.offload import (
     WARNING_SKIP_PREFIXES,
     _host_memory_kind,
@@ -1587,6 +1590,55 @@ def test_cpu_fallback_warning_attributes_to_caller(monkeypatch: pytest.MonkeyPat
     assert [r.filename for r in matching] == [__file__]
     assert_numpy_host(hosted)
     assert WARNING_SKIP_PREFIXES[0] == os.path.dirname(numpyro_forecast.__file__)
+
+
+def _ssoe_level_model(covariates: Array, data: Array | None = None) -> None:
+    """A constant-level `ssoe()` model, so a driver call traces ``ssoe``'s nested scan bodies."""
+    h = Horizon.from_data(covariates, data)
+    sigma = jnp.asarray(numpyro.sample("sigma", dist.HalfNormal(1.0)))
+    y = jnp.zeros((h.t_obs, 1)) if data is None else data
+    r = ssoe(h, "eps", y, jnp.zeros(1), identity_mean, keep_carry, dist.Normal(0.0, sigma))
+    numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=data)
+    if h.future > 0:
+        numpyro.deterministic("forecast", r.y_future)
+
+
+@pytest.mark.parametrize(
+    "driver", ["draw_posterior", "forecast", "predict_in_sample", "forecast_ssoe"]
+)
+def test_drivers_keep_warning_deduplication(driver: str) -> None:
+    """A driver call between two warnings from one line does not show the second (issue #235).
+
+    Under the ``"default"`` filter Python shows a warning once per location. beartype
+    enters ``warnings.catch_warnings()`` while it decorates a function, which clears
+    every warning registry, so a nested function that the import hook decorates on
+    each driver call made the next warning from the same line show again. The cases
+    cover the closures of `draw_posterior()`, of `forecast()` and `predict_in_sample()`,
+    and of a model building block that every driver call traces.
+    """
+    t, future = 6, 2
+    covariates = empty_covariates(t + future)
+    data = jnp.zeros((t, 1))
+    posterior = {"sigma": jnp.ones(2)}
+    call: Callable[[Array], object]
+    if driver == "draw_posterior":
+        guide, params = svi_guide_params(t, num_steps=2)
+        call = partial(draw_posterior, guide=guide, params=params, num_samples=2)
+    elif driver == "predict_in_sample":
+        call = partial(
+            predict_in_sample, model=rw_model, posterior=posterior, covariates=covariates[:t]
+        )
+    else:
+        model = _ssoe_level_model if driver == "forecast_ssoe" else rw_model
+        call = partial(
+            forecast, model=model, posterior=posterior, data=data, covariates=covariates
+        )
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("default")
+        for i in range(2):
+            warnings.warn("data looks stale", UserWarning, stacklevel=1)
+            call(random.PRNGKey(i))
+    assert [str(r.message) for r in records if r.category is UserWarning] == ["data looks stale"]
 
 
 def test_predictive_oom_reports_batch_size() -> None:

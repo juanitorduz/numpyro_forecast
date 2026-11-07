@@ -2,7 +2,10 @@
 
 ``numpyro_forecast/__init__.py`` installs the jaxtyping import hook with
 `typechecker`, so every package function and class is checked by beartype
-with `BEARTYPE_CONF` at call time. The configuration turns on the PEP 484
+with `BEARTYPE_CONF` at call time. Nested functions are the exception: they
+carry ``@no_type_check``, because the hook would otherwise decorate them again
+on every call of the enclosing function, and each decoration clears Python's
+warning registries (issue #235). The configuration turns on the PEP 484
 implicit numeric tower, which the static checker ``ty`` applies as well: a
 Python ``int`` satisfies a ``float`` hint (and an ``int`` or ``float`` a
 ``complex`` hint), so a call that type-checks never fails at runtime because
@@ -33,4 +36,4 @@ BEARTYPE_CONF = BeartypeConf(is_pep484_tower=True)
 """The beartype configuration of the package's runtime type checks."""
 
 typechecker = beartype(conf=BEARTYPE_CONF)
-"""The decorator that the jaxtyping import hook applies to every package function."""
+"""The decorator the jaxtyping import hook applies to every package function but nested ones."""
