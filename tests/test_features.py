@@ -27,7 +27,6 @@ def _expected_fourier(duration: int, period: float, num_terms: int) -> np.ndarra
 def test_fourier_features_shape_and_values() -> None:
     feats = fourier_features(duration=12, period=12.0, num_terms=3)
     assert feats.shape == (12, 6)
-    # First column is sin(2*pi*1*t/12); at t=0 it is 0, at t=3 it is 1.
     assert jnp.allclose(feats[0, 0], 0.0, atol=1e-6)
     assert jnp.allclose(feats[3, 0], 1.0, atol=1e-6)
 
@@ -40,9 +39,6 @@ def test_fourier_features_shape_and_values() -> None:
 def test_fourier_features_accepts_python_and_numpy_scalars(
     duration: IntScalar, period: RealScalar, num_terms: IntScalar
 ) -> None:
-    # An integer period is the normal case (7 for daily data with a weekly season), and a
-    # count read from NumPy or a DataFrame is a NumPy scalar (issue #165). Every spelling
-    # gives the matrix of the float reference call.
     reference = fourier_features(10, 7.0, 2)
     np.testing.assert_array_equal(fourier_features(duration, period, num_terms), reference)
     np.testing.assert_allclose(reference, _expected_fourier(10, 7.0, 2), atol=1e-6)
@@ -62,8 +58,6 @@ def test_fourier_features_accepts_python_and_numpy_scalars(
 def test_fourier_features_rejects_non_integral_counts_and_non_scalars(
     duration: object, period: object, num_terms: object
 ) -> None:
-    # The hints accept concrete Python or NumPy scalars only: a float count is never
-    # truncated, and a JAX array (a tracer under a trace) never reaches the memo.
     with pytest.raises(TypeCheckError):
         fourier_features(duration, period, num_terms)  # ty: ignore[invalid-argument-type]
 
@@ -79,8 +73,6 @@ def test_fourier_features_rejects_non_integral_counts_and_non_scalars(
 def test_float_counts_raise_with_the_runtime_checks_off(
     monkeypatch: pytest.MonkeyPatch, fn: Callable[..., Array], args: tuple[object, ...]
 ) -> None:
-    # With JAXTYPING_DISABLE=1 no hint is checked, so the boundary conversion is the guard:
-    # operator.index raises where int() would truncate (np.arange(10.7) has 11 steps).
     monkeypatch.setattr(jaxtyping.config, "jaxtyping_disable", True)
     with pytest.raises(TypeError, match="cannot be interpreted as an integer"):
         fn(*args)
@@ -107,8 +99,6 @@ def test_fourier_features_rejects_a_traced_duration() -> None:
 def test_fourier_features_rejects_degenerate_values(
     args: tuple[IntScalar, RealScalar, IntScalar], match: str
 ) -> None:
-    # A zero or non-finite period would cache an all-inf or all-nan matrix and feed it to
-    # the regression without an error; the boundary check raises before the memo.
     with pytest.raises(ValueError, match=match):
         fourier_features(*args)
 
@@ -119,8 +109,6 @@ def test_fourier_features_rejects_degenerate_values(
 def test_fourier_features_accepts_an_empty_window_or_no_harmonics(
     duration: int, num_terms: int, shape: tuple[int, int]
 ) -> None:
-    # An empty window and a zero-harmonic design (a no-seasonality baseline in a sweep
-    # over num_terms) are well defined and stay valid, as on main.
     assert fourier_features(duration, 7.0, num_terms).shape == shape
 
 
@@ -134,9 +122,6 @@ def test_periodic_repeat_accepts_a_zero_duration() -> None:
 
 
 def test_fourier_features_with_numpy_scalars_under_jit_and_vmap() -> None:
-    # A model function runs under jit (svi.run, forecast) and vmap (backtest_vectorized).
-    # NumPy scalar arguments stay concrete there; the argument tuple is unique to this test,
-    # so the first call of the memo entry happens inside the trace.
     coefs = jnp.arange(12.0).reshape(3, 4)
 
     @jax.jit
@@ -145,19 +130,14 @@ def test_fourier_features_with_numpy_scalars_under_jit_and_vmap() -> None:
         return fourier_features(np.int64(29), np.int64(9), np.int64(2)) @ beta
 
     expected = (_expected_fourier(29, 9.0, 2) @ np.asarray(coefs).T).T
-    # The tolerance covers the float32 cast of the result, not a numerical claim.
     np.testing.assert_allclose(seasonal(coefs), expected, rtol=1e-5, atol=1e-5)
 
 
 def test_fourier_features_first_called_inside_jit_stays_usable() -> None:
-    # The memo is process-global, so this test uses an argument tuple that no other
-    # test builds: an eager first call elsewhere would hide a value cached under a trace.
     duration, period, num_terms = 23, 6.5, 2
     expected = _expected_fourier(duration, period, num_terms)
     traced = jax.jit(lambda x: x + fourier_features(duration, period, num_terms))(jnp.zeros(()))
-    # The tolerance covers the float32 cast of the result, not a numerical claim.
     np.testing.assert_allclose(traced, expected, atol=1e-5)
-    # A later eager call and a retrace (new input shape) reuse the memo entry.
     np.testing.assert_allclose(fourier_features(duration, period, num_terms), expected, atol=1e-5)
     retraced = jax.jit(lambda x: x + fourier_features(duration, period, num_terms))(
         jnp.zeros((1, 1))
@@ -179,10 +159,6 @@ def test_fourier_features_follows_x64_flag() -> None:
 
 
 def test_backtest_with_fourier_features_built_from_the_horizon() -> None:
-    # A model that builds its seasonal design from ``h.duration`` first calls
-    # ``fourier_features`` under a trace (``svi.run``, the jitted ``forecast``). The
-    # second window trains on the duration the first window forecast over, so it
-    # reuses a memo entry created inside a trace. The period is unique to this test.
     def model(covariates: Array, data: Array | None = None) -> None:
         h = Horizon.from_data(covariates, data)
         beta = jnp.asarray(numpyro.sample("beta", dist.Normal(0.0, 1.0).expand([2]).to_event(1)))
@@ -213,15 +189,13 @@ def test_periodic_repeat_tiles_pattern() -> None:
 
 
 def test_periodic_repeat_along_axis() -> None:
-    season = jnp.arange(6.0).reshape(2, 3)  # period 3 along axis -1
+    season = jnp.arange(6.0).reshape(2, 3)
     repeated = periodic_repeat(season, 5, axis=-1)
     assert repeated.shape == (2, 5)
     assert jnp.allclose(repeated[0], jnp.array([0.0, 1.0, 2.0, 0.0, 1.0]))
 
 
 def test_periodic_repeat_accepts_array_like() -> None:
-    # ArrayLike inputs (here a NumPy array, not a traced jax.Array) are accepted
-    # and converted internally, so callers need no explicit cast.
     repeated = periodic_repeat(np.array([1.0, 2.0, 3.0]), 7)
     assert repeated.shape == (7,)
     assert jnp.allclose(repeated, jnp.array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0]))
