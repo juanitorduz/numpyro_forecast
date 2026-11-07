@@ -1675,7 +1675,11 @@ ValueError
     If ``data`` or ``covariates`` has fewer than two axes (time must be at
     axis ``-2``), if their durations differ, if ``eval_train=True`` but
     ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small (see
-    ``num_samples``).
+    ``num_samples``). Also if a metric returns a value that is not 0-d or
+    does not have a bool, integer or floating dtype (see
+    `evaluate_forecast()`): the error names the metric and comes when the
+    first window is scored, after its fit, because a metric may run on the
+    host here and so is not traced before the fit.
 BacktestWindowError
     If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
     ``train_window``, or ``"expanding"`` with one).
@@ -1761,8 +1765,9 @@ num_samples
     least 2 when ``metrics`` contains `eval_crps()` (as
     `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
     are checked before the fit. A CRPS inside another wrapper (a
-    ``lambda`` or a ``jax.jit`` function) is not checked up front: it
-    fails only after the fit.
+    ``lambda`` or a ``jax.jit`` function) raises the error of
+    `~~numpyro_forecast.metrics.crps_empirical()` instead, also before the
+    fit (see ``metrics``).
 metrics
     Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
     Each metric is vmapped over the window axis, so any pure-JAX mapping,
@@ -1776,7 +1781,18 @@ metrics
     included) receives floating arrays, while ``predictions`` keeps the
     dtype of the draws. A custom metric that needs the integer draws must
     read them from ``predictions`` (``keep_predictions=True``) or cast
-    back inside the metric.
+    back inside the metric. Before the fit, the scoring is traced with
+    ``jax.eval_shape`` on the shapes of the windows (no computation), so a
+    metric that breaks the `~~numpyro_forecast.typing.Metric` contract
+    fails before any window is fitted; that trace calls each metric once
+    more, on tracers. It is a ``jit``-style trace, so a metric must be
+    ``jit``-compatible as `~~numpyro_forecast.typing.Metric` says: a host
+    conversion of a ``jnp`` value, even one computed from shapes or
+    constants (``int(jnp.ceil(p.shape[0] * 0.1))``), raises
+    `VectorizedMetricError`; compute static values with Python or
+    ``math`` instead. A bool or integer metric result is cast to float, so
+    every entry of ``VectorizedBacktestResult.metrics`` has a floating
+    dtype.
 keep_predictions
     If ``True``, retain the stacked forecast samples on the result.
 
@@ -1793,7 +1809,10 @@ ValueError
     small (see ``num_samples``), if ``guide`` is an autoguide that is
     already set up (see ``guide``), or if ``metrics`` is not empty and the
     model's ``"forecast"`` site does not have the shape of ``data`` over
-    the test window.
+    the test window. Also, before the fit, if a metric returns a value that
+    is not 0-d or does not have a bool, integer or floating dtype for one
+    window: the message names the metric and gives the shape and dtype it
+    returned for one window.
 BacktestWindowError
     If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
     there is no room for a single window.
@@ -1804,10 +1823,12 @@ RuntimeError
     example no valid initial parameters), that error is raised instead;
     an eager init of window 0 before the fit raises it for window 0.
 VectorizedMetricError
-    If a metric is not a pure JAX function under ``vmap``: it forces a host
-    conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
-    indexing or a NumPy call on a traced value) or builds a value-dependent
-    shape (a boolean mask index such as ``x[x > 0]``).
+    If a metric is not a pure JAX function under a ``jit``-style trace: it
+    forces a host conversion (``float(...)``, ``int(...)``, ``range(...)``,
+    Python list indexing or a NumPy call on a traced value, including a
+    ``jnp`` value computed only from shapes or constants) or builds a
+    value-dependent shape (a boolean mask index such as ``x[x > 0]``).
+    Raised before the fit, from the trace of the scoring (see ``metrics``).
 
 BacktestResult(t0: int, t1: int, t2: int, num_samples: int, walltime: float, metrics: dict[str, float], train_metrics: dict[str, float] = <factory>, prediction: jax.Array | numpy.ndarray | None = None) -> None
 
@@ -1900,22 +1921,27 @@ truth
 metrics
     Mapping of metric name to function; when ``None`` defaults to
     `DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
-    Each function takes ``(pred, truth)`` and returns a scalar array (see
+    Each function takes ``(pred, truth)`` and returns a 0-d array (see
     `~~numpyro_forecast.typing.Metric`); bind any extra parameters
     with `functools.partial()` (see above). Each function receives
     floating arrays: an integer ``pred`` or ``truth`` is cast to the
-    default float dtype once, before the first metric runs.
+    default float dtype once, before the first metric runs. A per-cell
+    function such as `~~numpyro_forecast.metrics.crps_empirical()` is not
+    a metric: use `eval_crps()`, its mean over the cells.
 
 Returns
 -------
 dict[str, float]
-    Each metric name mapped to its value.
+    Each metric name mapped to its value. A bool or integer metric result
+    is converted to ``float``, whatever the other metrics are.
 
 Raises
 ------
 ValueError
     If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
-    check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
+    check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair. Also
+    if a metric returns a value that is not 0-d or does not have a bool, integer or floating
+    dtype; the message names the metric and gives the shape and dtype it returned.
 
 results_to_dataframe(results: 'Sequence[BacktestResult] | VectorizedBacktestResult') -> 'pd.DataFrame'
 
@@ -3901,6 +3927,8 @@ metric forces a host conversion under ``vmap`` (``float(...)``,
 traced value) or builds a value-dependent shape (a boolean mask index such
 as ``x[x > 0]``; use ``jnp.where`` instead). Metrics must be pure JAX
 functions returning a scalar array; see `~~numpyro_forecast.typing.Metric`.
+The scoring is traced on the window shapes before the fit, so this error
+comes before any window is fitted.
 
 KernelConfigError(message: str | None = None) -> None
 

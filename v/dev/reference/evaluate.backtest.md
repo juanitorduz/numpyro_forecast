@@ -158,7 +158,7 @@ One result per backtest window.
 
 
 `ValueError`  
-If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if their durations differ, if `eval_train=True` but `in_sample_fn` is `None`, or if `num_samples` is too small (see `num_samples`).
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if their durations differ, if `eval_train=True` but `in_sample_fn` is `None`, or if `num_samples` is too small (see `num_samples`). Also if a metric returns a value that is not 0-d or does not have a bool, integer or floating dtype (see [evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast)): the error names the metric and comes when the first window is scored, after its fit, because a metric may run on the host here and so is not traced before the fit.
 
 `BacktestWindowError`  
 If `window_type` and `train_window` disagree (`"rolling"` without a `train_window`, or `"expanding"` with one).
