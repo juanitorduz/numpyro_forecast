@@ -105,7 +105,7 @@ Closure that fits `model` on the training window and forecasts the test horizon 
 Optional closure that fits `model` on the training window and scores its in-sample fit (see [InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn) and the contract above). Required when `eval_train=True`. It receives its own child of `rng_key` (see `rng_key`), never a key that `forecast_fn` can derive from its own.
 
 `metrics: Mapping[str, Metric] | None = None`  
-Mapping of metric name to function; defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS). Each function takes `(pred, truth)` and returns a scalar array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`.
+Mapping of metric name to function; defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS). Each function takes `(pred, truth)` and returns a scalar array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`. Each window is scored through [evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast), so the integer draws of a count model need no cast and every metric receives floating arrays. `transform` receives the draws as `forecast_fn` returned them; `keep_predictions` stores them after `transform`.
 
 `per_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None = None`  
 Optional `(t0, t1, t2) -> Mapping[str, Metric]` callable producing extra metrics merged over `metrics` for each window. Use it for window-dependent metrics such as a MASE scaled by that window's training data ([numpyro_forecast.metrics.make_mase()](metrics.make_mase.md#numpyro_forecast.metrics.make_mase)).
@@ -158,7 +158,7 @@ One result per backtest window.
 
 
 `ValueError`  
-If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if their durations differ, if `eval_train=True` but `in_sample_fn` is `None`, or if `num_samples` is too small (see `num_samples`).
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if their durations differ, if `eval_train=True` but `in_sample_fn` is `None`, or if `num_samples` is too small (see `num_samples`). Also if a metric returns a value that is not 0-d or does not have a bool, integer or floating dtype (see [evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast)): the error names the metric and comes when the first window is scored, after its fit, because a metric may run on the host here and so is not traced before the fit.
 
 `BacktestWindowError`  
 If `window_type` and `train_window` disagree (`"rolling"` without a `train_window`, or `"expanding"` with one).

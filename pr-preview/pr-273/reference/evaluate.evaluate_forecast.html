@@ -934,7 +934,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L320-L381" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L334-L406" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">evaluate_forecast</span>(
@@ -956,17 +956,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" sample *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" sample *batch"</span>]</span></code></dt>
 <dd>
-<p>Forecast samples with the sample axis first, shape <code>(sample, *batch)</code>.</p>
+<p>Forecast samples with the sample axis first, shape <code>(sample, *batch)</code>. Integer draws (a count model) are accepted.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" *batch"</span>]</span></code></dt>
 <dd>
-<p>Ground-truth values with shape <code>(*batch)</code>.</p>
+<p>Ground-truth values with shape <code>(*batch)</code>. Integer values are accepted.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Mapping of metric name to function; when <code>None</code> defaults to <a href="evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="gdls-link gdls-code">DEFAULT_METRICS</a> (<code>mae</code>, <code>rmse</code>, <code>crps</code> and <code>coverage</code>). Each function takes <code>(pred, truth)</code> and returns a scalar array (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); bind any extra parameters with <code>functools.partial()</code> (see above).
+Mapping of metric name to function; when <code>None</code> defaults to <a href="evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="gdls-link gdls-code">DEFAULT_METRICS</a> (<code>mae</code>, <code>rmse</code>, <code>crps</code> and <code>coverage</code>). Each function takes <code>(pred, truth)</code> and returns a 0-d array (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); bind any extra parameters with <code>functools.partial()</code> (see above). Each function receives floating arrays: an integer <code>pred</code> or <code>truth</code> is cast to the default float dtype once, before the first metric runs. A per-cell function such as <a href="metrics.crps_empirical.html#numpyro_forecast.metrics.crps_empirical" class="gdls-link gdls-code">crps_empirical()</a> is not a metric: use <a href="evaluate.eval_crps.html#numpyro_forecast.evaluate.eval_crps" class="gdls-link gdls-code">eval_crps()</a>, its mean over the cells.
 </dd>
 </dl>
 </div>
@@ -977,7 +977,7 @@ Mapping of metric name to function; when <code>None</code> defaults to <a href="
 <dl>
 <dt><code> <span class="doc-parameter-annotation">dict[str, float]</span></code></dt>
 <dd>
-Each metric name mapped to its value.
+Each metric name mapped to its value. A bool or integer metric result is converted to <code>float</code>, whatever the other metrics are.
 </dd>
 </dl>
 </div>
@@ -988,7 +988,7 @@ Each metric name mapped to its value.
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>truth.shape</code> is not <code>pred.shape[1:]</code> (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>). The check runs here once, so a custom metric in <code>metrics</code> never sees a mismatched pair.
+If <code>truth.shape</code> is not <code>pred.shape[1:]</code> (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>). The check runs here once, so a custom metric in <code>metrics</code> never sees a mismatched pair. Also if a metric returns a value that is not 0-d or does not have a bool, integer or floating dtype; the message names the metric and gives the shape and dtype it returned.
 </dd>
 </dl>
 </div>

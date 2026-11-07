@@ -25,11 +25,11 @@ The frozen-gate recipe of [numpyro_forecast.models.ssoe()](models.ssoe.md#numpyr
 `x: Array`  
 In-sample array with time at axis `-2`, shape `(*batch, t_obs, obs)`.
 
-`future: int`  
-Number of forecast rows to append.
+`future: IntScalar`  
+Number of forecast rows to append, a Python or NumPy integer (for example `h.future` or `np.sum(mask)`).
 
-`value: float = ``0.0`  
-Fill value of the appended rows, cast to `x.dtype`.
+`value: RealScalar = ``0.0`  
+Fill value of the appended rows, a Python or NumPy integer or float, cast to `x.dtype`.
 
 
 ## Returns

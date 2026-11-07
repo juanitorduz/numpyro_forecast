@@ -934,7 +934,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L786-L1035" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L813-L1070" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest</span>(</span>
@@ -1028,7 +1028,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Mapping of metric name to function; defaults to <a href="evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="gdls-link gdls-code">DEFAULT_METRICS</a>. Each function takes <code>(pred, truth)</code> and returns a scalar array (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); bind any metric-specific parameters with <code>functools.partial()</code>, e.g. <code>{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}</code>.</p>
+<p>Mapping of metric name to function; defaults to <a href="evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="gdls-link gdls-code">DEFAULT_METRICS</a>. Each function takes <code>(pred, truth)</code> and returns a scalar array (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); bind any metric-specific parameters with <code>functools.partial()</code>, e.g. <code>{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}</code>. Each window is scored through <a href="evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast()</a>, so the integer draws of a count model need no cast and every metric receives floating arrays. <code>transform</code> receives the draws as <code>forecast_fn</code> returned them; <code>keep_predictions</code> stores them after <code>transform</code>.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">per_window_metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Callable[[int, int, int], Mapping[str, Metric]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -1102,7 +1102,7 @@ One result per backtest window.
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if their durations differ, if <code>eval_train=True</code> but <code>in_sample_fn</code> is <code>None</code>, or if <code>num_samples</code> is too small (see <code>num_samples</code>).</p>
+<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if their durations differ, if <code>eval_train=True</code> but <code>in_sample_fn</code> is <code>None</code>, or if <code>num_samples</code> is too small (see <code>num_samples</code>). Also if a metric returns a value that is not 0-d or does not have a bool, integer or floating dtype (see <a href="evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast()</a>): the error names the metric and comes when the first window is scored, after its fit, because a metric may run on the host here and so is not traced before the fit.</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">BacktestWindowError</span></code></dt>
 <dd>
