@@ -13,6 +13,34 @@ import numpy as np
 Array = jax.Array
 """A JAX array (alias of `jax.Array`)."""
 
+IntScalar = int | np.integer
+"""A concrete integer scalar: a Python ``int`` or a NumPy integer scalar (``np.int64``, ...).
+
+``np.int64`` is not a subclass of ``int``, so a count read from NumPy or a
+DataFrame (``df["day"].max()``, ``np.sum(mask)``) fails a plain ``int`` hint.
+A package function with a parameter annotated
+`~~numpyro_forecast.typing.IntScalar` accepts it and converts it with
+``operator.index`` at the function boundary, so the function body works with a
+Python ``int`` (arbitrary precision, no NumPy overflow). A ``float`` such as
+``10.0`` and a JAX array (also a tracer) are rejected. Two members of the
+union are wider than a count: a Python ``bool`` is an ``int`` and is accepted
+as ``0`` or ``1``, and ``np.timedelta64`` is an ``np.integer`` (so it passes
+the hint) but has no ``__index__``, so ``operator.index`` raises ``TypeError``
+for it; convert a time difference to a count yourself (``delta // np.timedelta64(1, "D")``).
+"""
+
+RealScalar = IntScalar | float | np.floating
+"""A concrete real scalar: a Python ``float`` or ``int``, or a NumPy integer or floating scalar.
+
+A package function with a parameter annotated
+`~~numpyro_forecast.typing.RealScalar` accepts an integer value as it is and
+converts a NumPy float to a Python ``float`` where it needs one. The alias
+spells ``int``, so an integer passes it under any runtime configuration; it
+matters for NumPy scalars such as ``np.int64(7)`` or ``np.float32(7.0)``, which
+a plain ``float`` hint rejects. A JAX array (also a tracer) is rejected; a
+Python ``bool`` passes as ``0`` or ``1``.
+"""
+
 BlackjaxBuildFn = Callable[..., object]
 """A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.
 
