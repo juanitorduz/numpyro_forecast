@@ -28,7 +28,7 @@ Number of time steps, a non-negative Python or NumPy integer (not a `float`).
 Seasonal period (in time steps): a positive, finite Python or NumPy integer or float, for example `7` for daily data with a weekly season. A NumPy float is used at its exact binary value, so `np.float32(0.1)` is the period `0.10000000149011612`, not `0.1`, and the two spellings are two memo entries.
 
 `num_terms: IntScalar`  
-Number of harmonics, a positive Python or NumPy integer; the output has `2 * num_terms` columns (sine then cosine).
+Number of harmonics, a non-negative Python or NumPy integer; the output has `2 * num_terms` columns (sine then cosine), none for `0`.
 
 
 ## Returns
@@ -42,4 +42,4 @@ The design matrix of shape `(duration, 2 * num_terms)`.
 
 
 `ValueError`  
-If `duration` is negative, `period` is not positive and finite (`0`, `inf` or `nan` would cache an all-`inf` or all-`nan` matrix without an error), or `num_terms` is less than `1`.
+If `duration` or `num_terms` is negative, or `period` is not positive and finite (`0` or `nan` would cache an all-`nan` matrix without an error, and `inf` a constant one).

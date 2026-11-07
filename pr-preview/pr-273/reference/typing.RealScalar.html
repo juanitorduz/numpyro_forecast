@@ -893,7 +893,7 @@ ul.task-list li input[type="checkbox"] {
 <p><code><span class="doc-parameter-name">typing.RealScalar</span><span class="doc-parameter-default-sep op">=</span><span class="doc-parameter-default">IntScalar | float | np.floating</span></code></p>
 </div>
 <div class="doc-text">
-<p>A package function with a parameter annotated <a href="typing.RealScalar.html#numpyro_forecast.typing.RealScalar" class="gdls-link gdls-code">RealScalar</a> converts the value with <code>float</code> at the function boundary. A Python <code>int</code> also satisfies a plain <code>float</code> hint (the PEP 484 numeric tower, which the runtime checks apply), so this alias matters for NumPy scalars such as <code>np.int64(7)</code> or <code>np.float32(7.0)</code>. A JAX array (also a tracer) is rejected.</p>
+<p>A package function with a parameter annotated <a href="typing.RealScalar.html#numpyro_forecast.typing.RealScalar" class="gdls-link gdls-code">RealScalar</a> accepts an integer value as it is and converts a NumPy float to a Python <code>float</code> where it needs one. The alias spells <code>int</code>, so an integer passes it under any runtime configuration; it matters for NumPy scalars such as <code>np.int64(7)</code> or <code>np.float32(7.0)</code>, which a plain <code>float</code> hint rejects. A JAX array (also a tracer) is rejected; a Python <code>bool</code> passes as <code>0</code> or <code>1</code>.</p>
 </div>
 
 

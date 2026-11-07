@@ -960,7 +960,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">num_terms</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">IntScalar</span></code></dt>
 <dd>
-Number of harmonics, a positive Python or NumPy integer; the output has <code>2 * num_terms</code> columns (sine then cosine).
+Number of harmonics, a non-negative Python or NumPy integer; the output has <code>2 * num_terms</code> columns (sine then cosine), none for <code>0</code>.
 </dd>
 </dl>
 </div>
@@ -982,7 +982,7 @@ The design matrix of shape <code>(duration, 2 * num_terms)</code>.
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>duration</code> is negative, <code>period</code> is not positive and finite (<code>0</code>, <code>inf</code> or <code>nan</code> would cache an all-<code>inf</code> or all-<code>nan</code> matrix without an error), or <code>num_terms</code> is less than <code>1</code>.
+If <code>duration</code> or <code>num_terms</code> is negative, or <code>period</code> is not positive and finite (<code>0</code> or <code>nan</code> would cache an all-<code>nan</code> matrix without an error, and <code>inf</code> a constant one).
 </dd>
 </dl>
 </div>

@@ -194,18 +194,18 @@ These two formulations are mathematically identical at training time. `numpyro.h
 
 ## GP prior parameters
 
-As in the baseline example, we set the Gaussian Process amplitude and length-scale priors with `preliz` by assuming both come from an Inverse-Gamma distribution and specifying the support.
+As in the baseline example, we set the Gaussian Process amplitude and length-scale priors with `preliz` by assuming both come from an Inverse-Gamma distribution and specifying the support. We also pass `mass=0.94` explicitly, so the priors do not depend on the default of the installed preliz version.
 
 
 ``` python
 # For the amplitude, we set the values inspired on the range of the demand / temperature
 # ratio.
-_ = pz.maxent(pz.InverseGamma(), lower=0.1, upper=0.5)
+amplitude_params, ax = pz.maxent(pz.InverseGamma(), lower=0.1, upper=0.5, mass=0.94)
 ```
 
 
 <figure class="figure">
-<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-7-output-1.png" class="figure-img" width="1410" height="582" /></p>
+<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-7-output-1.png" class="figure-img" width="1441" height="582" /></p>
 </figure>
 
 
@@ -213,21 +213,28 @@ _ = pz.maxent(pz.InverseGamma(), lower=0.1, upper=0.5)
 # As we want to use the GP to model the temperature effect, we need to set the length
 # scale parameter. We expect these effects to be seen at the order of units or tens of
 # units, so we expect the length scale to be between 3 and 10.
-_ = pz.maxent(pz.InverseGamma(), lower=3, upper=10)
+length_scale_params, ax = pz.maxent(pz.InverseGamma(), lower=3, upper=10, mass=0.94)
 ```
 
 
 <figure class="figure">
-<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-8-output-1.png" class="figure-img" width="1410" height="582" /></p>
+<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-8-output-1.png" class="figure-img" width="1404" height="582" /></p>
 </figure>
 
 
-These two `maxent` calls return the Inverse-Gamma parameters we plug into the model below. The model is identical to the baseline, with the masked calibration likelihood added just after the `beta_temperature` deterministic site. The HSGP settings and the three calibration numbers (threshold, target mean, target scale) are module constants, so the plots below can read them back.
+These two `maxent` calls return the fitted Inverse-Gamma distributions, and the model below builds its amplitude and length-scale priors from their `alpha` and `beta` parameters, so the priors in the model are the priors in the plots above. The model is identical to the baseline, with the masked calibration likelihood added just after the `beta_temperature` deterministic site. The HSGP settings and the three calibration numbers (threshold, target mean, target scale) are module constants, so the plots below can read them back.
 
 
 ``` python
 ELL = 55.0  # HSGP boundary factor
 M = 25  # number of HSGP basis functions
+# GP priors from the maxent fits above (preliz alpha, beta are NumPyro concentration, rate).
+AMPLITUDE_PRIOR = dist.InverseGamma(
+    concentration=amplitude_params.alpha, rate=amplitude_params.beta
+)
+LENGTH_SCALE_PRIOR = dist.InverseGamma(
+    concentration=length_scale_params.alpha, rate=length_scale_params.beta
+)
 TEMP_THRESHOLD = 32.0  # temperature (°C) above which the calibration likelihood applies
 PRIOR_MEAN = 0.13  # domain-knowledge mean of the temperature effect above the threshold
 PRIOR_SCALE = 0.01  # scale (uncertainty) of the calibration likelihood
@@ -249,8 +256,8 @@ def calibrated_electricity_model(covariates: Array, data: Array | None = None) -
     intercept = numpyro.sample("intercept", dist.Normal(loc=0.0, scale=2.0))
 
     # GP parameters (amplitude and length-scale priors are the preliz maxent fits).
-    alpha = numpyro.sample("alpha", dist.InverseGamma(concentration=6.66, rate=1.57))
-    length_scale = numpyro.sample("length_scale", dist.InverseGamma(concentration=11.0, rate=62.2))
+    alpha = numpyro.sample("alpha", AMPLITUDE_PRIOR)
+    length_scale = numpyro.sample("length_scale", LENGTH_SCALE_PRIOR)
     scale_factor = numpyro.sample("scale", dist.HalfNormal(scale=0.5))
     # Degrees of freedom for the Student-t likelihood.
     nu = numpyro.sample("nu", dist.Gamma(concentration=8.0, rate=3.0))
@@ -436,9 +443,9 @@ metrics_table
 
 |          | train    | test     |
 |----------|----------|----------|
-| mae      | 0.389393 | 0.263976 |
-| rmse     | 0.520497 | 0.334185 |
-| crps     | 0.280632 | 0.192164 |
+| mae      | 0.389398 | 0.263977 |
+| rmse     | 0.520501 | 0.334188 |
+| crps     | 0.280635 | 0.192166 |
 | coverage | 0.917659 | 0.994048 |
 
 

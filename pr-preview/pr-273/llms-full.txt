@@ -247,7 +247,9 @@ such: per-step error scales, if that is what you meant.
 each opens its own ``time_future`` plate. Scoping a helper that contains the
 call is fine (``handlers.scope`` prefixes the error site and the plate; use
 ``name="eps"`` inside a scoped helper so the site reads ``z/eps_future``,
-or ``z_eps_future`` with ``divider="_"``);
+or ``z_eps_future`` with ``divider="_"``, which
+`~~numpyro_forecast.convert.to_datatree()` needs because `xarray.DataTree`
+rejects ``"/"`` in a variable name);
 register ``"obs"`` and ``"forecast"`` outside any scope and build the
 forecast from the channels' ``y_future``.
 
@@ -1013,8 +1015,12 @@ plate. Each targeted site ``name`` becomes a ``deterministic`` site of the
 same shape, computed from a new sample site ``f"{name}_haar"`` or
 ``f"{name}_dct"`` whose event shape owns the time axis and every plate axis
 to its right (plate axes to the left of time stay batch axes). The
-transform is orthonormal, so the model's log density is unchanged; only the
-geometry inference sees changes.
+transform is orthonormal and acts on the unconstrained value of each site,
+so the posterior and the unconstrained potential energy that NUTS and
+``AutoNormal`` target are the same function of the rotated coordinates;
+only the geometry inference sees changes. For a site with a constrained support
+(positive or bounded), the `numpyro.infer.util.log_density` values and the
+``AutoDelta`` MAP estimates are not those of the plain model: see the Notes.
 
 Parameters
 ----------
@@ -1072,6 +1078,12 @@ Notes
   ``a/drift_haar``; ``time_reparam(scope(model, "a"))`` yields
   ``a/a/drift_haar`` because the auxiliary sample passes through ``scope``
   a second time (generic NumPyro reparam-under-scope behavior).
+  To export with `~~numpyro_forecast.convert.to_datatree()`, which
+  rejects ``"/"`` in a posterior key, scope a latent component with
+  ``divider="_"`` and call ``predict`` outside every scope
+  (``scope(time_reparam(trend), prefix="a", divider="_")`` yields
+  ``a_drift_haar`` and ``a_drift``); see the ``posterior`` parameter of
+  `~~numpyro_forecast.convert.to_datatree()`.
 - It composes with the per-block ``reparam=`` hook: after
   ``innovations(..., reparam=LocScaleReparam(0))`` the site under the plate
   is ``drift_decentered``, so the auxiliary site is
@@ -1083,6 +1095,33 @@ Notes
   unaffected), the scan sites of
   `~~numpyro_forecast.models.markov_series()`, the error sites of
   `~~numpyro_forecast.models.ssoe()`, observed sites and discrete sites.
+- Constrained supports. The rotation ``T`` acts on the unconstrained value
+  ``u = biject_to(support).inv(x)`` of a targeted site ``x``, so the
+  auxiliary site holds ``T(u)``. The potential energy in the unconstrained
+  space is the same function of the rotated coordinates for every support:
+  NUTS and the guides that work in that space (``AutoNormal``, for example)
+  target the same density, only in the rotated basis. A mean-field guide
+  such as ``AutoNormal`` is not rotation invariant, so its fit and its ELBO
+  can change; that is the point of the feature. For a site with real
+  support, ``u`` is ``x`` and the value of `numpyro.infer.util.log_density`
+  is unchanged too. For a site with a constrained support, the value of
+  `numpyro.infer.util.log_density` of the wrapped model at the auxiliary
+  value ``T(u)`` is the value of the plain model at ``x`` plus the log
+  absolute Jacobian determinant of ``biject_to(support)`` at ``u``:
+  ``sum(log(x))`` for a ``LogNormal`` site and
+  ``sum(log(x) + log(1 - x))`` for a ``Beta`` site. Values of
+  `numpyro.infer.util.log_density` and ``AutoDelta`` MAP estimates are
+  therefore not comparable with those of the plain model (NumPyro's
+  ``AutoDelta`` does MAP in constrained space, so the plain model's
+  estimate is the mode in ``x``; the wrapped model's auxiliary site is
+  real-valued, so its estimate is the mode in ``u``, which is what
+  ``AutoLaplaceApproximation`` gives for the plain model). To keep them
+  comparable, sample the innovation on the real line, for example
+  ``innovations(h, "log_growth", dist.Normal(0.0, 0.5))``, and apply
+  ``jnp.exp`` to it (to its cumulative sum for a multiplicative random
+  walk); the MAP is then the mode in the log for both models. Pyro's
+  ``time_reparam`` and NumPyro's ``UnitJacobianReparam`` behave the same
+  way.
 - Time latents under a subsampled plate are not supported. The auxiliary
   site is sampled outside every enclosing plate, so a subsampled plate
   would apply no ``size / subsample_size`` scale to it and an ``AutoGuide``
@@ -1746,7 +1785,12 @@ metrics
     ``jax.eval_shape`` on the shapes of the windows (no computation), so a
     metric that breaks the `~~numpyro_forecast.typing.Metric` contract
     fails before any window is fitted; that trace calls each metric once
-    more, on tracers. A bool or integer metric result is cast to float, so
+    more, on tracers. It is a ``jit``-style trace, so a metric must be
+    ``jit``-compatible as `~~numpyro_forecast.typing.Metric` says: a host
+    conversion of a ``jnp`` value, even one computed from shapes or
+    constants (``int(jnp.ceil(p.shape[0] * 0.1))``), raises
+    `VectorizedMetricError`; compute static values with Python or
+    ``math`` instead. A bool or integer metric result is cast to float, so
     every entry of ``VectorizedBacktestResult.metrics`` has a floating
     dtype.
 keep_predictions
@@ -1779,11 +1823,12 @@ RuntimeError
     example no valid initial parameters), that error is raised instead;
     an eager init of window 0 before the fit raises it for window 0.
 VectorizedMetricError
-    If a metric is not a pure JAX function under ``vmap``: it forces a host
-    conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
-    indexing or a NumPy call on a traced value) or builds a value-dependent
-    shape (a boolean mask index such as ``x[x > 0]``). Raised before the
-    fit, from the trace of the scoring (see ``metrics``).
+    If a metric is not a pure JAX function under a ``jit``-style trace: it
+    forces a host conversion (``float(...)``, ``int(...)``, ``range(...)``,
+    Python list indexing or a NumPy call on a traced value, including a
+    ``jnp`` value computed only from shapes or constants) or builds a
+    value-dependent shape (a boolean mask index such as ``x[x > 0]``).
+    Raised before the fit, from the trace of the scoring (see ``metrics``).
 
 BacktestResult(t0: int, t1: int, t2: int, num_samples: int, walltime: float, metrics: dict[str, float], train_metrics: dict[str, float] = <factory>, prediction: jax.Array | numpy.ndarray | None = None) -> None
 
@@ -2266,7 +2311,17 @@ posterior
     key is dropped, as in
     `~~numpyro_forecast.predictive.predict_in_sample()`: it is not in the
     ``posterior`` group, and the in-sample draws come from the latent
-    sites.
+    sites. Every other key becomes a ``posterior`` variable, and
+    `xarray.DataTree` rejects a variable name that contains ``"/"``, so a
+    key that contains ``"/"`` raises ``ValueError`` before any draw.
+    `numpyro.handlers.scope` joins its prefix and the site name with
+    ``"/"`` by default (``trend/drift``): pass ``divider="_"`` to every
+    ``scope`` call of a model you export (``trend_drift``). The divider
+    changes only the names: a fit drawn under ``"/"`` exports without a
+    refit once the model uses ``divider="_"`` and the posterior keys are
+    renamed the same way. Both must change, because the predictive
+    drivers ignore a posterior key that matches no site and draw that
+    site from the prior with no error.
 data
     In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
     the observation dim at axis ``-1`` and any batch axes to the left
@@ -2396,6 +2451,10 @@ ValueError
     no sample axis, if a forecast-horizon key of ``posterior`` (one that
     ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
     has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
+    a ``posterior`` key contains ``"/"`` (a site scoped with the default
+    divider of `numpyro.handlers.scope`; an empty forecast-horizon key
+    counts, because the export keeps it as a variable; see ``posterior``
+    above), if
     ``time_coord`` or a ``coords`` value is not a one-dimensional
     collection of labels (a set, a dict, a scalar, a 2-D array, ragged
     input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
@@ -3470,11 +3529,11 @@ Parameters
 ----------
 y
     Time series with time on the last axis, shape ``(*batch, time)``.
-    NumPy arrays are accepted directly. Integer counts are cast to the
-    default float dtype where the series lives
-    (`~~numpyro_forecast.offload.float_cast_in_place()`): host-committed
-    draws (``device="host"``) stay on the CPU and are not moved to the
-    accelerator; a pinned series (``device="pinned_host"``) is copied
+    NumPy arrays are accepted directly; integer counts are cast to the
+    default float dtype (`~~numpyro_forecast.offload.float_view_resident()`).
+    A CPU-committed series (``device="host"`` draws with the CPU backend
+    initialized, see `~~numpyro_forecast.predictive.draw_posterior()`)
+    stays on the CPU; a pinned series, floating or integer, is copied
     back onto its own device first.
 max_lag
     Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
@@ -3530,11 +3589,11 @@ Parameters
 ----------
 y
     Time series with time on the last axis, shape ``(*batch, time)``.
-    NumPy arrays are accepted directly. Integer counts are cast to the
-    default float dtype where the series lives
-    (`~~numpyro_forecast.offload.float_cast_in_place()`): host-committed
-    draws (``device="host"``) stay on the CPU and are not moved to the
-    accelerator; a pinned series (``device="pinned_host"``) is copied
+    NumPy arrays are accepted directly; integer counts are cast to the
+    default float dtype (`~~numpyro_forecast.offload.float_view_resident()`).
+    A CPU-committed series (``device="host"`` draws with the CPU backend
+    initialized, see `~~numpyro_forecast.predictive.draw_posterior()`)
+    stays on the CPU; a pinned series, floating or integer, is copied
     back onto its own device first.
 max_lag
     Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
@@ -3590,8 +3649,8 @@ period
     is the period ``0.10000000149011612``, not ``0.1``, and the two spellings
     are two memo entries.
 num_terms
-    Number of harmonics, a positive Python or NumPy integer; the output has
-    ``2 * num_terms`` columns (sine then cosine).
+    Number of harmonics, a non-negative Python or NumPy integer; the output
+    has ``2 * num_terms`` columns (sine then cosine), none for ``0``.
 
 Returns
 -------
@@ -3601,9 +3660,9 @@ Float[Array, "duration two_num_terms"]
 Raises
 ------
 ValueError
-    If ``duration`` is negative, ``period`` is not positive and finite
-    (``0``, ``inf`` or ``nan`` would cache an all-``inf`` or all-``nan``
-    matrix without an error), or ``num_terms`` is less than ``1``.
+    If ``duration`` or ``num_terms`` is negative, or ``period`` is not
+    positive and finite (``0`` or ``nan`` would cache an all-``nan``
+    matrix without an error, and ``inf`` a constant one).
 
 periodic_repeat(x: jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex, duration: int | numpy.integer, *, axis: int = -1) -> jax.Array
 
@@ -3690,16 +3749,21 @@ Parameters
 x
     In-sample array with time at axis ``-2``, shape ``(*batch, t_obs, obs)``.
 future
-    Number of forecast rows to append, a Python or NumPy integer (for
-    example ``h.future`` or ``np.sum(mask)``).
+    Number of forecast rows to append, a non-negative Python or NumPy
+    integer (for example ``h.future`` or ``np.sum(mask)``).
 value
     Fill value of the appended rows, a Python or NumPy integer or float,
-    cast to ``x.dtype``.
+    cast to ``x.dtype`` by ``jnp.full`` (an integer fill stays exact).
 
 Returns
 -------
 Array
     ``x`` followed by ``future`` constant rows, shape ``(*batch, t_obs + future, obs)``.
+
+Raises
+------
+ValueError
+    If ``future`` is negative.
 
 
 ## Datasets
