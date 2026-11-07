@@ -14,16 +14,16 @@ evaluate.eval_rmse(
 ```
 
 
-A pure JAX scalar kernel (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)). `pred` and `truth` are moved to device memory first (`device_view()`), so either (or both) may be host-committed, e.g. draws sampled with `device="host"`.
+A pure JAX scalar kernel (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)). `pred` and `truth` are moved to device memory first (`float_view()`), so either (or both) may be host-committed, e.g. draws sampled with `device="host"`. An integer operand (the draws of a count model) is cast to the default float dtype in the same step.
 
 
 ## Parameters
 
 
-`pred: Float[ArrayLike, ``" sample *batch"]`  
+`pred: Real[ArrayLike, ``" sample *batch"]`  
 Forecast samples with the sample axis first.
 
-`truth: Float[ArrayLike, ``" *batch"]`  
+`truth: Real[ArrayLike, ``" *batch"]`  
 Ground-truth values (matching `pred` without the sample axis).
 
 

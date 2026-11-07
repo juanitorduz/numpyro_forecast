@@ -967,7 +967,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/acf.py#L149-L204" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/acf.py#L155-L215" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">acf</span><span class="op">.</span><span class="sig-name">pacf</span>(
@@ -988,9 +988,9 @@ window.Quarto = {
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">y</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch time"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">y</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" *batch time"</span>]</span></code></dt>
 <dd>
-<p>Time series with time on the last axis, shape <code>(*batch, time)</code>. NumPy arrays are accepted directly.</p>
+<p>Time series with time on the last axis, shape <code>(*batch, time)</code>. NumPy arrays are accepted directly; integer counts are cast to the default float dtype (<code>float_view_resident()</code>). A CPU-committed series (<code>device="host"</code> draws with the CPU backend initialized, see <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>) stays on the CPU; a pinned series, floating or integer, is copied back onto its own device first.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">max_lag</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>
