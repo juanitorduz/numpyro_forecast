@@ -192,7 +192,7 @@ window.Quarto = {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../../index.html">
-    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
+    <span class="navbar-title">numpyro_forecast</span>
     </a>
   </div>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
@@ -208,15 +208,11 @@ window.Quarto = {
     <a class="nav-link" href="../../reference/index.html"> 
 <span class="menu-text">Reference</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="../../changelog.html"> 
-<span class="menu-text">Changelog</span></a>
-  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="40" data-forks="3"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
     </span>
   </li>  
 </ul>
@@ -337,6 +333,12 @@ window.Quarto = {
   <div class="sidebar-item-container"> 
   <a href="../../docs/examples/m5_forecasting.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">M5 forecasting: top-down, bottom-up and middle-out</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../docs/examples/m5_hierarchical_state_space.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">M5 forecasting II: a hierarchical count state space model</span></a>
   </div>
 </li>
         <li class="sidebar-item">
@@ -610,7 +612,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="gp-prior-parameters" class="level2">
 <h2 class="anchored" data-anchor-id="gp-prior-parameters">GP prior parameters</h2>
 <p>One key component of specifying Gaussian processes is to set the length scale and amplitude parameters. We use an optimization strategy (<code>preliz</code>) to set these parameters by assuming they both come from an Inverse-Gamma distribution while specifying the support.</p>
-<p>We pass <code>mass=0.94</code> explicitly, so each prior puts <span class="math inline">94\%</span> of its probability between the bounds (the same probability as the <span class="math inline">94\%</span> HDI bands of the prior and posterior predictive plots later in this notebook). The default <code>mass</code> is the preliz setting <code>rcParams["stats.ci_prob"]</code>, which changed between preliz releases, so without it the priors would depend on the installed version.</p>
+<p>We pass <code>mass=0.94</code> explicitly, so each prior puts <span class="math inline">94\%</span> of its probability between the bounds (the same probability as the <span class="math inline">94\%</span> HDI bands of the plots later in this notebook). The default <code>mass</code> is the preliz setting <code>rcParams["stats.ci_prob"]</code>, which changed between preliz releases, so without it the priors would depend on the installed version.</p>
 <div id="f7c17c97" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T12:42:56.140235Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T12:42:56.140123Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T12:42:56.601224Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T12:42:56.599496Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># For the amplitude, we set the values inspired on the range of the demand / temperature</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ratio above.</span></span>

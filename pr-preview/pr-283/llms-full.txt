@@ -1791,8 +1791,9 @@ metrics
     constants (``int(jnp.ceil(p.shape[0] * 0.1))``), raises
     `VectorizedMetricError`; compute static values with Python or
     ``math`` instead. A bool, integer, ``float8`` or ``float4`` metric
-    result is cast to float, so every entry of ``VectorizedBacktestResult.metrics`` has a floating
-    dtype.
+    result is cast to float (a ``float6`` one keeps its dtype: XLA on CPU
+    cannot convert it), so every entry of
+    ``VectorizedBacktestResult.metrics`` has a floating dtype.
 keep_predictions
     If ``True``, retain the stacked forecast samples on the result.
 
@@ -1934,7 +1935,8 @@ Returns
 dict[str, float]
     Each metric name mapped to its value. A bool, integer, ``float8`` or
     ``float4`` metric result is converted to ``float``, whatever the other
-    metrics are.
+    metrics are (a ``float6`` result keeps its dtype: XLA on CPU cannot
+    convert it).
 
 Raises
 ------
