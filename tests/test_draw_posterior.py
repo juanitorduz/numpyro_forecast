@@ -8,11 +8,13 @@ import numpyro.distributions as dist
 import pytest
 from conftest import assert_host_resident, empty_covariates, rw_model, svi_guide_params
 from jax import random
+from jaxtyping import TypeCheckError
 from numpyro.infer import SVI, Trace_ELBO
-from numpyro.infer.autoguide import AutoDelta, AutoNormal
+from numpyro.infer.autoguide import AutoBNAFNormal, AutoDelta, AutoGuide, AutoIAFNormal, AutoNormal
 
+from numpyro_forecast.convert import to_datatree
 from numpyro_forecast.exceptions import DeviceMemoryError
-from numpyro_forecast.predictive import draw_posterior
+from numpyro_forecast.predictive import draw_posterior, forecast
 from numpyro_forecast.typing import Array
 
 
@@ -40,6 +42,65 @@ def test_draw_posterior_autodelta_tiled_sample_axis() -> None:
     post = draw_posterior(random.PRNGKey(1), guide, result.params, 7)
     assert post["sigma"].shape[0] == 7
     assert jnp.allclose(post["sigma"][0], post["sigma"][1])
+
+
+# --- Normalizing-flow guides: params are pytrees, not flat arrays (#282) --------
+
+_FLOW_T = 12
+_FLOW_GUIDES = [
+    pytest.param(AutoIAFNormal, id="AutoIAFNormal"),
+    pytest.param(AutoBNAFNormal, id="AutoBNAFNormal"),
+]
+
+
+def _flow_fit(guide_cls: type[AutoGuide]) -> tuple[AutoGuide, dict, Array]:
+    """Fit a flow guide on ``rw_model`` for a few steps; its params hold lists of arrays."""
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_FLOW_T, 1)), axis=-2)
+    guide = guide_cls(rw_model)
+    svi = SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    result = svi.run(random.PRNGKey(1), 5, empty_covariates(_FLOW_T), data, progress_bar=False)
+    assert any(isinstance(v, list) for v in result.params.values())
+    return guide, result.params, data
+
+
+@pytest.mark.parametrize("guide_cls", _FLOW_GUIDES)
+@pytest.mark.parametrize(
+    ("device", "batch_size"), [(None, None), ("host", None), (None, 4), ("host", 4)]
+)
+def test_draw_posterior_flow_guide_params(
+    guide_cls: type[AutoGuide], device: str | None, batch_size: int | None
+) -> None:
+    guide, params, _ = _flow_fit(guide_cls)
+    post = draw_posterior(
+        random.PRNGKey(2), guide, params, 10, batch_size=batch_size, device=device
+    )
+    assert {"drift", "drift_scale", "sigma"} <= set(post)
+    assert post["drift"].shape == (10, _FLOW_T, 1)
+    assert post["sigma"].shape == (10,)
+    assert all(bool(np.all(np.isfinite(np.asarray(leaf)))) for leaf in post.values())
+    if device == "host":
+        assert_host_resident(post)
+
+
+@pytest.mark.parametrize("guide_cls", _FLOW_GUIDES)
+def test_flow_guide_draws_feed_forecast_and_datatree(guide_cls: type[AutoGuide]) -> None:
+    guide, params, data = _flow_fit(guide_cls)
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4, device="host")
+    covariates = empty_covariates(_FLOW_T + 3)
+    fc = forecast(random.PRNGKey(3), rw_model, post, data, covariates)
+    assert fc.shape == (10, 3, 1)
+    tree = to_datatree(random.PRNGKey(4), rw_model, post, data, covariates)
+    assert tree["posterior"].sizes["draw"] == 10
+    assert "drift" in tree["posterior"].dataset
+
+
+@pytest.mark.parametrize("bad", ["not an array", ["not an array"]], ids=["str", "list-of-str"])
+def test_draw_posterior_rejects_non_array_param_leaf(bad: object) -> None:
+    # The pytree hint still type-checks the leaves: a string is not a parameter.
+    # beartype checks one randomly chosen item of a dict, so the dict holds one key.
+    guide, _ = svi_guide_params(t=30, num_steps=5)
+    with pytest.raises(TypeCheckError):
+        draw_posterior(random.PRNGKey(2), guide, {"bad": bad}, 4)
 
 
 # --- Chunked drawing with host offload (GPU OOM in draw_posterior) --------------
