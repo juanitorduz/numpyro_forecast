@@ -18,11 +18,11 @@ from typing import Any, cast, get_args
 import arviz_base
 import jax
 import numpy as np
+import numpyro
 import xarray
 from jax import random
 from jax.typing import ArrayLike
 from jaxtyping import Float, Num
-from numpyro import handlers
 
 from numpyro_forecast.exceptions import CovariateDimsError
 from numpyro_forecast.offload import resolve_device
@@ -237,7 +237,9 @@ def _require_posterior_names_match_sites(
     sites: dict[str, tuple[str, bool]] = {}
 
     def record_sites(key: Array, model_covariates: Array) -> None:
-        trace = handlers.trace(handlers.seed(model, key)).get_trace(model_covariates)
+        trace = numpyro.handlers.trace(numpyro.handlers.seed(model, key)).get_trace(
+            model_covariates
+        )
         sites.update(
             (name, (site["type"], bool(site.get("is_observed")))) for name, site in trace.items()
         )
