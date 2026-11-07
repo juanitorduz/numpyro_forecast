@@ -707,7 +707,12 @@ def test_to_datatree_rejects_horizon_sites_before_drawing(monkeypatch: pytest.Mo
 def test_require_no_slash_in_site_names_lists_every_offending_key(
     posterior: dict[str, Array], offending: list[str]
 ) -> None:
-    """Issue #238: the message names every key with ``/``, sorted, and the scope divider fix."""
+    """Issue #238: the message names every key with ``/``, sorted, and the scope divider fix.
+
+    The advice is one change to the model and the posterior together: the
+    message must not offer a posterior-only rename, because the drivers ignore
+    a key that matches no site and draw that site from the prior.
+    """
     with pytest.raises(
         ValueError, match=re.escape(f"posterior sites {offending} have names that contain '/'")
     ) as excinfo:
@@ -716,6 +721,8 @@ def test_require_no_slash_in_site_names_lists_every_offending_key(
     example = offending[0]
     assert f"names the site {example.replace('/', '_')!r} instead of {example!r}" in message
     assert "divider='_'" in message
+    assert "prior" in message
+    assert "posterior.items()" not in message
 
 
 def test_require_no_slash_in_site_names_accepts_names_without_slash() -> None:
@@ -725,13 +732,16 @@ def test_require_no_slash_in_site_names_accepts_names_without_slash() -> None:
     )
 
 
-def test_to_datatree_rejects_slash_in_site_names_before_any_array_work(
+def test_to_datatree_rejects_slash_in_site_names_before_the_host_transfer_and_the_draws(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Issue #238: a ``/`` key raises before the host transfer, the draws and every group.
+    """Issue #238: a ``/`` key raises before ``_reshape_chains``, both drivers and every group.
 
-    xarray rejects the name only when `to_datatree()` assembles the groups at
-    the end, after both predictive drivers have run.
+    The patched names are ``_reshape_chains`` (the host transfer),
+    ``predict_in_sample`` and ``forecast`` (the draws) and
+    ``arviz_base.dict_to_dataset`` (the groups). xarray rejects the name only
+    when `to_datatree()` assembles the groups at the end, after both predictive
+    drivers have run. The coordinate helpers still run first.
     """
     import numpyro_forecast.convert as convert_mod
 
@@ -772,25 +782,25 @@ def test_to_datatree_scoped_latent_exports_with_the_advice_of_the_error() -> Non
     """Issue #238: the default divider raises by name; the advice exports the same fit.
 
     The message says to scope with ``divider="_"`` and rename the posterior
-    keys instead of fitting again. The renamed export must give the in-sample
-    draws of the original model and posterior, which the drivers accept with
-    ``/`` names.
+    keys together instead of fitting again. The divider changes only the
+    names: the ``_`` model with the renamed posterior must give the in-sample
+    draws of the ``/`` model with the original posterior, which the drivers
+    accept with ``/`` names, and the export must hold the renamed variable.
     """
     key = random.PRNGKey(0)
     posterior = {"trend/drift": random.normal(random.PRNGKey(1), (4, 6, 1))}
     data, covariates = jnp.zeros((6, 1)), empty_covariates(6)
-    with pytest.raises(
-        ValueError, match=r"pass divider='_' to scope, which names the site 'trend_drift'"
-    ):
+    with pytest.raises(ValueError, match=r"divider='_'.*names the site 'trend_drift'"):
         to_datatree(key, _scoped_trend_model("/"), posterior, data, covariates)
 
     renamed = {name.replace("/", "_"): value for name, value in posterior.items()}
+    np.testing.assert_array_equal(
+        predict_in_sample(key, _scoped_trend_model("_"), renamed, covariates),
+        predict_in_sample(key, _scoped_trend_model("/"), posterior, covariates),
+    )
     tree = to_datatree(key, _scoped_trend_model("_"), renamed, data, covariates)
     assert set(tree["posterior"].data_vars) == {"trend_drift"}
-    expected = predict_in_sample(key, _scoped_trend_model("/"), posterior, covariates)
-    np.testing.assert_array_equal(
-        np.asarray(tree["posterior_predictive"]["obs"]).reshape(np.shape(expected)), expected
-    )
+    assert tree["posterior_predictive"]["obs"].shape == (1, 4, 6, 1)
 
 
 def _drift_component(covariates: Array, data: Array | None = None) -> None:

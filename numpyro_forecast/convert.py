@@ -142,7 +142,18 @@ def _require_no_slash_in_site_names(posterior: Mapping[str, ArrayLike]) -> None:
     of the posterior and the in-sample and forecast draws, and its message does
     not name the cause. This check reads the keys only (no array is touched),
     so `to_datatree()` runs it before any of that work. It applies xarray's
-    rule exactly: a ``str`` name that contains ``"/"``.
+    rule: a name that contains ``"/"`` (the ``Mapping[str, ...]`` hint keeps
+    the keys ``str``). It runs after ``drop_obs_site`` and
+    ``require_no_horizon_sites``, so it also rejects an empty forecast-horizon
+    key with ``"/"`` (``trend/drift_future``): `to_datatree()` keeps such a
+    key as a ``posterior`` variable, unlike
+    `~~numpyro_forecast.predictive.forecast()` and
+    `~~numpyro_forecast.predictive.predict_in_sample()`, which drop it.
+
+    The message does not suggest a key-only rename. The drivers substitute
+    posterior sites by name and ignore a key that matches no site, so a
+    posterior renamed to ``trend_drift`` under a model that still registers
+    ``trend/drift`` draws that site from the prior without an error.
 
     Parameters
     ----------
@@ -154,20 +165,22 @@ def _require_no_slash_in_site_names(posterior: Mapping[str, ArrayLike]) -> None:
     ------
     ValueError
         If a key contains ``"/"``; the message lists every such key and says
-        how to rename the sites.
+        to rename the sites in the model and in the posterior together.
     """
-    offending = sorted(name for name in posterior if isinstance(name, str) and "/" in name)
+    offending = sorted(name for name in posterior if "/" in name)
     if offending:
         example = offending[0]
         msg = (
             f"posterior sites {offending} have names that contain '/', which xarray.DataTree "
             "uses as its path separator, so to_datatree() cannot store them as variables. "
             "numpyro.handlers.scope joins its prefix and the site name with '/' by default: "
-            f"pass divider='_' to scope, which names the site {example.replace('/', '_')!r} "
-            f"instead of {example!r}. The divider changes only the site names, so you do not "
-            "have to fit the model again: pass the model with divider='_' and the posterior "
-            "with renamed keys, for example "
-            "{name.replace('/', '_'): value for name, value in posterior.items()}."
+            f"pass divider='_' to every scope call, which names the site "
+            f"{example.replace('/', '_')!r} instead of {example!r}. The divider changes only "
+            "the site names, so you do not have to fit the model again, but the model and the "
+            "posterior must change together: pass the model scoped with divider='_' and the "
+            "posterior with its keys renamed the same way. A posterior key that matches no "
+            "site of the model is ignored by the drivers, and that site is then drawn from the "
+            "prior with no error."
         )
         raise ValueError(msg)
 
@@ -684,7 +697,12 @@ def to_datatree(
         key that contains ``"/"`` raises ``ValueError`` before any draw.
         `numpyro.handlers.scope` joins its prefix and the site name with
         ``"/"`` by default (``trend/drift``): scope the latent building
-        blocks with ``divider="_"`` (``trend_drift``) to export the fit.
+        blocks with ``divider="_"`` on every ``scope`` call (``trend_drift``)
+        to export the fit. The divider changes only the names, so a posterior
+        drawn under ``"/"`` exports without a refit once its keys are renamed
+        the same way, but model and posterior must change together: the
+        drivers ignore a key that matches no site of the model and draw that
+        site from the prior with no error.
     data
         In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
         the observation dim at axis ``-1`` and any batch axes to the left
@@ -815,7 +833,10 @@ def to_datatree(
         ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
         has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
         a ``posterior`` key contains ``"/"`` (a site scoped with the default
-        divider of `numpyro.handlers.scope`; pass ``divider="_"``), if
+        divider of `numpyro.handlers.scope`; pass ``divider="_"`` to every
+        ``scope`` call and rename the posterior keys the same way; an empty
+        forecast-horizon key counts, because the export keeps it as a
+        variable), if
         ``time_coord`` or a ``coords`` value is not a one-dimensional
         collection of labels (a set, a dict, a scalar, a 2-D array, ragged
         input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
@@ -915,7 +936,8 @@ def to_datatree(
     require_no_horizon_sites(posterior)
     posterior = drop_obs_site(posterior)
     # Before the host transfer and the predictive draws: xarray would raise only
-    # when the groups are assembled at the end (issue #238).
+    # when the groups are assembled at the end (issue #238). After drop_obs_site
+    # on purpose: an empty "_future" key with "/" still becomes a variable here.
     _require_no_slash_in_site_names(posterior)
     posterior_reshaped = {
         name: _reshape_chains(cast("Array | np.ndarray", value), num_chains)

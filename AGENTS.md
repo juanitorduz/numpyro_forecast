@@ -40,9 +40,14 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
   does not pin the in-sample draws to the observed data or land in the
   posterior group; a posterior that holds only `obs` raises `ValueError`.
   `to_datatree` also raises `ValueError` before any draw for a posterior key
-  that contains `/` (issue #238): `xarray.DataTree` rejects `/` in a variable
-  name, and `numpyro.handlers.scope` joins prefix and site with `/` by
-  default, so scope latent building blocks with `divider="_"` to export.
+  that contains `/` (issue #238), including an empty `_future` key, which the
+  export keeps: `xarray.DataTree` rejects `/` in a variable name, and
+  `numpyro.handlers.scope` joins prefix and site with `/` by default, so
+  scope latent building blocks with `divider="_"` on every `scope` call to
+  export. The divider changes only the names, so a fit drawn under `/`
+  exports once the model uses `divider="_"` and the posterior keys are
+  renamed the same way, together: the drivers ignore a posterior key that
+  matches no site and draw that site from the prior with no error.
 - **Functional style:** pure model functions, explicit `PRNGKey` threading,
   vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step
   drift), no global parameter store.
