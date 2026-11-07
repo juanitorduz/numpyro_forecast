@@ -202,7 +202,7 @@ window.Quarto = {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="./index.html">
-    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
+    <span class="navbar-title">numpyro_forecast</span>
     </a>
   </div>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
@@ -218,15 +218,11 @@ window.Quarto = {
     <a class="nav-link" href="./reference/index.html"> 
 <span class="menu-text">Reference</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="./changelog.html"> 
-<span class="menu-text">Changelog</span></a>
-  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="39" data-forks="3"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
     </span>
   </li>  
 </ul>
@@ -424,7 +420,7 @@ NumPyro Forecast
 <span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>(<span class="dv">500</span>, <span class="dv">26</span>, <span class="dv">1</span>)</span></code></pre></div>
 <section id="time-axis-reparameterization" class="level3">
 <h3 class="anchored" data-anchor-id="time-axis-reparameterization">Time-axis reparameterization</h3>
-<p><code>time_reparam(model, "haar" | "dct")</code> is the port of the <a href="reference/reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam</a> option of Pyro’s <code>Forecaster</code>. It wraps the model with <code>handlers.reparam</code> so every in-sample <a href="reference/models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations</a> site is sampled in a Haar wavelet or discrete cosine basis. The rotation acts on the unconstrained value of each site and has unit Jacobian there, so the posterior and the unconstrained log density that NUTS and <code>AutoNormal</code> work with are unchanged; only the geometry the guide or sampler sees changes, from strongly correlated increments to nearly independent coefficients, and for a positive or bounded site the <code>log_density</code> values and <code>AutoDelta</code> estimates are not comparable with the plain model’s (see the <a href="reference/reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam</a> Notes). Create the wrapped model once and hand that same object to the guide, to <code>SVI</code> or <code>MCMC</code> and to the drivers. On the random-walk level of the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/forecasting_univariate.html">univariate example</a>, a mean-field <code>AutoNormal</code> reaches a lower ELBO loss in the DCT coordinates:</p>
+<p><code>time_reparam(model, "haar" | "dct")</code> is the port of the <a href="reference/reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam</a> option of Pyro’s <code>Forecaster</code>. It wraps the model with <code>handlers.reparam</code> so every in-sample <a href="reference/models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations</a> site is sampled in a Haar wavelet or discrete cosine basis. The rotation acts on the unconstrained value of each site and has unit Jacobian there, so the posterior and the unconstrained potential energy that NUTS and <code>AutoNormal</code> target are the same function of the rotated coordinates; only the geometry the guide or sampler sees changes, from strongly correlated increments to nearly independent coefficients, and for a positive or bounded site the <code>log_density</code> values and <code>AutoDelta</code> estimates are not comparable with the plain model’s (see the <a href="reference/reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam</a> Notes). Create the wrapped model once and hand that same object to the guide, to <code>SVI</code> or <code>MCMC</code> and to the drivers. On the random-walk level of the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/forecasting_univariate.html">univariate example</a>, a mean-field <code>AutoNormal</code> reaches a lower ELBO loss in the DCT coordinates:</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="https://raw.githubusercontent.com/juanitorduz/numpyro_forecast/main/docs/images/svi_elbo_time_reparam.png" class="img-fluid figure-img"></p>

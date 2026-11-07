@@ -1014,8 +1014,9 @@ same shape, computed from a new sample site ``f"{name}_haar"`` or
 ``f"{name}_dct"`` whose event shape owns the time axis and every plate axis
 to its right (plate axes to the left of time stay batch axes). The
 transform is orthonormal and acts on the unconstrained value of each site,
-so the posterior and the unconstrained potential energy are unchanged; only
-the geometry inference sees changes. For a site with a constrained support
+so the posterior and the unconstrained potential energy that NUTS and
+``AutoNormal`` target are the same function of the rotated coordinates;
+only the geometry inference sees changes. For a site with a constrained support
 (positive or bounded), the `numpyro.infer.util.log_density` values and the
 ``AutoDelta`` MAP estimates are not those of the plain model: see the Notes.
 
@@ -1110,8 +1111,9 @@ Notes
   comparable, sample the innovation on the real line, for example
   ``innovations(h, "log_growth", dist.Normal(0.0, 0.5))``, and apply
   ``jnp.exp`` to it (to its cumulative sum for a multiplicative random
-  walk). Pyro's ``time_reparam`` and NumPyro's ``UnitJacobianReparam``
-  behave the same way.
+  walk); the MAP is then the mode in the log for both models. Pyro's
+  ``time_reparam`` and NumPyro's ``UnitJacobianReparam`` behave the same
+  way.
 - Time latents under a subsampled plate are not supported. The auxiliary
   site is sampled outside every enclosing plate, so a subsampled plate
   would apply no ``size / subsample_size`` scale to it and an ``AutoGuide``
