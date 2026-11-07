@@ -923,7 +923,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L227-L289" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L234-L300" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">metrics</span><span class="op">.</span><span class="sig-name">make_mase</span>(
@@ -933,15 +933,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on <code>train_data</code>, <code>mean(|y_t - y_{t-seasonality}|)</code>. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>). <code>train_data</code> and the returned metric’s <code>pred</code>/<code>truth</code> are all moved to device memory first (<code>device_view()</code>), so any of them may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
+<p>MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on <code>train_data</code>, <code>mean(|y_t - y_{t-seasonality}|)</code>. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>). <code>train_data</code> and the returned metric’s <code>pred</code>/<code>truth</code> are all moved to device memory first (<code>float_view()</code>), so any of them may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>. Integer counts are cast to the default float dtype in the same step, so the seasonal-naive differences of <code>train_data</code> are computed in floating point: in the integer dtype a <code>uint8</code> difference wraps and the <a href="typing.Array.html#numpyro_forecast.typing.Array.__abs__" class="gdls-link gdls-code">abs</a> of the <code>int16</code> minimum stays negative.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">train_data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch time obs_dim"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">train_data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" *batch time obs_dim"</span>]</span></code></dt>
 <dd>
-<p>Training data with time at axis <code>-2</code>; leading batch axes are allowed and the seasonal-naive scale is averaged over all axes.</p>
+<p>Training data with time at axis <code>-2</code>; leading batch axes are allowed and the seasonal-naive scale is averaged over all axes. Integer counts are accepted.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">seasonality</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
 <dd>

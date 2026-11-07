@@ -932,17 +932,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>). <code>pred</code> and <code>truth</code> are moved to device memory first (<code>device_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
+<p>A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>). <code>pred</code> and <code>truth</code> are moved to device memory first (<code>float_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>. An integer operand (the draws of a count model) is cast to the default float dtype in the same step.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" sample *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" sample *batch"</span>]</span></code></dt>
 <dd>
 <p>Forecast samples with the sample axis first.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" *batch"</span>]</span></code></dt>
 <dd>
 Ground-truth values (matching <code>pred</code> without the sample axis).
 </dd>
