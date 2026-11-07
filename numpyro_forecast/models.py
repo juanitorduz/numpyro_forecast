@@ -731,7 +731,9 @@ def ssoe[Carry](
     each opens its own ``time_future`` plate. Scoping a helper that contains the
     call is fine (``handlers.scope`` prefixes the error site and the plate; use
     ``name="eps"`` inside a scoped helper so the site reads ``z/eps_future``,
-    or ``z_eps_future`` with ``divider="_"``);
+    or ``z_eps_future`` with ``divider="_"``, which
+    `~~numpyro_forecast.convert.to_datatree()` needs because `xarray.DataTree`
+    rejects ``"/"`` in a variable name);
     register ``"obs"`` and ``"forecast"`` outside any scope and build the
     forecast from the channels' ``y_future``.
 

@@ -303,6 +303,12 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
       ``a/drift_haar``; ``time_reparam(scope(model, "a"))`` yields
       ``a/a/drift_haar`` because the auxiliary sample passes through ``scope``
       a second time (generic NumPyro reparam-under-scope behavior).
+      To export with `~~numpyro_forecast.convert.to_datatree()`, which
+      rejects ``"/"`` in a posterior key, scope a latent component with
+      ``divider="_"`` and call ``predict`` outside every scope
+      (``scope(time_reparam(trend), prefix="a", divider="_")`` yields
+      ``a_drift_haar`` and ``a_drift``); see the ``posterior`` parameter of
+      `~~numpyro_forecast.convert.to_datatree()`.
     - It composes with the per-block ``reparam=`` hook: after
       ``innovations(..., reparam=LocScaleReparam(0))`` the site under the plate
       is ``drift_decentered``, so the auxiliary site is
