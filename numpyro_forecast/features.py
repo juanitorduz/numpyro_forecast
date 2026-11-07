@@ -72,8 +72,15 @@ def fourier_features(
         is the period ``0.10000000149011612``, not ``0.1``, and the two spellings
         are two memo entries.
     num_terms
-        Number of harmonics, a non-negative Python or NumPy integer; the output
-        has ``2 * num_terms`` columns (sine then cosine), none for ``0``.
+        Number of harmonics, a non-negative Python or NumPy integer of at most
+        ``floor(period / 2)``; the output has ``2 * num_terms`` columns (sine
+        then cosine), none for ``0``. The matrix samples ``t = 0, 1, ...``, so
+        harmonic ``k > period / 2`` is above the Nyquist frequency of that grid
+        and aliases onto the lower frequency ``(period - k) / period``: same
+        cosine samples, negated sine samples (harmonic ``period - k`` when
+        ``period`` is an integer). For an even integer ``period``,
+        ``num_terms == period / 2`` is valid but its last sine column is zero up
+        to rounding; the matching cosine column carries the period-2 pattern.
 
     Returns
     -------
@@ -83,9 +90,10 @@ def fourier_features(
     Raises
     ------
     ValueError
-        If ``duration`` or ``num_terms`` is negative, or ``period`` is not
+        If ``duration`` or ``num_terms`` is negative, ``period`` is not
         positive and finite (``0`` or ``nan`` would cache an all-``nan``
-        matrix without an error, and ``inf`` a constant one).
+        matrix without an error, and ``inf`` a constant one), or ``num_terms``
+        is larger than ``period / 2`` (aliased harmonics).
     """
     n_steps, cycle, n_terms = operator.index(duration), float(period), operator.index(num_terms)
     if n_steps < 0:
@@ -96,6 +104,12 @@ def fourier_features(
         raise ValueError(msg)
     if n_terms < 0:
         msg = f"num_terms must be non-negative, got {n_terms}"
+        raise ValueError(msg)
+    if 2 * n_terms > cycle:
+        msg = (
+            f"num_terms must be at most {math.floor(cycle / 2)} for period {cycle}, "
+            f"got {n_terms}: harmonics above period / 2 alias onto lower ones"
+        )
         raise ValueError(msg)
     design = _fourier_features(n_steps, cycle, n_terms)
     return jnp.asarray(design, dtype=jnp.result_type(float))

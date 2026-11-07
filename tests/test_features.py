@@ -112,6 +112,15 @@ def test_fourier_features_accepts_an_empty_window_or_no_harmonics(
     assert fourier_features(duration, 7.0, num_terms).shape == shape
 
 
+@pytest.mark.parametrize(
+    ("period", "largest"), [(7.0, 3), (4, 2), (365.25, 182), (1.5, 0)], ids=repr
+)
+def test_fourier_features_allows_harmonics_up_to_nyquist_only(period: float, largest: int) -> None:
+    assert fourier_features(10, period, largest).shape == (10, 2 * largest)
+    with pytest.raises(ValueError, match=rf"num_terms must be at most {largest} "):
+        fourier_features(10, period, largest + 1)
+
+
 def test_periodic_repeat_rejects_a_negative_duration() -> None:
     with pytest.raises(ValueError, match="duration must be non-negative"):
         periodic_repeat(jnp.array([1.0, 2.0, 3.0]), np.int64(-1))
