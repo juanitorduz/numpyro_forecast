@@ -884,7 +884,7 @@ Group: /
 │           sigma    (chain, draw) float32 16kB 0.4142 0.4574 0.4017 ... 0.4904 0.4828
 │           theta    (chain, draw) float32 16kB 0.48 0.4315 0.3439 ... 0.5847 0.5859
 │       Attributes:
-│           created_at:                 2026-11-07T19:19:25.166525+00:00
+│           created_at:                 2026-11-07T19:34:00.076753+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -899,7 +899,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB -1.003 0.3323 ... -1.009
 │       Attributes:
-│           created_at:                 2026-11-07T19:19:25.304085+00:00
+│           created_at:                 2026-11-07T19:34:00.186302+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -912,7 +912,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 400B 0.6115 0.06982 ... -0.1484 -0.1441
 │       Attributes:
-│           created_at:                 2026-11-07T19:19:25.304376+00:00
+│           created_at:                 2026-11-07T19:34:00.186558+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -925,7 +925,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 400B 0.6115 0.06982 ... -0.1441
         Attributes:
-            created_at:                 2026-11-07T19:19:25.304587+00:00
+            created_at:                 2026-11-07T19:34:00.186742+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1137,7 +1137,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:19:25.166525+00:00
+2026-11-07T19:34:00.076753+00:00
 
 creation_library :  
 ArviZ
@@ -1273,7 +1273,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:19:25.304085+00:00
+2026-11-07T19:34:00.186302+00:00
 
 creation_library :  
 ArviZ
@@ -1367,7 +1367,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:19:25.304376+00:00
+2026-11-07T19:34:00.186558+00:00
 
 creation_library :  
 ArviZ
@@ -1461,7 +1461,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:19:25.304587+00:00
+2026-11-07T19:34:00.186742+00:00
 
 creation_library :  
 ArviZ
@@ -1777,6 +1777,8 @@ which for the true \phi = 0.4 and \theta = 0.7 is 1.49 \sigma at h = 2 and settl
 
 ``` python
 fig, ax = plt.subplots()
+
+# Plot each score per fold, label every marker with its value, and mark the mean.
 for values, color, label, offset in (
     (train_crps, "C0", "in-sample CRPS", -14),  # labels below the in-sample line
     (test_crps, "C1", "out-of-sample CRPS", 8),
@@ -1784,6 +1786,7 @@ for values, color, label, offset in (
     mean = np.mean(values)
     ax.plot(split_points, values, "o-", color=color, label=label)
     ax.axhline(mean, color=color, ls="--", lw=1, label=f"{label} mean: {mean:.3f}")
+
     for split_point, value in zip(split_points, values, strict=True):
         ax.annotate(
             f"{value:.3f}",
@@ -1794,7 +1797,8 @@ for values, color, label, offset in (
             fontsize=10,
             color=color,
         )
-ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize=10)
+
+ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per cross-validation fold");
 ```
 
@@ -1816,12 +1820,15 @@ A small caveat: [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyr
 
 ``` python
 fig, ax = plt.subplots()
+
+# Plot each coverage per fold against its nominal level, label every marker, and mark the mean.
 for values, nominal, color in ((test_cov_50, 0.5, "C0"), (test_cov_94, 0.94, "C1")):
     percent = f"{nominal:.0%}".replace("%", r"\%")
     mean = np.mean(values)
     ax.plot(split_points, values, "o-", color=color, label=rf"empirical ${percent}$ coverage")
     ax.axhline(nominal, color=color, ls="--", lw=1, label=rf"nominal ${percent}$")
     ax.axhline(mean, color=color, ls=":", lw=1.5, label=rf"mean empirical ${percent}$: {mean:.2f}")
+
     for split_point, value in zip(split_points, values, strict=True):
         ax.annotate(
             f"{value:.1f}",
@@ -1832,7 +1839,8 @@ for values, nominal, color in ((test_cov_50, 0.5, "C0"), (test_cov_94, 0.94, "C1
             fontsize=10,
             color=color,
         )
-ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize=10)
+
+ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(
     xlabel="train/test split point",
     ylabel="coverage",
@@ -1855,7 +1863,7 @@ The 94\\ interval covers every test point in every fold, 50 of 50 in total, and 
 - Orduz, J. [*Notes on an ARMA(1,1) Model with NumPyro*](https://juanitorduz.github.io/arma_numpyro/). The blog post this notebook ports.
 - Hyndman, R. J., & Athanasopoulos, G. (2021). [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/), 3rd edition. Chapter 9: ARIMA models.
 - Brockwell, P. J., & Davis, R. A. (2016). [*Introduction to Time Series and Forecasting*](https://doi.org/10.1007/978-3-319-29854-2), 3rd edition. Springer. Chapter 3: ARMA models and their forecasts.
-- Gneiting, T., & Raftery, A. E. (2007). [Strictly proper scoring rules, prediction, and estimation](https://doi.org/10.1198/016214506000001437). *Journal of the American Statistical Association*, 102(477), 359-378. The CRPS and its closed form for the Gaussian.
+- Gneiting, T., & Raftery, A. E. (2007). [*Strictly proper scoring rules, prediction, and estimation*](https://doi.org/10.1198/016214506000001437). Journal of the American Statistical Association, 102(477), 359-378. The CRPS and its closed form for the Gaussian.
 - NumPyro documentation: [Example: AR(2) process](https://num.pyro.ai/en/stable/examples/ar2.html).
 - The [exponential smoothing example](exponential_smoothing_state_space.md) in this documentation, which uses the same [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for an error-feedback model.
 - The [univariate forecasting example](forecasting_univariate.md) in this documentation, which introduces [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) and the per-fold evaluation workflow.
