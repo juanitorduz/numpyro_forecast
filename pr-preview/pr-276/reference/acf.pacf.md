@@ -24,8 +24,8 @@ The recursion runs along the last axis and broadcasts over any leading batch axe
 ## Parameters
 
 
-`y: Float[ArrayLike, ``" *batch time"]`  
-Time series with time on the last axis, shape `(*batch, time)`. NumPy arrays are accepted directly.
+`y: Real[ArrayLike, ``" *batch time"]`  
+Time series with time on the last axis, shape `(*batch, time)`. NumPy arrays are accepted directly; integer counts are cast to the default float dtype (`float_view_resident()`). A CPU-committed series (`device="host"` draws with the CPU backend initialized, see [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)) stays on the CPU; a pinned series, floating or integer, is copied back onto its own device first.
 
 `max_lag: int`  
 Largest lag to evaluate; must satisfy `1 <= max_lag < time`.
