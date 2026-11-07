@@ -499,8 +499,8 @@ MVNLayoutError
     over time, for example ``lambda mu: dist.MultivariateNormal(mu, cov)``
     or the noise ``dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)``
     with a ``(duration, n)`` predictor. The time-axis surgery reads the
-    event as time. Write the ``"obs"``, ``"obs_future"`` and
-    ``"forecast"`` sites in the model instead. Also raised by
+    event as time. Replace the ``predict()`` call with ``"obs"``,
+    ``"obs_future"`` and ``"forecast"`` sites in the model. Also raised by
     `~~numpyro_forecast.surgery.shift_loc()` for MVN noise with an
     unsupported layout.
 
@@ -897,10 +897,10 @@ observation axis as its event (independent over time), is read as the
 ``(*batch, time)`` layout above with the series as time, for example the
 noise ``dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)`` with a
 ``(duration, n)`` predictor. `slice_time()` and `prefix_condition()` then
-slice the series, and the shapes cannot tell the two layouts apart when
-the panel has ``time`` series. `~~numpyro_forecast.models.predict()`
-scores it in training but raises
-`~~numpyro_forecast.exceptions.MVNLayoutError` when it forecasts.
+slice the series: forecasting fails with a broadcasting error, or with a
+forecast of the wrong shape when the panel has as many series as time
+steps. `~~numpyro_forecast.models.predict()` scores it in training but
+raises `~~numpyro_forecast.exceptions.MVNLayoutError` when it forecasts.
 
 Parameters
 ----------

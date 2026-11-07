@@ -933,7 +933,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L1066-L1192" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L1067-L1193" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">predict</span>(
@@ -982,7 +982,7 @@ The deterministic predictor over the full horizon, shape <code>(*batch, duration
 </dd>
 <dt><code> <span class="doc-parameter-annotation">MVNLayoutError</span></code></dt>
 <dd>
-If forecasting and the observation distribution, inside any <code>Independent</code> wrappers, is a <code>MultivariateNormal</code> whose event is the observation axis: correlated across the series and independent over time, for example <code>lambda mu: dist.MultivariateNormal(mu, cov)</code> or the noise <code>dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)</code> with a <code>(duration, n)</code> predictor. The time-axis surgery reads the event as time. Write the <code>"obs"</code>, <code>"obs_future"</code> and <code>"forecast"</code> sites in the model instead. Also raised by <a href="surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="gdls-link gdls-code">shift_loc()</a> for MVN noise with an unsupported layout.
+If forecasting and the observation distribution, inside any <code>Independent</code> wrappers, is a <code>MultivariateNormal</code> whose event is the observation axis: correlated across the series and independent over time, for example <code>lambda mu: dist.MultivariateNormal(mu, cov)</code> or the noise <code>dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)</code> with a <code>(duration, n)</code> predictor. The time-axis surgery reads the event as time. Replace the <a href="models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a> call with <code>"obs"</code>, <code>"obs_future"</code> and <code>"forecast"</code> sites in the model. Also raised by <a href="surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="gdls-link gdls-code">shift_loc()</a> for MVN noise with an unsupported layout.
 </dd>
 </dl>
 </div>
