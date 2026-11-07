@@ -41,8 +41,9 @@ predictive it feeds, onto the CPU), and `device_view()` is its
 counterpart for the unchunked metric entry points, handing the fused kernel an
 accelerator-resident copy. `float_view()` is the operand view that the metrics
 use: `device_view()` plus a cast of an integer operand (the draws of a count
-model) to the default float dtype. `float_cast_in_place()` is the same dtype
-rule for the ACF diagnostics, which keep a CPU-committed series on the CPU.
+model) to the default float dtype, run on the host for a host-resident leaf.
+`float_view_resident()` is the same dtype rule for the ACF diagnostics, which
+keep a CPU-committed series on the CPU.
 
 A host-committed jax result is not a drop-in replacement for a device array in
 your own ``jnp`` code. Mixed with an *uncommitted* array (every fresh ``jnp``
@@ -463,10 +464,12 @@ def float_view(leaf: Real[ArrayLike, " *shape"]) -> Float[Array, " *shape"]:
     ``int64`` count above $2^{31}$ is not first wrapped by the ``int32``
     canonicalization of `jax.numpy.asarray()` (x64 disabled). A device-resident
     jax operand (a tracer under ``jit``/``vmap`` included) is cast on its
-    device, a pinned one on the device it was offloaded from (`device_view()`),
-    and a CPU-committed one under an accelerator default is cast on the host
-    first, so the floating copy is the only transfer and the only accelerator
-    allocation.
+    device. A host-resident one (`_is_host_resident()`) is cast on the host
+    first, through its zero-copy NumPy view, so the floating copy is the only
+    transfer and the only accelerator allocation: a CPU-committed leaf under
+    an accelerator default becomes an uncommitted copy on the default device
+    (as in `device_view()`), and a pinned leaf is committed back to the device
+    it was offloaded from, in the ``"device"`` memory kind.
 
     Parameters
     ----------
@@ -478,39 +481,44 @@ def float_view(leaf: Real[ArrayLike, " *shape"]) -> Float[Array, " *shape"]:
     Float[Array, "*shape"]
         ``device_view(leaf)`` when ``leaf`` is floating; otherwise a
         device-resident copy in the default float dtype. With the runtime type
-        hook on, a boolean or complex ``leaf`` raises
-        ``jaxtyping.TypeCheckError`` instead.
+        hook on, a boolean or complex array raises
+        ``jaxtyping.TypeCheckError`` instead (a Python ``bool`` scalar passes
+        as ``0.0``/``1.0``).
     """
     if jnp.issubdtype(jnp.result_type(leaf), jnp.floating):
         return device_view(leaf)
     float_dtype = jnp.result_type(float)
     if isinstance(leaf, jax.Array):
-        if (
-            not isinstance(leaf, Tracer)
-            and leaf.sharding.memory_kind not in _HOST_MEMORY_KINDS
-            and _is_host_resident(leaf)
-        ):
-            return jnp.asarray(np.asarray(leaf), dtype=float_dtype)
+        if not isinstance(leaf, Tracer) and _is_host_resident(leaf):
+            host = np.asarray(leaf).astype(float_dtype)
+            if leaf.sharding.memory_kind not in _HOST_MEMORY_KINDS:
+                # CPU-committed: an uncommitted copy, as in device_view().
+                return jnp.asarray(host)
+            device = next(iter(leaf.devices()))
+            try:
+                return jax.device_put(host, SingleDeviceSharding(device, memory_kind="device"))
+            except (ValueError, NotImplementedError):
+                return jnp.asarray(host)
         return device_view(leaf).astype(float_dtype)
     return jnp.asarray(leaf, dtype=float_dtype)
 
 
-def float_cast_in_place(leaf: Real[ArrayLike, " *shape"]) -> Float[Array, " *shape"]:
+def float_view_resident(leaf: Real[ArrayLike, " *shape"]) -> Float[Array, " *shape"]:
     """Return ``leaf`` as a floating jax array without moving it off its device.
 
     The dtype rule of `float_view()` for a diagnostic that runs where the
     series already is (`~~numpyro_forecast.acf.acf()`,
     `~~numpyro_forecast.acf.pacf()`): a CPU-committed series (``device="host"``
     draws) stays committed, so the jitted kernel runs on the CPU instead of
-    moving the panel to the accelerator. The one exception is a pinned leaf
-    (an explicit ``device="pinned_host"`` result), which no kernel can read
-    (``memory_space of all inputs ... must be the same``): `device_view()`
-    copies it back into the device memory kind of its own device. A floating
-    operand keeps its dtype (a jax array is returned as is, a NumPy
-    ``float64`` array canonicalizes as usual). An integer NumPy or Python
-    operand is converted with the float dtype directly, so a NumPy ``int64``
-    count above $2^{31}$ is not first wrapped by the ``int32`` canonicalization
-    of `jax.numpy.asarray()` (x64 disabled).
+    moving the panel to the accelerator. That is the one case in which the two
+    helpers differ; every other operand (a device-resident array or tracer, a
+    pinned leaf, which no kernel can read in place, a NumPy or Python value)
+    goes through `float_view()` itself, so there is one dtype and placement
+    rule to maintain. A floating operand keeps its dtype (a jax array is
+    returned as is, a NumPy ``float64`` array canonicalizes as usual). An
+    integer NumPy or Python operand is converted with the float dtype directly,
+    so a NumPy ``int64`` count above $2^{31}$ is not first wrapped by the
+    ``int32`` canonicalization of `jax.numpy.asarray()` (x64 disabled).
 
     Parameters
     ----------
@@ -521,21 +529,18 @@ def float_cast_in_place(leaf: Real[ArrayLike, " *shape"]) -> Float[Array, " *sha
     -------
     Float[Array, "*shape"]
         ``leaf`` itself when it is a floating jax array outside pinned memory;
-        otherwise an array in the default float dtype on the device ``leaf`` is
-        committed to (the default device for a NumPy, Python or uncommitted
-        operand).
+        otherwise an array on the device ``leaf`` is committed to (the default
+        device for a NumPy, Python or uncommitted operand), in its own dtype
+        when floating and in the default float dtype when integer.
     """
-    float_dtype = jnp.result_type(float)
-    if isinstance(leaf, jax.Array):
-        pinned = not isinstance(leaf, Tracer) and leaf.sharding.memory_kind in _HOST_MEMORY_KINDS
-        arr = device_view(leaf) if pinned else jnp.asarray(leaf)
-    elif jnp.issubdtype(jnp.result_type(leaf), jnp.floating):
-        arr = jnp.asarray(leaf)
-    else:
-        return jnp.asarray(leaf, dtype=float_dtype)
-    if jnp.issubdtype(arr.dtype, jnp.floating):
-        return arr
-    return arr.astype(float_dtype)
+    resident = isinstance(leaf, jax.Array) and (
+        isinstance(leaf, Tracer) or leaf.sharding.memory_kind not in _HOST_MEMORY_KINDS
+    )
+    if not resident:
+        return float_view(leaf)
+    if jnp.issubdtype(leaf.dtype, jnp.floating):
+        return leaf
+    return leaf.astype(jnp.result_type(float))
 
 
 def resolve_device(device: jax.Device | str | None) -> ResolvedDevice:

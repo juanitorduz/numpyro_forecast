@@ -12,6 +12,7 @@ from conftest import commit_host
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
+from numpyro_forecast import offload
 from numpyro_forecast.evaluate import (
     eval_coverage,
     eval_crps,
@@ -720,12 +721,32 @@ def test_float_view_moves_and_casts_a_pinned_integer_leaf() -> None:
     np.testing.assert_array_equal(viewed, np.arange(4.0))
 
 
+def _fail_device_view(_: object) -> Array:
+    msg = "a host-resident integer leaf must be cast on the host, not moved first"
+    raise AssertionError(msg)
+
+
+def test_float_view_casts_a_pinned_integer_leaf_on_the_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pinned integer leaf is cast on the host; only the float copy lands on its device."""
+    hosted = commit_host(jnp.arange(4, dtype=jnp.int32), "pinned")
+    monkeypatch.setattr(offload, "device_view", _fail_device_view)
+    viewed = float_view(hosted)
+    assert viewed.dtype == jnp.result_type(float)
+    assert viewed.committed
+    assert viewed.devices() == hosted.devices()
+    assert viewed.sharding.memory_kind == "device"
+    np.testing.assert_array_equal(viewed, np.arange(4.0))
+
+
 def test_float_view_casts_a_cpu_committed_integer_leaf_on_the_host(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Under an accelerator default a CPU-committed integer leaf is cast once, uncommitted."""
     hosted = commit_host(jnp.arange(4, dtype=jnp.int32), "cpu")
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
+    monkeypatch.setattr(offload, "device_view", _fail_device_view)
     viewed = float_view(hosted)
     assert viewed.dtype == jnp.result_type(float)
     assert not viewed.committed

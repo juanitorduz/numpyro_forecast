@@ -274,7 +274,7 @@ def make_mase(
     if seasonality < 1:
         msg = f"seasonality must be >= 1, got {seasonality}"
         raise ValueError(msg)
-    # Cast before the lag difference: integer differences wrap (pymc-forecast#72).
+    # Cast before the lag difference: integer differences wrap (#163, pymc-labs/pymc-forecast#72).
     train_arr = float_view(train_data)
     if train_arr.shape[-2] <= seasonality:
         msg = (

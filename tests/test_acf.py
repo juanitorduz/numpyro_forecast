@@ -213,17 +213,18 @@ _COUNTS = np.array([200, 3, 0, 2, 5, 1, 0, 4, 2, 1, 3, 7, 0, 2, 6])
         (np.int32, "jax"),
         (np.uint32, "jax"),
         (np.int64, "numpy"),
+        (np.float64, "numpy"),
     ],
-    ids=["uint8", "int16", "int32", "uint32", "numpy-int64"],
+    ids=["uint8", "int16", "int32", "uint32", "numpy-int64", "numpy-float64"],
 )
 @pytest.mark.parametrize(("fn", "oracle"), [(acf, _np_acf), (pacf, _np_pacf)], ids=["acf", "pacf"])
 def test_integer_counts_match_float_oracle(
     fn: Callable[..., Array],
     oracle: Callable[[np.ndarray, int], np.ndarray],
-    dtype: type[np.integer],
+    dtype: type[np.integer] | type[np.floating],
     container: str,
 ) -> None:
-    """Integer counts (a Poisson ``predict()`` draw) give the float spectrum (#163)."""
+    """Counts (a Poisson ``predict()`` draw) and NumPy floats give the float spectrum (#163)."""
     counts = _COUNTS.astype(dtype)
     y = jnp.asarray(counts) if container == "jax" else counts
     got = fn(y, max_lag=4)
