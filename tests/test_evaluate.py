@@ -514,6 +514,30 @@ def test_evaluate_forecast_does_not_demote_a_result_next_to_a_bfloat16_metric() 
     assert report["half"] == float(metrics["half"](pred, truth))
 
 
+@pytest.mark.parametrize("dtype", [jnp.float8_e4m3fn, jnp.float8_e5m2, jnp.float4_e2m1fn])
+def test_scalar_metric_value_casts_a_sub_16_bit_float_to_default_float(dtype: Any) -> None:
+    """A float8 or float4 result is cast to the default float dtype, with its value kept."""
+    value = jnp.asarray(0.5, dtype)
+    out = scalar_metric_value("m", value)
+    assert out.dtype == jnp.result_type(float)
+    assert float(out) == float(value)
+
+
+@pytest.mark.parametrize("with_defaults", [False, True], ids=["alone", "with_defaults"])
+def test_evaluate_forecast_accepts_a_float8_metric(with_defaults: bool) -> None:
+    """A float8 result joins the float32 results without a type promotion error."""
+    pred, truth = random.normal(random.PRNGKey(0), (50, 4, 1)), jnp.zeros((4, 1))
+
+    def float8_mae(p: Array, t: Array) -> Array:
+        return jnp.abs(p - t).mean().astype(jnp.float8_e4m3fn)
+
+    metrics = {**DEFAULT_METRICS, "f8": float8_mae} if with_defaults else {"f8": float8_mae}
+    report = evaluate_forecast(pred, truth, metrics=metrics)
+    assert report["f8"] == float(float8_mae(pred, truth))
+    if with_defaults:
+        assert report["mae"] == pytest.approx(float(eval_mae(pred, truth)), rel=1e-6)
+
+
 def test_scalar_metric_value_reads_static_shapes_of_tracers() -> None:
     """Under ``jit`` and ``vmap`` the check sees one window's value and needs no host value."""
 

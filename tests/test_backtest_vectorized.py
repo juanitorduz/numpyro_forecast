@@ -788,6 +788,11 @@ def _count_inside(pred: Array, truth: Array) -> Array:
     return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).sum()
 
 
+def _float8_mae(pred: Array, truth: Array) -> Array:
+    """A float8-valued metric: the mean absolute error in ``float8_e4m3fn``."""
+    return jnp.abs(pred - truth).mean().astype(jnp.float8_e4m3fn)
+
+
 def _all_inside(pred: Array, truth: Array) -> Array:
     """A boolean-valued metric: whether every cell is inside the range of the samples."""
     return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).all()
@@ -904,8 +909,8 @@ def test_metric_trace_before_the_fit_compiles_nothing(
     assert seen == [(True, jnp.result_type(float))]
 
 
-def test_bool_and_integer_metrics_are_cast_to_float() -> None:
-    """A bool or integer metric gives a float ``(num_windows,)`` array that matches each window."""
+def test_bool_integer_and_float8_metrics_are_cast_to_float() -> None:
+    """A bool, integer or float8 metric gives a float ``(num_windows,)`` array that matches each window."""
     data, cov = _series(TRAIN + TEST + 4)
     model = rw_model
     result = backtest_vectorized(
@@ -919,7 +924,12 @@ def test_bool_and_integer_metrics_are_cast_to_float() -> None:
         stride=2,
         num_steps=5,
         num_samples=10,
-        metrics={**DEFAULT_METRICS, "count_inside": _count_inside, "all_inside": _all_inside},
+        metrics={
+            **DEFAULT_METRICS,
+            "count_inside": _count_inside,
+            "all_inside": _all_inside,
+            "float8_mae": _float8_mae,
+        },
         keep_predictions=True,
     )
     num_windows = int(result.t0.shape[0])
@@ -932,10 +942,12 @@ def test_bool_and_integer_metrics_are_cast_to_float() -> None:
         pred = result.predictions[i]
         assert float(result.metrics["count_inside"][i]) == float(_count_inside(pred, truth))
         assert float(result.metrics["all_inside"][i]) == float(_all_inside(pred, truth))
+        assert float(result.metrics["float8_mae"][i]) == float(_float8_mae(pred, truth))
     df = results_to_dataframe(result)
     assert len(df) == num_windows
     assert df["metric_count_inside"].dtype == np.float64
     assert df["metric_all_inside"].dtype == np.float64
+    assert result.metrics["float8_mae"].dtype == jnp.result_type(float)
 
 
 def test_vectorized_result_to_dict_does_not_copy_predictions() -> None:

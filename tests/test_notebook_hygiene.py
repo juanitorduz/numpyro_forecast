@@ -37,6 +37,8 @@ NOTEBOOK_IDS = [path.stem for path in NOTEBOOKS]
 # IPython magics (``%load_ext``, ``%%time``) and shell escapes (``!pip``) are not Python. The
 # magic name follows the sigil directly, so a wrapped ``% 24`` operator line does not match.
 MAGIC_LINE = re.compile(r"^(?P<indent>\s*)[%!]{1,2}[A-Za-z_]")
+# A flag-less ``%time``/``%timeit`` line magic runs its statement, so the statement is kept.
+TIME_MAGIC_LINE = re.compile(r"^(?P<indent>\s*)%time(?:it)?\s+(?P<stmt>[^-\s].*)$")
 # A cell that calls ``maxent`` must parse, so the mass check cannot skip it.
 MAXENT_CALL = re.compile(r"\bmaxent\s*\(")
 
@@ -51,23 +53,29 @@ def _reference_entries() -> set[str]:
     }
 
 
+def _unmagic(line: str) -> str:
+    """Return ``line`` as Python: a flag-less time magic keeps its statement, other magics pass."""
+    if match := TIME_MAGIC_LINE.match(line):
+        return f"{match['indent']}{match['stmt']}"
+    if match := MAGIC_LINE.match(line):
+        return f"{match['indent']}pass"
+    return line
+
+
 def _code_trees(name: str, cells: list[Cell]) -> list[tuple[int, ast.Module]]:
     """Parse the code cells of notebook ``name`` as Python.
 
-    A magic line becomes ``pass`` at the same indentation, so line numbers and block bodies
-    survive. A cell that is still not Python (a ``%%bash`` body, ``x = !cmd``) is skipped,
-    unless its source calls ``maxent``: the mass check reads that call, so the cell fails
-    the test by name.
+    A flag-less ``%time``/``%timeit`` line magic keeps its statement at the same indentation;
+    any other magic line becomes ``pass``, so line numbers and block bodies survive. A cell
+    that is still not Python (a ``%%bash`` body, ``x = !cmd``) is skipped, unless its source
+    calls ``maxent``: the mass check reads that call, so the cell fails the test by name.
     """
     trees = []
     for index, cell in enumerate(cells):
         if cell["cell_type"] != "code":
             continue
         text = source(cell)
-        lines = [
-            f"{match['indent']}pass" if (match := MAGIC_LINE.match(line)) else line
-            for line in text.splitlines()
-        ]
+        lines = [_unmagic(line) for line in text.splitlines()]
         try:
             tree = ast.parse("\n".join(lines))
         except SyntaxError as exc:
@@ -177,12 +185,31 @@ def test_maxent_check_rejects_a_positional_none_mass() -> None:
 
 
 def test_code_trees_keep_the_body_of_an_indented_magic() -> None:
-    """An indented ``%time`` becomes ``pass``, so the enclosing block still parses."""
-    (tree,) = [
-        tree for _, tree in _code_trees("s.ipynb", _cells("for _ in range(2):\n    %time x = 1"))
-    ]
+    """An indented ``%timeit -n 3`` becomes ``pass``, so the enclosing block still parses."""
+    cells = _cells("for _ in range(2):\n    %timeit -n 3 x = 1")
+    (tree,) = [tree for _, tree in _code_trees("s.ipynb", cells)]
     (loop,) = tree.body
     assert isinstance(loop, ast.For) and isinstance(loop.body[0], ast.Pass)
+
+
+def test_maxent_check_reads_the_statement_of_a_time_magic() -> None:
+    """A flag-less ``%time`` or ``%timeit`` keeps its statement, so its ``maxent`` is checked."""
+    for magic in ("%time", "%timeit"):
+        cells = _cells(f"x = 1\n{magic} f = pz.maxent(pz.Gamma(), 0, 10)")
+        with pytest.raises(AssertionError, match="calls maxent without mass"):
+            _check_maxent_calls_pass_mass("synthetic.ipynb", cells)
+        cells = _cells(f"x = 1\n{magic} f = pz.maxent(pz.Gamma(), 0, 10, mass=0.9)")
+        _check_maxent_calls_pass_mass("synthetic.ipynb", cells)
+        (tree,) = [tree for _, tree in _code_trees("s.ipynb", cells)]
+        assert isinstance(tree.body[1], ast.Assign) and tree.body[1].lineno == 2
+
+
+def test_maxent_check_skips_a_timeit_magic_with_flags() -> None:
+    """A ``%timeit`` with flags still becomes ``pass``, at the same line."""
+    cells = _cells("x = 1\n%timeit -n 3 pz.maxent(pz.Gamma(), 0, 10)")
+    _check_maxent_calls_pass_mass("synthetic.ipynb", cells)
+    (tree,) = [tree for _, tree in _code_trees("s.ipynb", cells)]
+    assert isinstance(tree.body[1], ast.Pass) and tree.body[1].lineno == 2
 
 
 def test_code_trees_keep_a_wrapped_modulo_operator() -> None:

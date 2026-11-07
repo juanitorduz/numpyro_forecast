@@ -107,8 +107,9 @@ def test_fourier_features_rejects_a_traced_duration() -> None:
 def test_fourier_features_rejects_degenerate_values(
     args: tuple[IntScalar, RealScalar, IntScalar], match: str
 ) -> None:
-    # A zero or non-finite period would cache an all-inf or all-nan matrix and feed it to
-    # the regression without an error; the boundary check raises before the memo.
+    # A zero or nan period would cache an all-nan matrix and an infinite one a constant matrix
+    # (sin 0, cos 0), fed to the regression without an error; the boundary check raises
+    # before the memo.
     with pytest.raises(ValueError, match=match):
         fourier_features(*args)
 
