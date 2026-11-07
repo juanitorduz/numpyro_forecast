@@ -316,7 +316,7 @@ simple exponential smoothing of the demand indicator, updated **only when the pr
 
 # Prior for the smoothing parameters
 
-Both smoothing parameters get a \text{Beta}(1.5, 3) prior. This is a weakly informative choice. Its mode is 0.2, the value classical practice expects for smoothing parameters, and its mean is 1/3. The density stays meaningfully positive across the whole unit interval, so a series whose data call for a very stiff level (near 0) or a very reactive one (near 1) can reach it without fighting the prior. Contrast this with the blog post's \text{Beta}(10, 40), which pins the parameter to a narrow band around 0.2; with 1{,}000 series each contributing its own posterior, there is no reason to constrain them that tightly a priori, and we let the data decide instead.
+Both smoothing parameters get a \text{Beta}(1.5, 3) prior. This is a weakly informative choice. Its mode is 0.2, inside the range \[0.1, 0.3\] that classical practice uses for smoothing parameters, and its mean is 1/3. The density stays clearly positive from 0 up to about 0.8, so a series whose data call for a very stiff level (near 0) or a reactive one (up to about 0.8) can reach it without fighting the prior. Contrast this with the blog post's \text{Beta}(10, 40), which pins the parameter to a narrow band around 0.2; with 1{,}000 series each contributing its own posterior, there is no reason to constrain them that tightly a priori, and we let the data decide instead.
 
 
 ``` python
@@ -326,6 +326,7 @@ prior_mean = 1.5 / 4.5
 beta_prior = pz.Beta(1.5, 3)
 mass_classical = float(beta_prior.cdf(0.3) - beta_prior.cdf(0.1))
 mass_above = float(1 - beta_prior.cdf(0.3))
+
 print(f"prior mass in [0.1, 0.3]: {mass_classical:.3f}, above 0.3: {mass_above:.3f}")
 
 fig, ax = plt.subplots(figsize=(10, 6))
@@ -349,7 +350,7 @@ ax.set(
 </figure>
 
 
-The \text{Beta}(1.5, 3) prior puts 36.5\\ of its mass in the classical range \[0.1, 0.3\] and 51.2\\ above 0.3. Values near 0 and near 1 keep visible density, while the blog post's \text{Beta}(10, 40) is concentrated in a narrow band around 0.2.
+The \text{Beta}(1.5, 3) prior puts 36.5\\ of its mass in the classical range \[0.1, 0.3\] and 51.2\\ above 0.3, so half of the prior allows a more reactive level than classical practice. Its density is clearly above zero up to about 0.8 and close to zero near 1, while the blog post's \text{Beta}(10, 40) has almost no density above about 0.45.
 
 
 # Model specification
@@ -661,8 +662,8 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 
     mean ELBO loss over the last 100 steps: 56,657
-    CPU times: user 12 s, sys: 10.9 s, total: 22.9 s
-    Wall time: 7.5 s
+    CPU times: user 14.2 s, sys: 11.2 s, total: 25.4 s
+    Wall time: 9.66 s
 
 
 <figure class="figure">
@@ -1266,7 +1267,7 @@ Group: /
 │           z_noise            (chain, draw, z_noise_dim_0) float32 4MB 2.114 ... 1.463
 │           z_smoothing        (chain, draw, z_smoothing_dim_0) float32 4MB 0.1354 .....
 │       Attributes:
-│           created_at:                 2026-11-07T19:00:20.797080+00:00
+│           created_at:                 2026-11-07T19:08:52.358693+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1281,7 +1282,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 200MB -2.411 2.176 ... 3.494
 │       Attributes:
-│           created_at:                 2026-11-07T19:00:21.392625+00:00
+│           created_at:                 2026-11-07T19:08:53.114848+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1294,7 +1295,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 200kB 1.0 1.0 2.0 3.0 ... 2.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-11-07T19:00:21.392882+00:00
+│           created_at:                 2026-11-07T19:08:53.115146+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1308,7 +1309,7 @@ Group: /
 │       Data variables:
 │           covariates  (covariate, time, obs_dim) float32 400kB 1.0 1.0 2.0 ... 1.0 0.0
 │       Attributes:
-│           created_at:                 2026-11-07T19:00:21.393187+00:00
+│           created_at:                 2026-11-07T19:08:53.115516+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1323,7 +1324,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 40MB -0.0 1.284 ... -0.0 0.0
 │       Attributes:
-│           created_at:                 2026-11-07T19:00:21.741972+00:00
+│           created_at:                 2026-11-07T19:08:53.581566+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1337,7 +1338,7 @@ Group: /
         Data variables:
             covariates  (covariate, time, obs_dim) float32 80kB 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-11-07T19:00:21.742329+00:00
+            created_at:                 2026-11-07T19:08:53.581973+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1693,7 +1694,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:00:20.797080+00:00
+2026-11-07T19:08:52.358693+00:00
 
 creation_library :  
 ArviZ
@@ -1829,7 +1830,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:00:21.392625+00:00
+2026-11-07T19:08:53.114848+00:00
 
 creation_library :  
 ArviZ
@@ -1923,7 +1924,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:00:21.392882+00:00
+2026-11-07T19:08:53.115146+00:00
 
 creation_library :  
 ArviZ
@@ -2038,7 +2039,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:00:21.393187+00:00
+2026-11-07T19:08:53.115516+00:00
 
 creation_library :  
 ArviZ
@@ -2174,7 +2175,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:00:21.741972+00:00
+2026-11-07T19:08:53.581566+00:00
 
 creation_library :  
 ArviZ
@@ -2289,7 +2290,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-07T19:00:21.742329+00:00
+2026-11-07T19:08:53.581973+00:00
 
 creation_library :  
 ArviZ
@@ -2550,7 +2551,7 @@ The `predictions` group of the tree already holds the out-of-sample draws of the
 forecast_pp = stacked_draws(tree["predictions"], "obs")
 test_np = np.asarray(test_data)
 
-# off-shelf mask over the (time, series) test window
+# on-shelf mask over the (time, series) test window
 on_shelf = np.asarray(available_test) == 1
 
 print(f"off-shelf share of the test cells: {1 - on_shelf.mean():.3f}")
