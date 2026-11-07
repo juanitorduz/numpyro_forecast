@@ -1797,8 +1797,8 @@ panel-mean sales step on 2024-04-27: 1.62x day over day</code></pre>
 <span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a><span class="co"># 3 heaviest stockouts) to stay readable.</span></span>
 <span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a>focus_labels <span class="op">=</span> <span class="bu">list</span>(<span class="bu">dict</span>.fromkeys([<span class="op">*</span>top_volume_labels[:n_focus], <span class="op">*</span>top_stockout_labels[:n_focus]]))</span>
 <span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>split_x <span class="op">=</span> <span class="bu">float</span>(mdates.date2num(dates[t_train]))</span>
-<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a><span class="co"># plot_lm concatenates x with the float predictions internally, so the faceted</span></span>
-<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a><span class="co"># plots below use matplotlib date numbers plus a date formatter on each axis.</span></span>
+<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a><span class="co"># plot_lm concatenates x with the predictions internally, so the faceted plots</span></span>
+<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a><span class="co"># below use matplotlib date numbers plus a date formatter on each axis.</span></span>
 <span id="cb25-22"><a href="#cb25-22" aria-hidden="true" tabindex="-1"></a>dates_num <span class="op">=</span> np.asarray(mdates.date2num(dates))</span>
 <span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(</span>

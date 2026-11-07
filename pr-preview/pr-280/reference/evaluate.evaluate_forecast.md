@@ -45,7 +45,7 @@ Mapping of metric name to function; when `None` defaults to [DEFAULT_METRICS](ev
 
 
 `dict[str, float]`  
-Each metric name mapped to its value. A bool or integer metric result is converted to `float`, whatever the other metrics are.
+Each metric name mapped to its value. A bool, integer, `float8` or `float4` metric result is converted to `float`, whatever the other metrics are (a `float6` result keeps its dtype: XLA on CPU cannot convert it).
 
 
 ## Raises
