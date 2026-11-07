@@ -359,6 +359,12 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
       and ``mcmc.get_samples()`` contain both ``drift`` (deterministic) and
       ``drift_haar``; ``Predictive`` substitutes only the latter and recomputes
       the former. ``init_to_value`` must therefore target ``drift_haar``.
+      `~~numpyro_forecast.convert.to_datatree()` raises ``ValueError`` for a
+      posterior key that misses its site (``drift_haar`` without ``drift`` with
+      the plain model, or ``a_drift_haar`` with a model still scoped with
+      ``"/"``), while `~~numpyro_forecast.predictive.forecast()` and
+      `~~numpyro_forecast.predictive.predict_in_sample()` ignore such a key and
+      draw the site from the prior.
     - Measured on random-walk level models: mean-field ``AutoNormal`` reaches a
       better ELBO for both transforms (DCT slightly ahead of Haar), but an
       optimizer schedule tuned for the original coordinates does not transfer

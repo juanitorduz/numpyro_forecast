@@ -66,9 +66,8 @@ SERIES = simulate(random.PRNGKey(0), T_OBS + FUTURE)
 TRAIN, COVARIATES = SERIES[:T_OBS], SERIES
 PARAMS = {"q": jnp.asarray(Q_TRUE), "r": jnp.asarray(R_TRUE)}
 smoother = Smoother(smoother_config=KFSmootherConfig(filter_source="cuthbert"))
-# u_t = 100 t enters through D = 1, so any misalignment of the controls is a 100-unit error
 CONTROL = 100.0 * jnp.arange(T_OBS + FUTURE, dtype=jnp.float32)[:, None]
-CONTROLLED = jnp.concatenate([SERIES + CONTROL, CONTROL], axis=-1)  # column 0 series, 1 control
+CONTROLLED = jnp.concatenate([SERIES + CONTROL, CONTROL], axis=-1)
 
 
 def level_with_controls(covariates: Array, data: Array | None = None) -> None:
@@ -160,7 +159,6 @@ def test_forecast_rolls_the_smoothed_state_forward() -> None:
         draws = forecast(random.PRNGKey(2), local_level, _repeat(PARAMS, n), TRAIN, COVARIATES)
     mean, var = _smoothed_moments()
     assert draws.shape == (n, FUTURE, 1)
-    # a random walk's forecast mean is the last smoothed state, the variance grows by q^2 per step
     expected_var = var[-1] + Q_TRUE**2 * jnp.arange(1, FUTURE + 1)[:, None] + R_TRUE**2
     assert jnp.allclose(draws.mean(axis=0), mean[-1], atol=4 * jnp.sqrt(expected_var / n).max())
     assert jnp.allclose(draws.var(axis=0), expected_var, rtol=0.15)
@@ -274,7 +272,7 @@ def test_window_shapes_are_validated() -> None:
         state_space(h, "f", TRAIN[:-1], dynamics)
     with smoother, pytest.raises(ValueError, match="duration"):
         state_space(h, "f", TRAIN, dynamics, controls=jnp.zeros((T_OBS, 2)))
-    with pytest.raises(TypeError):  # jaxtyping.TypeCheckError: " time obs" is exactly 2-D
+    with pytest.raises(TypeError):
         state_space(h, "f", TRAIN[None], dynamics)
 
 
@@ -415,10 +413,10 @@ def test_result_returns_the_states_of_the_current_mode() -> None:
 def test_latent_path_builder_reads_the_controls() -> None:
     """The explicit path also aligns ``u_t = 100 t`` (through ``D = 1``) with its time step."""
     n = 400
-    path = SERIES[:T_OBS]  # the level path that generated the series, up to observation noise
+    path = SERIES[:T_OBS]
     posterior = {"f_state_path_params": jnp.broadcast_to(path, (n, *path.shape))}
     builder = LatentPathBuilder()
-    with builder:  # the eager run that a fit would make, so the builder sees concrete data
+    with builder:
         numpyro.handlers.trace(
             numpyro.handlers.seed(level_with_controls, random.PRNGKey(0))
         ).get_trace(CONTROLLED[:T_OBS], CONTROLLED[:T_OBS, :1])
@@ -439,7 +437,7 @@ def test_model_relations_trace_a_latent_path_with_controls() -> None:
     indices; a NumPy control grid fails there with ``TracerArrayConversionError``.
     """
     builder = LatentPathBuilder()
-    with builder:  # the eager run that a fit would make, so the builder sees concrete data
+    with builder:
         numpyro.handlers.trace(
             numpyro.handlers.seed(level_with_controls, random.PRNGKey(0))
         ).get_trace(CONTROLLED[:T_OBS], CONTROLLED[:T_OBS, :1])
@@ -587,7 +585,7 @@ def test_in_sample_predictive_needs_a_seed_handler() -> None:
     h = Horizon.from_data(TRAIN, None)
     dynamics = local_level_dynamics(jnp.asarray(Q_TRUE), jnp.asarray(R_TRUE))
     with warnings.catch_warnings():
-        warnings.simplefilter("error")  # numpyro's "Cannot generate JAX PRNG key" stays silent
+        warnings.simplefilter("error")
         with smoother, pytest.raises(RuntimeError, match="seed handler"):
             state_space(h, "f", TRAIN, dynamics)
 
@@ -631,7 +629,7 @@ def test_numpy_controls_are_rejected_by_the_annotation() -> None:
     """
     h = Horizon.from_data(COVARIATES, TRAIN)
     dynamics = local_level_dynamics(jnp.asarray(Q_TRUE), jnp.asarray(R_TRUE))
-    with smoother, pytest.raises(TypeError):  # jaxtyping.TypeCheckError
+    with smoother, pytest.raises(TypeError):
         state_space(
             h,
             "f",
@@ -649,7 +647,7 @@ def test_a_scalar_state_path_is_rejected_with_a_clear_message() -> None:
     """
     h = Horizon.from_data(TRAIN, None)
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # dynestyx warns about the scalar initial condition
+        warnings.simplefilter("ignore")
         dynamics = DynamicalModel(
             initial_condition=dist.Normal(0.0, jnp.sqrt(P0)),
             state_evolution=lambda x, u, t_now, t_next: dist.Normal(x, Q_TRUE),
@@ -674,6 +672,23 @@ def test_filter_and_smoother_add_the_same_log_density(
     with Smoother(smoother_config=KFSmootherConfig(filter_source=filter_source)):
         smoothed, _ = log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
     assert jnp.allclose(filtered, smoothed, rtol=1e-5)
+
+
+def test_a_filter_posterior_exports_under_the_smoother() -> None:
+    """The ``f_filtered_states_*`` keys of a Filter fit name no site of the model under the
+    Smoother, so ``to_datatree`` keeps them in the ``posterior`` group (issue #277).
+    """
+    with Filter(filter_config=KFConfig(filter_source="cuthbert")):
+        fitted = Predictive(local_level, posterior_samples=_repeat(PARAMS, 4))(
+            random.PRNGKey(4), TRAIN, TRAIN
+        )
+    posterior = {**_repeat(PARAMS, 4), **fitted}
+    filtered = {name for name in posterior if name.startswith("f_filtered_states")}
+    assert filtered
+    with smoother:
+        tree = to_datatree(random.PRNGKey(3), local_level, posterior, TRAIN, TRAIN)
+    assert filtered <= set(tree["posterior"].data_vars)
+    assert tree["posterior_predictive"]["obs"].shape == (1, 4, T_OBS, 1)
 
 
 def test_svi_fit_and_draw_posterior_run_through_the_block() -> None:
@@ -757,7 +772,7 @@ def test_two_observed_series_keep_their_columns(handler_name: str) -> None:
         handler, posterior = smoother, {"unused": jnp.zeros(n)}
     else:
         handler = LatentPathBuilder()
-        with handler:  # the eager run that a fit would make, so the builder sees concrete data
+        with handler:
             numpyro.handlers.trace(numpyro.handlers.seed(two_series, random.PRNGKey(0))).get_trace(
                 train, train
             )

@@ -13,11 +13,13 @@ groups are then assembled with `xarray.DataTree.from_dict()`.
 """
 
 from collections.abc import Collection, Mapping, Sequence
-from typing import Any, cast
+from typing import Any, cast, get_args
 
 import arviz_base
 import jax
+import jax.numpy as jnp
 import numpy as np
+import numpyro
 import xarray
 from jax import random
 from jax.typing import ArrayLike
@@ -26,8 +28,10 @@ from jaxtyping import Num, Real
 from numpyro_forecast.exceptions import CovariateDimsError
 from numpyro_forecast.offload import resolve_device
 from numpyro_forecast.predictive import forecast, predict_in_sample
+from numpyro_forecast.reparam import TimeTransform
 from numpyro_forecast.typing import Array, ForecastModel
 from numpyro_forecast.validation import (
+    drop_empty_horizon_sites,
     drop_obs_site,
     require_covariates_cover_data,
     require_no_horizon_sites,
@@ -45,6 +49,35 @@ _DEFAULT_OBS_DIMS = ("time", "obs_dim")
 
 _RESERVED_PREDICTION_GROUPS = frozenset({"observed_data", "constant_data"})
 """The groups `predictions_to_datatree()` always writes, so ``group`` cannot name them."""
+
+_TIME_REPARAM_SUFFIXES = tuple(f"_{transform}" for transform in get_args(TimeTransform))
+"""The suffixes of the auxiliary sites of `~~numpyro_forecast.reparam.time_reparam()`."""
+
+_LOC_SCALE_SUFFIX = "_decentered"
+"""The suffix ``numpyro.infer.reparam.LocScaleReparam`` gives the site it samples."""
+
+
+def _candidate_site_names(key: str) -> set[str]:
+    """Return ``key`` and the site names it can stand for once reparam suffixes are removed.
+
+    `~~numpyro_forecast.reparam.time_reparam()` adds the outer suffix
+    (``drift_decentered_haar``) and ``LocScaleReparam`` the inner one
+    (``drift_decentered``). Removing either or both gives the site of a model
+    without that reparam: ``drift_decentered`` (no time suffix),
+    ``drift_haar`` (a ``time_reparam`` model without ``LocScaleReparam``) or
+    ``drift`` (neither).
+    """
+    names = {key}
+    for suffix in _TIME_REPARAM_SUFFIXES:
+        if key.endswith(suffix):
+            base = key.removesuffix(suffix)
+            names.add(base)
+            if base.endswith(_LOC_SCALE_SUFFIX):
+                names.add(base.removesuffix(_LOC_SCALE_SUFFIX) + suffix)
+    names |= {
+        name.removesuffix(_LOC_SCALE_SUFFIX) for name in names if name.endswith(_LOC_SCALE_SUFFIX)
+    }
+    return names
 
 
 def _resolve_covariate_dims(covariates: Array, covariate_dims: Sequence[str] | None) -> list[str]:
@@ -172,11 +205,122 @@ def _require_no_slash_in_site_names(posterior: Mapping[str, ArrayLike]) -> None:
             "numpyro.handlers.scope joins its prefix and the site name with '/' by default: "
             f"pass divider='_' to every scope call (for example "
             f"{example.replace('/', '_')!r} instead of {example!r}), or rename a site that "
-            "you named with '/' yourself. The divider changes only the site names, so you do "
+            "you named with '/' yourself. Scope the latent building blocks only and keep "
+            "predict outside every scope: the drivers read the 'obs' and 'forecast' sites by "
+            "name. The divider changes only the site names, so you do "
             "not have to fit the model again, but the model and the posterior must change "
             "together: pass the model scoped with divider='_' and the posterior with its keys "
-            "renamed the same way, because the drivers ignore a posterior key that matches no "
-            "site of the model and draw that site from the prior with no error."
+            "renamed the same way: to_datatree() raises for a renamed key that matches no "
+            "site of the model, while forecast() and predict_in_sample() ignore such a key "
+            "and draw that site from the prior with no error."
+        )
+        raise ValueError(msg)
+
+
+def _require_posterior_names_match_sites(
+    rng_key: Array,
+    model: ForecastModel,
+    posterior: Mapping[str, ArrayLike],
+    covariates: Array,
+) -> None:
+    """Raise ``ValueError`` when a ``posterior`` key misses the model site it was meant for.
+
+    The drivers substitute posterior sites by name and ignore a key that
+    matches no site, so the site it was meant for is drawn from the prior
+    with no error (issue #277). Three realistic mistakes produce that: a
+    half-applied divider rename (the keys renamed to ``trend_drift`` while
+    the model still scopes with ``"/"``, issue #238), the posterior of a
+    `~~numpyro_forecast.reparam.time_reparam()` fit passed with the plain
+    model (a ``drift_haar`` key and no ``drift``), and the posterior of a fit
+    whose innovations use ``LocScaleReparam`` passed with a model that does
+    not (a ``drift_decentered`` key and no ``drift``). Extra keys are
+    otherwise legitimate: ``_auto_latent`` from ``Predictive`` over an
+    ``AutoContinuous`` guide, the ``f_filtered_states_*`` keys of a dynestyx
+    Filter fit exported under a Smoother, and derived quantities. So only a
+    key that names a missing site raises.
+
+    The model is traced the way
+    `~~numpyro_forecast.predictive.predict_in_sample()` calls it: on the
+    in-sample covariates only (so ``data=None``), with the empty horizon keys
+    dropped and one draw of the posterior substituted for every site that is
+    not deterministic, as ``numpyro.infer.Predictive`` does, so a site the
+    posterior provides is never sampled from its prior (a prior with no
+    ``sample``, such as ``ImproperUniform``, exports as before). The trace
+    runs under `jax.eval_shape` on abstract values: the site names, types and
+    ``is_observed`` flags are recorded without computing or compiling
+    anything, and no draw changes. The drivers run the same substituted model
+    under `jax.jit`, so a model they accept traces abstractly.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key for the ``seed`` handler of the trace (nothing is drawn).
+    model
+        The forecasting model of the export.
+    posterior
+        Posterior samples, with the keys the drivers substitute by name.
+    covariates
+        The in-sample covariates that
+        `~~numpyro_forecast.predictive.predict_in_sample()` gets.
+
+    Raises
+    ------
+    ValueError
+        If a key that is not a site of the model, or that key with a trailing
+        ``"_haar"`` or ``"_dct"`` removed, with an inner ``"_decentered"``
+        removed, or both, equals the name of an unobserved ``sample`` site
+        other than ``"obs"`` with no posterior key once ``"/"`` is replaced by
+        ``"_"`` in that name. The message lists each such key with its site.
+    """
+    sites: dict[str, tuple[str, bool]] = {}
+
+    def record_sites(key: Array, model_covariates: Array, draw: Mapping[str, Array]) -> None:
+        def posterior_value(msg: dict[str, Any]) -> Array | None:
+            # numpyro.infer.Predictive substitutes every site but the deterministic ones.
+            return draw.get(msg["name"]) if msg["type"] != "deterministic" else None
+
+        substituted = numpyro.handlers.substitute(model, substitute_fn=posterior_value)
+        trace = numpyro.handlers.trace(numpyro.handlers.seed(substituted, key)).get_trace(
+            model_covariates
+        )
+        sites.update(
+            (name, (site["type"], bool(site.get("is_observed")))) for name, site in trace.items()
+        )
+
+    # One abstract draw per key that predict_in_sample substitutes (it drops the empty
+    # horizon keys): the shape without the sample axis, in the dtype the drivers would
+    # see (jnp.result_type canonicalizes float64 when x64 is off).
+    draw = {
+        name: jax.ShapeDtypeStruct(np.shape(value)[1:], jnp.result_type(value))
+        for name, value in drop_empty_horizon_sites(posterior).items()
+    }
+    jax.eval_shape(record_sites, rng_key, covariates, draw)
+    # "obs" is the likelihood: the trace runs without data, so it is an unobserved site
+    # here, but no posterior key ever stands for it (to_datatree drops an "obs" key).
+    missing = sorted(
+        name
+        for name, (site_type, observed) in sites.items()
+        if site_type == "sample" and not observed and name != "obs" and name not in posterior
+    )
+    pairs = []
+    for key in posterior:
+        if key in sites:
+            continue
+        stems = _candidate_site_names(key)
+        pairs.extend((key, site) for site in missing if site.replace("/", "_") in stems)
+    if pairs:
+        listed = ", ".join(f"{key!r} for site {site!r}" for key, site in pairs)
+        msg = (
+            "posterior keys match no site of the model but name a latent site that has no "
+            f"posterior key: {listed}. The drivers substitute posterior sites by name, so the "
+            "export would draw those sites from the prior. A key with '_' where the site has "
+            "'/' is a half-applied divider rename: pass the model scoped with divider='_' "
+            "together with the renamed posterior. A key that ends in '_haar' or '_dct' is "
+            "the auxiliary site of a time_reparam model: pass the model wrapped with "
+            "time_reparam that the posterior was fit with. A key with '_decentered' "
+            "(drift_decentered, drift_decentered_haar) comes from a site reparameterized "
+            "with LocScaleReparam(...) (innovations(..., reparam=...), a markov_series "
+            "reparam_config or handlers.reparam): pass the model with that reparam."
         )
         raise ValueError(msg)
 
@@ -696,9 +840,27 @@ def to_datatree(
         ``scope`` call of a model you export (``trend_drift``). The divider
         changes only the names: a fit drawn under ``"/"`` exports without a
         refit once the model uses ``divider="_"`` and the posterior keys are
-        renamed the same way. Both must change, because the predictive
-        drivers ignore a posterior key that matches no site and draw that
-        site from the prior with no error.
+        renamed the same way. Both must change: the drivers substitute
+        posterior sites by name, and `~~numpyro_forecast.predictive.forecast()`
+        and `~~numpyro_forecast.predictive.predict_in_sample()` ignore a key
+        that matches no site and draw that site from the prior with no error.
+        ``to_datatree`` traces the in-sample model call of
+        `~~numpyro_forecast.predictive.predict_in_sample()` abstractly, with
+        the posterior substituted as the driver does (no draw, no compile),
+        and raises ``ValueError`` before any draw when such
+        a key names a latent ``sample`` site that has no key of its own: the
+        key equals the site name with ``"/"`` replaced by ``"_"`` (a
+        half-applied rename, ``trend_drift`` with a model that still has
+        ``trend/drift``), or does so without a trailing ``"_haar"`` or
+        ``"_dct"`` (the posterior of a
+        `~~numpyro_forecast.reparam.time_reparam()` fit that holds
+        ``drift_haar`` but no ``drift``, passed with the plain model) or
+        without an inner ``"_decentered"`` (a fit of a site reparameterized
+        with ``LocScaleReparam``, such as ``drift_decentered`` or
+        ``drift_decentered_haar``, passed with a model without that reparam).
+        Any other key that matches no site, such as ``_auto_latent`` from
+        ``Predictive`` over an ``AutoContinuous`` guide or a derived quantity
+        you add, is stored in the ``posterior`` group and changes no draw.
     data
         In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
         the observation dim at axis ``-1`` and any batch axes to the left
@@ -831,7 +993,10 @@ def to_datatree(
         a ``posterior`` key contains ``"/"`` (a site scoped with the default
         divider of `numpyro.handlers.scope`; an empty forecast-horizon key
         counts, because the export keeps it as a variable; see ``posterior``
-        above), if
+        above), if a ``posterior`` key that matches no site of the model names
+        a latent site that has no key (a half-applied divider rename, or a
+        `~~numpyro_forecast.reparam.time_reparam()` or ``LocScaleReparam``
+        key with a model without that reparam; see ``posterior`` above), if
         ``time_coord`` or a ``coords`` value is not a one-dimensional
         collection of labels (a set, a dict, a scalar, a 2-D array, ragged
         input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
@@ -936,6 +1101,11 @@ def to_datatree(
     # message; an empty horizon key with "/" is still rejected, because the
     # export keeps it as a variable.
     _require_no_slash_in_site_names(posterior)
+    covariates_insample = covariates[..., :n_time, :]
+    # Trace the in-sample model call of predict_in_sample abstractly, with the posterior
+    # substituted as Predictive does: a key that names a site the model has under another
+    # name would leave that site prior-drawn.
+    _require_posterior_names_match_sites(key_pred, model, posterior, covariates_insample)
     posterior_reshaped = {
         name: _reshape_chains(cast("Array | np.ndarray", value), num_chains)
         for name, value in posterior.items()
@@ -947,7 +1117,6 @@ def to_datatree(
         coords=merged_arg,
     )
 
-    covariates_insample = covariates[..., :n_time, :]
     # Resolve once so the two predictive drivers share one placement (and an
     # unmet explicit "cpu" request warns once per export).
     resolved_device = resolve_device(device)

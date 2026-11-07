@@ -1,8 +1,10 @@
 """Tests for the ArviZ DataTree export (roadmap §5)."""
 
 import re
+import types
 import warnings
-from collections.abc import Collection, Hashable, Mapping
+from collections.abc import Callable, Collection, Hashable, Mapping
+from contextlib import AbstractContextManager
 from enum import Enum
 from typing import Any, cast
 
@@ -26,10 +28,13 @@ from jax import Array, random
 from jax.typing import ArrayLike
 from jaxtyping import TypeCheckError
 from numpyro.handlers import scope
-from numpyro.infer import Predictive
+from numpyro.infer import SVI, Predictive, Trace_ELBO
+from numpyro.infer.autoguide import AutoDiagonalNormal, AutoNormal
+from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.convert import (
     _require_no_slash_in_site_names,
+    _require_posterior_names_match_sites,
     _reshape_chains,
     add_forecast_groups,
     predictions_to_datatree,
@@ -114,10 +119,8 @@ def test_mcmc_chain_reshape_roundtrip() -> None:
     """The (num_samples,...) -> (chain, draw, ...) reshape matches group_by_chain."""
     posterior, data, covariates = _mcmc_posterior(num_chains=2)
     tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
-    reshaped = np.asarray(tree["posterior"]["sigma"])  # (chain, draw)
-    flat = np.asarray(posterior["sigma"])  # (num_samples,)
-    # get_samples(group_by_chain=False) concatenates chains in order, so a plain
-    # reshape recovers the per-chain layout.
+    reshaped = np.asarray(tree["posterior"]["sigma"])
+    flat = np.asarray(posterior["sigma"])
     np.testing.assert_allclose(reshaped.reshape(-1), flat, rtol=1e-6)
     assert reshaped.shape == (2, flat.shape[0] // 2)
 
@@ -175,7 +178,6 @@ def test_add_forecast_groups_adds_groups_and_time_continuation() -> None:
     times = out["predictions"].coords["time"].values
     np.testing.assert_array_equal(times, np.arange(n, n + 5))
     assert out["predictions"]["obs"].dims == ("chain", "draw", "time", "obs_dim")
-    # The original tree is untouched.
     assert "predictions" not in tree.children
 
 
@@ -241,8 +243,6 @@ def test_to_datatree_forecast_covariates_add_prediction_groups() -> None:
     assert "predictions" in tree.children
     assert "predictions_constant_data" in tree.children
     np.testing.assert_array_equal(tree["predictions"].coords["time"].values, np.arange(n, n + 5))
-    # constant_data holds only the in-sample slice; the future rows live in
-    # predictions_constant_data.
     assert tree["constant_data"].sizes["time"] == n
     assert tree["predictions_constant_data"].sizes["time"] == 5
 
@@ -711,8 +711,9 @@ def test_require_no_slash_in_site_names_lists_every_offending_key(
     """Issue #238: the message names every key with ``/``, sorted, and the scope divider fix.
 
     The advice is one change to the model and the posterior together: the
-    message must say so, because the drivers ignore a key that matches no
-    site and draw that site from the prior.
+    message must say so, because ``forecast()`` and ``predict_in_sample()``
+    ignore a key that matches no site and draw that site from the prior
+    (``to_datatree()`` raises for a half-applied rename, issue #277).
     """
     with pytest.raises(
         ValueError, match=re.escape(f"posterior sites {offending} have names that contain '/'")
@@ -724,6 +725,7 @@ def test_require_no_slash_in_site_names_lists_every_offending_key(
     assert "divider='_'" in message
     assert "the model and the posterior must change together" in message
     assert "from the prior with no error" in message
+    assert "keep predict outside every scope" in message
 
 
 def test_require_no_slash_in_site_names_accepts_names_without_slash() -> None:
@@ -731,6 +733,19 @@ def test_require_no_slash_in_site_names_accepts_names_without_slash() -> None:
     _require_no_slash_in_site_names(
         {"trend_drift": jnp.zeros((4, 6, 1)), "sigma": jnp.ones(4), "a_drift_haar": jnp.zeros(4)}
     )
+
+
+def _fail_before_the_draws(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``_reshape_chains``, both drivers and ``dict_to_dataset`` raise when called."""
+    import numpyro_forecast.convert as convert_mod
+
+    def fail(*args: object, **kwargs: object) -> object:
+        msg = "to_datatree touched the posterior arrays before it checked the site names"
+        raise AssertionError(msg)
+
+    for name in ("_reshape_chains", "predict_in_sample", "forecast"):
+        monkeypatch.setattr(convert_mod, name, fail)
+    monkeypatch.setattr(arviz_base, "dict_to_dataset", fail)
 
 
 def test_to_datatree_rejects_slash_in_site_names_before_the_host_transfer_and_the_draws(
@@ -744,15 +759,7 @@ def test_to_datatree_rejects_slash_in_site_names_before_the_host_transfer_and_th
     when `to_datatree()` assembles the groups at the end, after both predictive
     drivers have run. The coordinate helpers still run first.
     """
-    import numpyro_forecast.convert as convert_mod
-
-    def fail(*args: object, **kwargs: object) -> object:
-        msg = "to_datatree touched the posterior arrays before it checked the site names"
-        raise AssertionError(msg)
-
-    for name in ("_reshape_chains", "predict_in_sample", "forecast"):
-        monkeypatch.setattr(convert_mod, name, fail)
-    monkeypatch.setattr(arviz_base, "dict_to_dataset", fail)
+    _fail_before_the_draws(monkeypatch)
     posterior = {
         "drift_scale": jnp.ones(4),
         "sigma": jnp.ones(4),
@@ -799,8 +806,6 @@ def test_to_datatree_scoped_latent_exports_with_the_advice_of_the_error() -> Non
     np.testing.assert_array_equal(
         good, predict_in_sample(key, _scoped_trend_model("/"), posterior, covariates)
     )
-    # Two prior draws agree too (same seed, same site order): tie the draws to
-    # the posterior through the Normal(0.0, 0.1) observation noise.
     np.testing.assert_allclose(good, jnp.cumsum(posterior["trend/drift"], axis=-2), atol=0.5)
     tree = to_datatree(key, _scoped_trend_model("_"), renamed, data, covariates)
     assert set(tree["posterior"].data_vars) == {"trend_drift"}
@@ -812,9 +817,14 @@ def _drift_component(covariates: Array, data: Array | None = None) -> None:
     innovations(h, "drift", dist.Normal(0.0, 1.0))
 
 
-def _scoped_time_reparam_model(divider: str) -> ForecastModel:
-    """The ``time_reparam`` Notes example: a reparameterized component under a scope."""
-    component = scope(time_reparam(_drift_component, "haar"), prefix="a", divider=divider)
+def _scoped_time_reparam_model(divider: str, *, reparam: bool = True) -> ForecastModel:
+    """The ``time_reparam`` Notes example: a reparameterized component under a scope.
+
+    With ``reparam=False`` the component is the plain one, so the model has the
+    sample site ``a<divider>drift`` and no auxiliary site.
+    """
+    block = time_reparam(_drift_component, "haar") if reparam else _drift_component
+    component = scope(block, prefix="a", divider=divider)
 
     def model(covariates: Array, data: Array | None = None) -> None:
         h = Horizon.from_data(covariates, data)
@@ -856,6 +866,288 @@ def test_to_datatree_scoped_time_reparam_exports_with_the_underscore_divider() -
     )
     assert set(tree["posterior"].data_vars) == set(names)
     assert {"predictions", "predictions_constant_data"} <= set(tree.children)
+
+
+def test_to_datatree_rejects_a_half_applied_divider_rename(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #277: renamed keys with the model still on ``/`` raise before any draw.
+
+    The drivers would ignore ``trend_drift`` and draw ``trend/drift`` from the
+    prior; the export names both and raises before the host transfer.
+    """
+    posterior = {"trend_drift": random.normal(random.PRNGKey(1), (4, 6, 1))}
+    data, covariates = jnp.zeros((6, 1)), empty_covariates(8)
+    _fail_before_the_draws(monkeypatch)
+    with pytest.raises(ValueError, match=r"'trend_drift'.*'trend/drift'") as excinfo:
+        to_datatree(random.PRNGKey(0), _scoped_trend_model("/"), posterior, data, covariates)
+    assert "divider='_'" in str(excinfo.value)
+
+
+def _time_reparam_svi(t: int = 18) -> tuple[ForecastModel, AutoNormal, dict[str, Array]]:
+    """A short ``AutoNormal`` fit of the Haar-reparameterized random walk."""
+    model = time_reparam(rw_model, "haar")
+    guide = AutoNormal(model)
+    svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    result = svi.run(random.PRNGKey(1), 20, empty_covariates(t), _series(t), progress_bar=False)
+    return model, guide, result.params
+
+
+def test_to_datatree_rejects_the_guide_draws_of_a_time_reparam_fit_with_the_plain_model() -> None:
+    """Issue #277: ``Predictive(guide)`` draws hold ``drift_haar`` and no ``drift``.
+
+    With the plain model ``drift`` is a latent sample site without a posterior
+    key, so the drivers would draw it from the prior.
+    """
+    model, guide, params = _time_reparam_svi()
+    data, covariates = _series(), empty_covariates(18)
+    posterior = Predictive(guide, params=params, num_samples=4)(
+        random.PRNGKey(2), covariates, data
+    )
+    assert "drift_haar" in posterior
+    assert "drift" not in posterior
+    with pytest.raises(ValueError, match=r"'drift_haar'.*'drift'") as excinfo:
+        to_datatree(random.PRNGKey(0), rw_model, posterior, data, covariates)
+    assert "time_reparam" in str(excinfo.value)
+    tree = to_datatree(random.PRNGKey(0), model, posterior, data, covariates)
+    assert "drift_haar" in tree["posterior"].data_vars
+
+
+def test_to_datatree_rejects_a_scoped_time_reparam_key_with_the_plain_scoped_model() -> None:
+    """Issue #277: ``a_drift_haar`` with the plain model, whose site is ``a_drift``."""
+    data, covariates = jnp.zeros((6, 1)), empty_covariates(6)
+    posterior = _prior_draws(_scoped_time_reparam_model("_"), ["a_drift_haar"], data)
+    with pytest.raises(ValueError, match=r"'a_drift_haar'.*'a_drift'"):
+        to_datatree(
+            random.PRNGKey(0),
+            _scoped_time_reparam_model("_", reparam=False),
+            posterior,
+            data,
+            covariates,
+        )
+
+
+def _drift_model(loc_scale: bool) -> ForecastModel:
+    """A random walk whose ``drift`` innovations use ``LocScaleReparam(0)`` or not."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        reparam = LocScaleReparam(0) if loc_scale else None
+        drift = innovations(h, "drift", dist.Normal(0.0, 0.1), reparam=reparam)
+        predict(h, dist.Normal(0.0, 0.1), jnp.cumsum(drift, axis=-2))
+
+    return model
+
+
+@pytest.mark.parametrize(
+    ("wrap_fit", "wrap_export", "key", "site"),
+    [
+        (False, False, "drift_decentered", "drift"),
+        (True, False, "drift_decentered_haar", "drift"),
+        (True, True, "drift_decentered_haar", "drift_haar"),
+    ],
+    ids=["loc_scale", "loc_scale_and_time_reparam", "time_reparam_without_loc_scale"],
+)
+def test_to_datatree_rejects_the_guide_draws_of_a_loc_scale_fit_with_the_plain_model(
+    wrap_fit: bool, wrap_export: bool, key: str, site: str
+) -> None:
+    """Issue #277: ``LocScaleReparam`` renames the latent to ``drift_decentered``.
+
+    The guide draws of such a fit hold only ``drift_decentered`` (or
+    ``drift_decentered_haar`` under ``time_reparam``). A model without the
+    reparam has the site ``drift``, or ``drift_haar`` when it is wrapped with
+    ``time_reparam`` too, and that site would be drawn from the prior.
+    """
+    fit_model = _drift_model(loc_scale=True)
+    fit_model = time_reparam(fit_model, "haar") if wrap_fit else fit_model
+    export_model = _drift_model(loc_scale=False)
+    export_model = time_reparam(export_model, "haar") if wrap_export else export_model
+    data, covariates = _series(), empty_covariates(18)
+    guide = AutoNormal(fit_model)
+    svi = SVI(fit_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    params = svi.run(random.PRNGKey(1), 20, covariates, data, progress_bar=False).params
+    posterior = Predictive(guide, params=params, num_samples=4)(
+        random.PRNGKey(2), covariates, data
+    )
+    assert set(posterior) == {key}
+    with pytest.raises(ValueError, match=rf"'{key}' for site '{site}'") as excinfo:
+        to_datatree(random.PRNGKey(0), export_model, posterior, data, covariates)
+    assert "LocScaleReparam" in str(excinfo.value)
+    to_datatree(random.PRNGKey(0), fit_model, posterior, data, covariates)
+
+
+def test_to_datatree_accepts_derived_keys_named_after_obs() -> None:
+    """Issue #277: ``obs`` is the likelihood, never a latent the posterior should hold.
+
+    The check traces the model without data, so ``obs`` is an unobserved site
+    with no posterior key; a derived key such as ``obs_decentered`` must not
+    be read as a reparameterized ``obs``.
+    """
+    posterior, data, covariates = _svi_posterior(8)
+    derived = {name: jnp.zeros((8,)) for name in ("obs_decentered", "obs_haar", "obs_dct")}
+    tree = to_datatree(random.PRNGKey(0), rw_model, {**posterior, **derived}, data, covariates)
+    assert set(derived) <= set(tree["posterior"].data_vars)
+
+
+def test_to_datatree_exports_a_loc_scale_posterior_that_holds_the_site() -> None:
+    """Issue #277: ``draw_posterior`` also holds the deterministic ``drift``, so nothing raises."""
+    fit_model = _drift_model(loc_scale=True)
+    data, covariates = _series(), empty_covariates(18)
+    guide = AutoNormal(fit_model)
+    svi = SVI(fit_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    params = svi.run(random.PRNGKey(1), 20, covariates, data, progress_bar=False).params
+    posterior = cast(
+        "dict[str, Array]", draw_posterior(random.PRNGKey(3), guide, params, 4, device=None)
+    )
+    assert {"drift", "drift_decentered"} <= set(posterior)
+    plain = _drift_model(loc_scale=False)
+    tree = to_datatree(random.PRNGKey(0), plain, posterior, data, covariates)
+    np.testing.assert_array_equal(
+        tree["posterior_predictive"]["obs"].to_numpy()[0],
+        predict_in_sample(random.PRNGKey(0), plain, posterior, covariates),
+    )
+
+
+def test_to_datatree_exports_a_time_reparam_posterior_with_the_plain_model() -> None:
+    """Issue #277: ``draw_posterior`` holds ``drift`` next to ``drift_haar``, so nothing raises.
+
+    The plain model substitutes ``drift`` itself, so its in-sample draws are
+    those of the wrapped model, which recomputes ``drift`` from ``drift_haar``.
+    """
+    model, guide, params = _time_reparam_svi()
+    data, covariates = _series(), empty_covariates(18)
+    posterior = cast(
+        "dict[str, Array]", draw_posterior(random.PRNGKey(3), guide, params, 4, device=None)
+    )
+    assert {"drift", "drift_haar"} <= set(posterior)
+    plain = to_datatree(random.PRNGKey(0), rw_model, posterior, data, covariates)
+    wrapped = to_datatree(random.PRNGKey(0), model, posterior, data, covariates)
+    assert set(plain["posterior"].data_vars) == set(posterior)
+    np.testing.assert_allclose(
+        plain["posterior_predictive"]["obs"], wrapped["posterior_predictive"]["obs"], atol=1e-5
+    )
+
+
+def test_to_datatree_accepts_keys_that_name_no_missing_site() -> None:
+    """Issue #277: ``_auto_latent`` and a derived key are stored and change no draw.
+
+    ``Predictive(guide)`` over an ``AutoContinuous`` guide returns
+    ``_auto_latent`` next to the latents, and users add derived quantities to
+    land them in the ``posterior`` group; neither names a site of the model.
+    """
+    data, covariates = _series(), empty_covariates(18)
+    guide = AutoDiagonalNormal(rw_model)
+    svi = SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    params = svi.run(random.PRNGKey(1), 20, covariates, data, progress_bar=False).params
+    posterior = Predictive(guide, params=params, num_samples=4)(
+        random.PRNGKey(2), covariates, data
+    )
+    assert "_auto_latent" in posterior
+    posterior["level"] = jnp.cumsum(posterior["drift"], axis=-2)
+    tree = to_datatree(random.PRNGKey(0), rw_model, posterior, data, covariates)
+    assert {"_auto_latent", "level"} <= set(tree["posterior"].data_vars)
+    np.testing.assert_array_equal(
+        tree["posterior_predictive"]["obs"].to_numpy()[0],
+        predict_in_sample(random.PRNGKey(0), rw_model, posterior, covariates),
+    )
+
+
+def _flat_scale_model(covariates: Array, data: Array | None = None) -> None:
+    """A random walk whose noise scale has a flat prior that cannot be sampled.
+
+    ``ImproperUniform`` has no ``sample``: NUTS fits it, and the drivers never
+    sample it because ``Predictive`` substitutes the posterior value first.
+    """
+    h = Horizon.from_data(covariates, data)
+    flat = dist.ImproperUniform(dist.constraints.positive, (), ())
+    sigma = jnp.asarray(numpyro.sample("sigma", flat))
+    drift = innovations(h, "drift", dist.Normal(0.0, 0.1))
+    predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
+
+
+def test_to_datatree_site_check_substitutes_the_posterior_like_the_drivers() -> None:
+    """Issue #277: a latent with a sample-less prior exports, as it does without the check.
+
+    The check traces the model with the posterior substituted, as ``Predictive``
+    does, so it never samples a site that the posterior provides.
+    """
+    data, covariates = _series(), empty_covariates(18)
+    posterior = {"sigma": jnp.full((4,), 0.3), "drift": jnp.zeros((4, 18, 1))}
+    tree = to_datatree(random.PRNGKey(0), _flat_scale_model, posterior, data, covariates)
+    np.testing.assert_array_equal(
+        tree["posterior_predictive"]["obs"].to_numpy()[0],
+        predict_in_sample(random.PRNGKey(0), _flat_scale_model, posterior, covariates),
+    )
+
+
+def test_to_datatree_site_check_keeps_the_draws_of_the_drivers() -> None:
+    """Issue #277: the site check draws nothing, so a valid export equals the drivers' draws."""
+    posterior, data, _ = _svi_posterior(8)
+    covariates = empty_covariates(18 + 3)
+    tree = to_datatree(random.PRNGKey(5), rw_model, posterior, data, covariates)
+    key_pred, key_forecast = random.split(random.PRNGKey(5), 2)
+    np.testing.assert_array_equal(
+        tree["posterior_predictive"]["obs"].to_numpy()[0],
+        predict_in_sample(key_pred, rw_model, posterior, covariates[:18], device="host"),
+    )
+    np.testing.assert_array_equal(
+        tree["predictions"]["obs"].to_numpy()[0],
+        forecast(key_forecast, rw_model, posterior, data, covariates, device="host"),
+    )
+
+
+def test_site_check_compiles_nothing(
+    count_compilations: Callable[[], AbstractContextManager[types.SimpleNamespace]],
+) -> None:
+    """Issue #277: the site check traces the model abstractly, with no backend compile.
+
+    Every argument is built before the counting window, so only the check's own
+    work is counted (a key or a ``jnp.zeros`` built inside it compiles when the
+    test runs alone).
+    """
+    key = random.PRNGKey(0)
+    renamed = {"trend_drift": jnp.zeros((4, 6, 1))}
+    matching = {"trend/drift": jnp.zeros((4, 6, 1))}
+    covariates = empty_covariates(6)
+
+    def fresh_model(covariates: Array, data: Array | None = None) -> None:
+        _scoped_trend_model("/")(covariates, data)
+
+    with count_compilations() as tally, pytest.raises(ValueError, match="'trend/drift'"):
+        _require_posterior_names_match_sites(key, fresh_model, renamed, covariates)
+    assert tally.count == 0
+    with count_compilations() as tally:
+        _require_posterior_names_match_sites(key, fresh_model, matching, covariates)
+    assert tally.count == 0
+
+
+def _always_future_model(covariates: Array, data: Array | None = None) -> None:
+    """A random walk that registers its ``eps_future`` sample site on every call.
+
+    At horizon 0 the site has shape ``(0, 1)``; a training run records an empty
+    leaf for it, which ``predict_in_sample`` drops before ``Predictive``.
+    """
+    h = Horizon.from_data(covariates, data)
+    eps = numpyro.sample("eps", dist.Normal(0.0, 0.1).expand([h.t_obs, 1]).to_event(2))
+    future = dist.Normal(0.0, 0.1).expand([h.future, 1]).to_event(2)
+    eps_future = numpyro.sample("eps_future", future)
+    level = jnp.cumsum(jnp.concatenate([eps, eps_future], axis=-2), axis=-2)
+    predict(h, dist.Normal(0.0, 0.1), level)
+
+
+def test_site_check_drops_the_empty_horizon_keys_like_the_drivers() -> None:
+    """Issue #277: an empty horizon key is dropped, as ``predict_in_sample`` drops it.
+
+    The leaf has no obs axis, so substituting it would break the concatenation
+    that the driver never sees.
+    """
+    data, covariates = _series(), empty_covariates(18)
+    posterior = {"eps": jnp.zeros((4, 18, 1)), "eps_future": jnp.zeros((4, 0))}
+    tree = to_datatree(random.PRNGKey(0), _always_future_model, posterior, data, covariates)
+    np.testing.assert_array_equal(
+        tree["posterior_predictive"]["obs"].to_numpy()[0],
+        predict_in_sample(random.PRNGKey(0), _always_future_model, posterior, covariates),
+    )
 
 
 def test_to_datatree_rejects_data_without_observations() -> None:
@@ -1018,9 +1310,6 @@ def test_add_forecast_groups_inherited_dims_reject_wrong_ndim() -> None:
     )
     with pytest.raises(CovariateDimsError, match="carry 3 axis names"):
         add_forecast_groups(tree, fc, future_covariates[n:])
-
-
-# --- batched (*batch, time, obs) data (issue #172) --------------------------
 
 
 def _panel_body(h: Horizon, covariates: Array) -> None:
@@ -1313,9 +1602,7 @@ def test_add_forecast_groups_squeezed_observed_data_takes_default_names() -> Non
     ("covariate_dims", "coords", "width"),
     [
         pytest.param(_LEVEL_COVARIATE_DIMS, _LEVEL_COORDS, 2, id="named-labels"),
-        # The in-sample labels of a time axis named "step" must not reach the forecast.
         pytest.param(["covariate", "step", "obs_dim"], _LEVEL_COORDS, 2, id="time-named-step"),
-        # One covariate column for both series: 'obs_dim' has 2 labels on obs, 1 on covariates.
         pytest.param(
             _LEVEL_COVARIATE_DIMS, {"covariate": ["sales", "availability"]}, 1, id="broadcast"
         ),
@@ -1365,7 +1652,6 @@ def test_add_forecast_groups_keeps_the_posterior_draw_labels(
     posterior = {"level": jnp.arange(20, dtype=jnp.float32)}
     covariates = jnp.ones((2, 6, 2))
     subset = _level_tree(posterior, covariates[:, :4], num_chains=2).isel(selection)
-    # A C-order flatten of (chain, draw) is the order of stack(sample=("chain", "draw")).
     subset_level = np.asarray(subset["posterior"].dataset["level"]).reshape(-1)
     fc = forecast(
         random.PRNGKey(1), _level_model, {"level": subset_level}, jnp.ones((4, 2)), covariates
@@ -1409,7 +1695,6 @@ def test_to_datatree_forecast_groups_via_dict_to_dataset(monkeypatch: pytest.Mon
     to_datatree(
         random.PRNGKey(2), _model(), posterior, data, empty_covariates(n + 2), num_chains=2
     )
-    # The four in-sample groups plus predictions and predictions_constant_data.
     assert calls["count"] == 6
 
 
@@ -1425,7 +1710,6 @@ def test_all_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(arviz_base, "dict_to_dataset", spy)
     posterior, data, covariates = _mcmc_posterior()
     to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
-    # posterior + posterior_predictive + observed_data + constant_data.
     assert calls["count"] == 4
 
 
@@ -1555,9 +1839,6 @@ def test_to_datatree_deterministic_given_key() -> None:
     )
 
 
-# --- batch_size (issue #64) ----------------------------------------
-
-
 def _svi_posterior_with_horizon(
     num_draws: int, horizon: int = 5
 ) -> tuple[dict[str, Array], Array, Array]:
@@ -1676,7 +1957,6 @@ def test_to_datatree_forwards_device(monkeypatch: pytest.MonkeyPatch, device: st
             device=None,
         )
     else:
-        # The default must forward "host", so device is deliberately omitted.
         to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, batch_size=4)
     expected = None if device is None else jax.devices("cpu")[0]
     assert captured["predict_in_sample"] == expected
@@ -1809,8 +2089,6 @@ def test_predictions_to_datatree_custom_group() -> None:
 
 
 def test_predictions_to_datatree_default_observed_is_zeros() -> None:
-    # plot_lm requires the observed_data group even with observed_scatter disabled,
-    # so the default is a zeros placeholder rather than omitting the group.
     predictions, x, labels = _prediction_draws()
     tree = predictions_to_datatree(predictions, x, labels)
     np.testing.assert_array_equal(
