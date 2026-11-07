@@ -2340,9 +2340,10 @@ posterior
     ``"_dct"`` (the posterior of a
     `~~numpyro_forecast.reparam.time_reparam()` fit that holds
     ``drift_haar`` but no ``drift``, passed with the plain model) or
-    without a trailing ``"_decentered"`` (a fit whose innovations use
-    ``LocScaleReparam``, passed with a model that does not). Any
-    other key that matches no site, such as ``_auto_latent`` from
+    without an inner ``"_decentered"`` (a fit of a site reparameterized
+    with ``LocScaleReparam``, such as ``drift_decentered`` or
+    ``drift_decentered_haar``, passed with a model without that reparam).
+    Any other key that matches no site, such as ``_auto_latent`` from
     ``Predictive`` over an ``AutoContinuous`` guide or a derived quantity
     you add, is stored in the ``posterior`` group and changes no draw.
 data
@@ -2478,9 +2479,9 @@ ValueError
     divider of `numpyro.handlers.scope`; an empty forecast-horizon key
     counts, because the export keeps it as a variable; see ``posterior``
     above), if a ``posterior`` key that matches no site of the model names
-    a latent site that has no key (a half-applied divider rename or a
-    `~~numpyro_forecast.reparam.time_reparam()` key with the plain model;
-    see ``posterior`` above), if
+    a latent site that has no key (a half-applied divider rename, or a
+    `~~numpyro_forecast.reparam.time_reparam()` or ``LocScaleReparam``
+    key with a model without that reparam; see ``posterior`` above), if
     ``time_coord`` or a ``coords`` value is not a one-dimensional
     collection of labels (a set, a dict, a scalar, a 2-D array, ragged
     input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
