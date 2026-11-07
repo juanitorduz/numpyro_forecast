@@ -420,8 +420,9 @@ _SUPPORT_CASES: dict[str, _SupportCase] = {
     ),
 }
 """Real, positive and bounded supports: ``exp`` gives ``log(x)``, the (scaled) sigmoid
-``log((x - a)(b - x) / (b - a))``, written by hand so the expectation does not reuse
-NumPyro's bijectors."""
+``log((x - a)(b - x) / (b - a))``. The formulas are written by hand, so a wrong sign or a
+Jacobian taken at ``x`` instead of ``u`` in the package's composite transform cannot cancel
+against the expectation; they do depend on NumPyro's choice of bijector, through ``x``."""
 
 NUM_POINTS = 8
 
