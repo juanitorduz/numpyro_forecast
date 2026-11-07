@@ -87,6 +87,49 @@ ul.task-list li input[type="checkbox"] {
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
 
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
   <link rel="alternate" type="text/markdown" href="typing.Metric.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/typing.Metric.html">
@@ -137,7 +180,7 @@ ul.task-list li input[type="checkbox"] {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast</span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
     </a>
   </div>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
@@ -153,11 +196,15 @@ ul.task-list li input[type="checkbox"] {
     <a class="nav-link active" href="../reference/index.html" aria-current="page"> 
 <span class="menu-text">Reference</span></a>
   </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../changelog.html"> 
+<span class="menu-text">Changelog</span></a>
+  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="39" data-forks="3"></div>
     </span>
   </li>  
 </ul>
@@ -880,6 +927,7 @@ ul.task-list li input[type="checkbox"] {
 <p><code>pred</code> has the sample axis first, shape <code>(sample, *batch)</code>; <code>truth</code> has shape <code>(*batch)</code>; the result is a 0-d array. Metrics must be pure JAX functions (jit- and vmap-compatible): host floats appear only at result boundaries (<a href="evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast()</a>, <a href="evaluate.BacktestResult.html#numpyro_forecast.evaluate.BacktestResult" class="gdls-link gdls-code">BacktestResult</a>), never inside metrics, so <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a> can vmap any metric over the window axis. Parametrize by closure: <code>functools.partial</code> for keywords (e.g.&nbsp;<code>partial(eval_coverage, alpha=0.5)</code>) or a factory like <a href="metrics.make_mase.html#numpyro_forecast.metrics.make_mase" class="gdls-link gdls-code">make_mase()</a>.</p>
 <p>Every driver checks each result on its own, so the outcome for one metric never depends on the other metrics in the mapping: a 0-d bool or integer result is converted to float, and any other shape or dtype (for example the per-cell values of <a href="metrics.crps_empirical.html#numpyro_forecast.metrics.crps_empirical" class="gdls-link gdls-code">crps_empirical()</a>, whose metric counterpart is <a href="evaluate.eval_crps.html#numpyro_forecast.evaluate.eval_crps" class="gdls-link gdls-code">eval_crps()</a>) raises <code>ValueError</code> with the name, shape and dtype of the metric. <a href="evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast()</a> and <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> check the value they score; <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a> checks the value of one window inside its <code>vmap</code>, and traces the scoring on the window shapes before the fit, so the error comes before any window is fitted.</p>
 <p>The built-in metrics and <a href="evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast()</a> check that <code>truth.shape</code> is <code>pred.shape[1:]</code> and raise <code>ValueError</code> otherwise. With the runtime type hook on (the default), the jaxtyping annotations reject a mismatched array first and raise <code>jaxtyping.TypeCheckError</code>. A Python or NumPy scalar <code>truth</code> passes the annotations, so the explicit check raises <code>ValueError</code> for it. Either way a mismatched <code>truth</code> never broadcasts into a wrong value.</p>
+<p><code>pred</code> and <code>truth</code> may have any real dtype. A count model (a discrete observation family in <a href="models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a>) needs integer data, so its forecast draws are integers. The built-in metrics cast an integer operand to the default float dtype (<code>float32</code>, or <code>float64</code> with x64 enabled) before they compute, and keep a floating operand in its own dtype. <code>float32</code> holds every integer up to <span class="math inline">2^{24}</span> exactly; larger counts round unless x64 is enabled. <a href="evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast()</a> (and with it <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>) and <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a> cast once before they call the metrics, so every metric receives floating arrays and can compute <code>jnp.abs(pred - truth)</code> without integer wraparound; a custom metric that needs the integer draws must read them from the kept predictions (<code>keep_predictions=True</code>) or cast back inside the metric. The built-in metrics reject boolean and complex arrays.</p>
 </div>
 
 

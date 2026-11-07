@@ -215,7 +215,7 @@ window.Quarto = {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast</span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
     </a>
   </div>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
@@ -231,11 +231,15 @@ window.Quarto = {
     <a class="nav-link active" href="../reference/index.html" aria-current="page"> 
 <span class="menu-text">Reference</span></a>
   </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../changelog.html"> 
+<span class="menu-text">Changelog</span></a>
+  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="39" data-forks="3"></div>
     </span>
   </li>  
 </ul>
@@ -963,7 +967,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/acf.py#L149-L204" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/acf.py#L155-L215" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">acf</span><span class="op">.</span><span class="sig-name">pacf</span>(
@@ -984,9 +988,9 @@ window.Quarto = {
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">y</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch time"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">y</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" *batch time"</span>]</span></code></dt>
 <dd>
-<p>Time series with time on the last axis, shape <code>(*batch, time)</code>. NumPy arrays are accepted directly.</p>
+<p>Time series with time on the last axis, shape <code>(*batch, time)</code>. NumPy arrays are accepted directly. Integer counts are cast to the default float dtype where the series lives (<code>float_cast_in_place()</code>): host-committed draws (<code>device="host"</code>) stay on the CPU and are not moved to the accelerator; a pinned series (<code>device="pinned_host"</code>) is copied back onto its own device first.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">max_lag</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>

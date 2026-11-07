@@ -24,8 +24,8 @@ The recursion runs along the last axis and broadcasts over any leading batch axe
 ## Parameters
 
 
-`y: Float[ArrayLike, ``" *batch time"]`  
-Time series with time on the last axis, shape `(*batch, time)`. NumPy arrays are accepted directly.
+`y: Real[ArrayLike, ``" *batch time"]`  
+Time series with time on the last axis, shape `(*batch, time)`. NumPy arrays are accepted directly. Integer counts are cast to the default float dtype where the series lives (`float_cast_in_place()`): host-committed draws (`device="host"`) stay on the CPU and are not moved to the accelerator; a pinned series (`device="pinned_host"`) is copied back onto its own device first.
 
 `max_lag: int`  
 Largest lag to evaluate; must satisfy `1 <= max_lag < time`.

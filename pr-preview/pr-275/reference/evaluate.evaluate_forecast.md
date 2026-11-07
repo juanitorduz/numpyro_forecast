@@ -31,14 +31,14 @@ evaluate_forecast(pred, truth, metrics=metrics)
 ## Parameters
 
 
-`pred: Float[ArrayLike, ``" sample *batch"]`  
-Forecast samples with the sample axis first, shape `(sample, *batch)`.
+`pred: Real[ArrayLike, ``" sample *batch"]`  
+Forecast samples with the sample axis first, shape `(sample, *batch)`. Integer draws (a count model) are accepted.
 
-`truth: Float[ArrayLike, ``" *batch"]`  
-Ground-truth values with shape `(*batch)`.
+`truth: Real[ArrayLike, ``" *batch"]`  
+Ground-truth values with shape `(*batch)`. Integer values are accepted.
 
 `metrics: Mapping[str, Metric] | None = None`  
-Mapping of metric name to function; when `None` defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS) (`mae`, `rmse`, `crps` and `coverage`). Each function takes `(pred, truth)` and returns a 0-d array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any extra parameters with `functools.partial()` (see above). A per-cell function such as [crps_empirical()](metrics.crps_empirical.md#numpyro_forecast.metrics.crps_empirical) is not a metric: use [eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps), its mean over the cells.
+Mapping of metric name to function; when `None` defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS) (`mae`, `rmse`, `crps` and `coverage`). Each function takes `(pred, truth)` and returns a 0-d array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any extra parameters with `functools.partial()` (see above). Each function receives floating arrays: an integer `pred` or `truth` is cast to the default float dtype once, before the first metric runs. A per-cell function such as [crps_empirical()](metrics.crps_empirical.md#numpyro_forecast.metrics.crps_empirical) is not a metric: use [eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps), its mean over the cells.
 
 
 ## Returns
