@@ -990,7 +990,7 @@ window.Quarto = {
 <dl>
 <dt><code><span class="doc-parameter-name">y</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Real[ArrayLike, <span class="st">" *batch time"</span>]</span></code></dt>
 <dd>
-<p>Time series with time on the last axis, shape <code>(*batch, time)</code>. NumPy arrays are accepted directly. Integer counts are cast to the default float dtype where the series lives (<code>float_cast_in_place()</code>): host-committed draws (<code>device="host"</code>) stay on the CPU and are not moved to the accelerator; a pinned series (<code>device="pinned_host"</code>) is copied back onto its own device first.</p>
+<p>Time series with time on the last axis, shape <code>(*batch, time)</code>. NumPy arrays are accepted directly; integer counts are cast to the default float dtype (<code>float_view_resident()</code>). A CPU-committed series (<code>device="host"</code> draws with the CPU backend initialized, see <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>) stays on the CPU; a pinned series, floating or integer, is copied back onto its own device first.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">max_lag</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>
