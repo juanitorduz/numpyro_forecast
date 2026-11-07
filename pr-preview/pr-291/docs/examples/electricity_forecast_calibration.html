@@ -65,7 +65,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </style>
 
 
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
 <script src="../../site_libs/quarto-nav/headroom.min.js"></script>
 <script src="../../site_libs/clipboard/clipboard.min.js"></script>
 <script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
@@ -112,9 +112,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     "search-label": "Search"
   }
 }</script>
-<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
-
-<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 <style>
 .cell-output-display img { max-width: 100%; height: auto; }
 </style>
@@ -399,7 +396,7 @@ window.Quarto = {
 <p>Throughout the package, time lives at axis <code>-2</code> and the observation dimension at <code>-1</code>, and the forecast horizon is inferred from the covariates being longer than the data.</p>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
-<div id="f17ff016" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:05.901959Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:05.901871Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:08.494041Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:08.493235Z&quot;}}" data-execution_count="1">
+<div id="f17ff016" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:49.909581Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:49.909497Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:52.250680Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:52.249620Z&quot;}}" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> warnings</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># preliz warns at import time when PyMC is not installed; this example does not use PyMC.</span></span>
@@ -411,17 +408,17 @@ window.Quarto = {
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span>
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> cast</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.dates <span class="im">as</span> mdates</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.handlers</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> functools <span class="im">import</span> partial</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> cast</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.dates <span class="im">as</span> mdates</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.handlers</span>
 <span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> preliz <span class="im">as</span> pz</span>
 <span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
 <span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.contrib.hsgp.approximation <span class="im">import</span> hsgp_matern</span>
@@ -459,7 +456,7 @@ window.Quarto = {
 <blockquote class="blockquote">
 <p><em>“Victoria electricity demand dataset, as presented at https://otexts.com/fpp2/scatterplots.html and downloaded from https://github.com/robjhyndman/fpp2-package/blob/master/data/elecdaily.rda . This series contains the first eight weeks (starting Jan 1). The original dataset was half-hourly data; here we’ve downsampled to hourly data by taking every other timestep.”</em></p>
 </blockquote>
-<div id="40f97b71" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:08.495834Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:08.495626Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:08.534035Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:08.533268Z&quot;}}" data-execution_count="2">
+<div id="40f97b71" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:52.252660Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:52.252461Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:52.301067Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:52.300133Z&quot;}}" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>demand, temperature <span class="op">=</span> load_victoria_electricity()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>duration <span class="op">=</span> demand.shape[<span class="dv">0</span>]</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -478,7 +475,7 @@ temperature shape: (1344,)</code></pre>
 </div>
 </div>
 <p>Let’s visualize the data:</p>
-<div id="84c32ee4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:08.535400Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:08.535270Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:08.769893Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:08.769258Z&quot;}}" data-execution_count="3">
+<div id="84c32ee4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:52.302866Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:52.302744Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:52.560432Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:52.559441Z&quot;}}" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">2</span>, ncols<span class="op">=</span><span class="dv">1</span>, sharex<span class="op">=</span><span class="va">True</span>, sharey<span class="op">=</span><span class="va">False</span>, layout<span class="op">=</span><span class="st">"constrained"</span>)</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].plot(demand_dates, demand_values, c<span class="op">=</span><span class="st">"C0"</span>)</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].<span class="bu">set</span>(</span>
@@ -498,7 +495,7 @@ temperature shape: (1344,)</code></pre>
 </div>
 </div>
 <p>As in the baseline example, there is a clear positive correlation between temperature and demand, and the relationship is non-linear. The scatter plot below motivates the calibration: at the high end of the temperature range the air-conditioning effect dominates and the per-degree effect on demand settles around a stable value. This is exactly the regime where we will anchor the model with domain knowledge.</p>
-<div id="7ba7e9d4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:08.771606Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:08.771517Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:08.906025Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:08.905554Z&quot;}}" data-execution_count="4">
+<div id="7ba7e9d4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:52.562236Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:52.562126Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:52.708103Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:52.707365Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>ax.scatter(temperature_values, demand_values)</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>ax.axvline(x<span class="op">=</span><span class="fl">32.0</span>, color<span class="op">=</span><span class="st">"C3"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"32 °C threshold"</span>)</span>
@@ -516,7 +513,7 @@ temperature shape: (1344,)</code></pre>
 <section id="training-and-test-data" class="level1">
 <h1>Training and test data</h1>
 <p>We split the data as in the original example, holding out the last two weeks. We build the exogenous inputs the model needs and pack them into a single <code>covariates</code> array with time at axis <code>-2</code>: the temperature and a <code>day_of_week</code> index. The forecast horizon is inferred later from <code>covariates</code> being longer than the training data.</p>
-<div id="cccd2976" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:08.907715Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:08.907589Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:08.990897Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:08.990404Z&quot;}}" data-execution_count="5">
+<div id="cccd2976" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:52.709877Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:52.709764Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:52.789160Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:52.788635Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>num_forecast_steps <span class="op">=</span> <span class="dv">24</span> <span class="op">*</span> <span class="dv">7</span> <span class="op">*</span> <span class="dv">2</span>  <span class="co"># two weeks</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>t_train <span class="op">=</span> duration <span class="op">-</span> num_forecast_steps</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -565,7 +562,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="gp-prior-parameters" class="level2">
 <h2 class="anchored" data-anchor-id="gp-prior-parameters">GP prior parameters</h2>
 <p>As in the baseline example, we set the Gaussian Process amplitude and length-scale priors with <code>preliz</code> by assuming both come from an Inverse-Gamma distribution and specifying the support. We also pass <code>mass=0.94</code> explicitly, so the priors do not depend on the default of the installed preliz version.</p>
-<div id="941286aa" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:08.992332Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:08.992221Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:09.373042Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:09.372420Z&quot;}}" data-execution_count="6">
+<div id="941286aa" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:52.791060Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:52.790903Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:53.153197Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:53.152183Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># For the amplitude, we set the values inspired on the range of the demand / temperature</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ratio.</span></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>amplitude_params, ax <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="fl">0.1</span>, upper<span class="op">=</span><span class="fl">0.5</span>, mass<span class="op">=</span><span class="fl">0.94</span>)</span></code></pre></div>
@@ -577,7 +574,7 @@ covariates shape: (1344, 2)</code></pre>
 </div>
 </div>
 </div>
-<div id="1e2c04b3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:09.374470Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:09.374343Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:09.460493Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:09.459809Z&quot;}}" data-execution_count="7">
+<div id="1e2c04b3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:53.154754Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:53.154646Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:53.260635Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:53.260127Z&quot;}}" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># As we want to use the GP to model the temperature effect, we need to set the length</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># scale parameter. We expect these effects to be seen at the order of units or tens of</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co"># units, so we expect the length scale to be between 3 and 10.</span></span>
@@ -594,8 +591,8 @@ covariates shape: (1344, 2)</code></pre>
 </div>
 </div>
 </div>
-<p>These two <code>maxent</code> calls return the fitted Inverse-Gamma distributions, and the model below builds its amplitude and length-scale priors from their <code>alpha</code> and <code>beta</code> parameters, so the priors in the model are the priors in the plots above. The model is identical to the baseline, with the masked calibration likelihood added just after the <code>beta_temperature</code> deterministic site. As in the baseline, the GP input is the temperature minus <code>TEMP_CENTER</code>, the midpoint of the training temperature range, and <code>ELL</code> is the half-width <span class="math inline">L</span> of the box <span class="math inline">[-L, L]</span> that must contain that input (not a factor of the data range), set to twice the training half-range. The <a href="electricity_forecast.html">baseline example</a> explains why both come from the training temperatures and not from <code>covariates</code> inside the model. The HSGP settings and the three calibration numbers (threshold, target mean, target scale) are module constants, so the plots below can read them back. The calibration mask, the linear term and the noise scale use the raw temperature.</p>
-<div id="55151e36" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:09.461875Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:09.461761Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:09.494675Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:09.494028Z&quot;}}" data-execution_count="8">
+<p>These two <code>maxent</code> calls return the fitted Inverse-Gamma distributions, and the model below builds its amplitude and length-scale priors from their <code>alpha</code> and <code>beta</code> parameters, so the priors in the model are the priors in the plots above. The model is identical to the baseline, with the masked calibration likelihood added just after the <code>beta_temperature</code> deterministic site. As in the baseline, the GP input is the temperature minus <code>TEMP_CENTER</code>, the midpoint of the training temperature range, and <code>ELL</code> is the half-width <span class="math inline">L</span> of the box <span class="math inline">[-L, L]</span> that must contain that input (not a factor of the data range), set to twice the training half-range (the baseline also gives the box rule of Riutort-Mayol et al., 2023, which the <em>Accuracy of the HSGP approximation</em> section below applies). The <a href="electricity_forecast.html">baseline example</a> explains why both come from the training temperatures and not from <code>covariates</code> inside the model. The HSGP settings and the three calibration numbers (threshold, target mean, target scale) are module constants, so the plots below can read them back. The calibration mask, the linear term and the noise scale use the raw temperature.</p>
+<div id="55151e36" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:53.262316Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:53.262179Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:53.298186Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:53.297628Z&quot;}}" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># HSGP input: the temperature centered on the training midrange. NumPyro's ``ell`` is the</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co"># half-width L of the box [-L, L] that must contain the centered input, not a factor of the</span></span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co"># data range; we take twice the training half-range. Both constants come from the training</span></span>
@@ -618,80 +615,83 @@ covariates shape: (1344, 2)</code></pre>
 <span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>PRIOR_SCALE <span class="op">=</span> <span class="fl">0.01</span>  <span class="co"># scale (uncertainty) of the calibration likelihood</span></span>
 <span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> calibrated_electricity_model(covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
-<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""HSGP temperature effect with hour/day seasonality and a calibration likelihood.</span></span>
-<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a><span class="co">    Same model as ``electricity_model`` in the baseline example, plus a masked</span></span>
-<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a><span class="co">    Normal likelihood on the latent temperature effect that anchors it to a</span></span>
-<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a><span class="co">    domain-knowledge value in the high-temperature regime.</span></span>
-<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
-<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>    duration <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">2</span>]</span>
-<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>    temperature <span class="op">=</span> covariates[..., <span class="dv">0</span>]</span>
-<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>    day_of_week <span class="op">=</span> covariates[..., <span class="dv">1</span>].astype(<span class="st">"int32"</span>)</span>
-<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Intercept.</span></span>
-<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>    intercept <span class="op">=</span> numpyro.sample(<span class="st">"intercept"</span>, dist.Normal(loc<span class="op">=</span><span class="fl">0.0</span>, scale<span class="op">=</span><span class="fl">2.0</span>))</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> calibrated_electricity_model(</span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>    covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>, <span class="op">*</span>, ell: <span class="bu">float</span> <span class="op">=</span> ELL, m: <span class="bu">int</span> <span class="op">=</span> M</span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""HSGP temperature effect with hour/day seasonality and a calibration likelihood.</span></span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a><span class="co">    Same model as ``electricity_model`` in the baseline example, plus a masked</span></span>
+<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a><span class="co">    Normal likelihood on the latent temperature effect that anchors it to a</span></span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a><span class="co">    domain-knowledge value in the high-temperature regime. ``ell`` and ``m`` set the HSGP</span></span>
+<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a><span class="co">    box half-width and the number of basis functions.</span></span>
+<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
+<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a>    duration <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">2</span>]</span>
+<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>    temperature <span class="op">=</span> covariates[..., <span class="dv">0</span>]</span>
+<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>    day_of_week <span class="op">=</span> covariates[..., <span class="dv">1</span>].astype(<span class="st">"int32"</span>)</span>
 <span id="cb11-37"><a href="#cb11-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-38"><a href="#cb11-38" aria-hidden="true" tabindex="-1"></a>    <span class="co"># GP parameters (amplitude and length-scale priors are the preliz maxent fits).</span></span>
-<span id="cb11-39"><a href="#cb11-39" aria-hidden="true" tabindex="-1"></a>    alpha <span class="op">=</span> numpyro.sample(<span class="st">"alpha"</span>, AMPLITUDE_PRIOR)</span>
-<span id="cb11-40"><a href="#cb11-40" aria-hidden="true" tabindex="-1"></a>    length_scale <span class="op">=</span> numpyro.sample(<span class="st">"length_scale"</span>, LENGTH_SCALE_PRIOR)</span>
-<span id="cb11-41"><a href="#cb11-41" aria-hidden="true" tabindex="-1"></a>    scale_factor <span class="op">=</span> numpyro.sample(<span class="st">"scale"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
-<span id="cb11-42"><a href="#cb11-42" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Degrees of freedom for the Student-t likelihood.</span></span>
-<span id="cb11-43"><a href="#cb11-43" aria-hidden="true" tabindex="-1"></a>    nu <span class="op">=</span> numpyro.sample(<span class="st">"nu"</span>, dist.Gamma(concentration<span class="op">=</span><span class="fl">8.0</span>, rate<span class="op">=</span><span class="fl">3.0</span>))</span>
-<span id="cb11-44"><a href="#cb11-44" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-45"><a href="#cb11-45" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Non-linear temperature effect as a Matérn 5/2 HSGP of the centered temperature.</span></span>
-<span id="cb11-46"><a href="#cb11-46" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ``hsgp_matern`` is annotated for float hyperparameters, so we cast the sampled scalars.</span></span>
-<span id="cb11-47"><a href="#cb11-47" aria-hidden="true" tabindex="-1"></a>    beta_temperature <span class="op">=</span> hsgp_matern(</span>
-<span id="cb11-48"><a href="#cb11-48" aria-hidden="true" tabindex="-1"></a>        x<span class="op">=</span>temperature <span class="op">-</span> TEMP_CENTER,</span>
-<span id="cb11-49"><a href="#cb11-49" aria-hidden="true" tabindex="-1"></a>        nu<span class="op">=</span><span class="dv">5</span> <span class="op">/</span> <span class="dv">2</span>,</span>
-<span id="cb11-50"><a href="#cb11-50" aria-hidden="true" tabindex="-1"></a>        alpha<span class="op">=</span>cast(<span class="st">"float"</span>, alpha),</span>
-<span id="cb11-51"><a href="#cb11-51" aria-hidden="true" tabindex="-1"></a>        length<span class="op">=</span>cast(<span class="st">"float"</span>, length_scale),</span>
-<span id="cb11-52"><a href="#cb11-52" aria-hidden="true" tabindex="-1"></a>        ell<span class="op">=</span>ELL,</span>
-<span id="cb11-53"><a href="#cb11-53" aria-hidden="true" tabindex="-1"></a>        m<span class="op">=</span>M,</span>
-<span id="cb11-54"><a href="#cb11-54" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb11-55"><a href="#cb11-55" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"beta_temperature"</span>, beta_temperature)</span>
-<span id="cb11-56"><a href="#cb11-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-57"><a href="#cb11-57" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Calibration likelihood: anchor the latent temperature effect to the</span></span>
-<span id="cb11-58"><a href="#cb11-58" aria-hidden="true" tabindex="-1"></a>    <span class="co"># domain-knowledge value where temperature exceeds the threshold. The mask</span></span>
-<span id="cb11-59"><a href="#cb11-59" aria-hidden="true" tabindex="-1"></a>    <span class="co"># keeps only the high-temperature contributions, matching the blog's</span></span>
-<span id="cb11-60"><a href="#cb11-60" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ``beta_temperature[temperature_prior_idx]`` indexing.</span></span>
-<span id="cb11-61"><a href="#cb11-61" aria-hidden="true" tabindex="-1"></a>    high_temp_mask <span class="op">=</span> temperature <span class="op">&gt;</span> TEMP_THRESHOLD</span>
-<span id="cb11-62"><a href="#cb11-62" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> numpyro.handlers.mask(mask<span class="op">=</span>high_temp_mask):</span>
-<span id="cb11-63"><a href="#cb11-63" aria-hidden="true" tabindex="-1"></a>        numpyro.sample(</span>
-<span id="cb11-64"><a href="#cb11-64" aria-hidden="true" tabindex="-1"></a>            <span class="st">"temperature_prior"</span>,</span>
-<span id="cb11-65"><a href="#cb11-65" aria-hidden="true" tabindex="-1"></a>            dist.Normal(loc<span class="op">=</span>PRIOR_MEAN, scale<span class="op">=</span>PRIOR_SCALE),</span>
-<span id="cb11-66"><a href="#cb11-66" aria-hidden="true" tabindex="-1"></a>            obs<span class="op">=</span>beta_temperature,</span>
-<span id="cb11-67"><a href="#cb11-67" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb11-68"><a href="#cb11-68" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-69"><a href="#cb11-69" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Hour-of-day effect, tiled over the horizon with periodic_repeat.</span></span>
-<span id="cb11-70"><a href="#cb11-70" aria-hidden="true" tabindex="-1"></a>    scale_hour_of_day <span class="op">=</span> numpyro.sample(<span class="st">"scale_hour_of_day"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
-<span id="cb11-71"><a href="#cb11-71" aria-hidden="true" tabindex="-1"></a>    hour_of_day_effect <span class="op">=</span> numpyro.sample(</span>
-<span id="cb11-72"><a href="#cb11-72" aria-hidden="true" tabindex="-1"></a>        <span class="st">"hour_of_day_effect"</span>,</span>
-<span id="cb11-73"><a href="#cb11-73" aria-hidden="true" tabindex="-1"></a>        dist.ZeroSumNormal(scale<span class="op">=</span>scale_hour_of_day, event_shape<span class="op">=</span>(<span class="dv">24</span>,)),</span>
-<span id="cb11-74"><a href="#cb11-74" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb11-75"><a href="#cb11-75" aria-hidden="true" tabindex="-1"></a>    hour_of_day_effect <span class="op">=</span> periodic_repeat(hour_of_day_effect, duration, axis<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb11-76"><a href="#cb11-76" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-77"><a href="#cb11-77" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Day-of-week effect, indexed by the calendar covariate.</span></span>
-<span id="cb11-78"><a href="#cb11-78" aria-hidden="true" tabindex="-1"></a>    scale_day_of_week <span class="op">=</span> numpyro.sample(<span class="st">"scale_day_of_week"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
-<span id="cb11-79"><a href="#cb11-79" aria-hidden="true" tabindex="-1"></a>    day_of_week_effect <span class="op">=</span> numpyro.sample(</span>
-<span id="cb11-80"><a href="#cb11-80" aria-hidden="true" tabindex="-1"></a>        <span class="st">"day_of_week_effect"</span>,</span>
-<span id="cb11-81"><a href="#cb11-81" aria-hidden="true" tabindex="-1"></a>        dist.ZeroSumNormal(scale<span class="op">=</span>scale_day_of_week, event_shape<span class="op">=</span>(<span class="dv">7</span>,)),</span>
-<span id="cb11-82"><a href="#cb11-82" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb11-83"><a href="#cb11-83" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-84"><a href="#cb11-84" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Expected demand and a temperature-dependent Student-t noise scale.</span></span>
-<span id="cb11-85"><a href="#cb11-85" aria-hidden="true" tabindex="-1"></a>    mu <span class="op">=</span> (</span>
-<span id="cb11-86"><a href="#cb11-86" aria-hidden="true" tabindex="-1"></a>        beta_temperature <span class="op">*</span> temperature</span>
-<span id="cb11-87"><a href="#cb11-87" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> intercept</span>
-<span id="cb11-88"><a href="#cb11-88" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> hour_of_day_effect</span>
-<span id="cb11-89"><a href="#cb11-89" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> jnp.take(day_of_week_effect, day_of_week)</span>
-<span id="cb11-90"><a href="#cb11-90" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb11-91"><a href="#cb11-91" aria-hidden="true" tabindex="-1"></a>    scale <span class="op">=</span> scale_factor <span class="op">*</span> jnp.sqrt(temperature)</span>
-<span id="cb11-92"><a href="#cb11-92" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-93"><a href="#cb11-93" aria-hidden="true" tabindex="-1"></a>    predict(h, dist.StudentT(df<span class="op">=</span>nu, loc<span class="op">=</span><span class="fl">0.0</span>, scale<span class="op">=</span>scale[..., <span class="va">None</span>]), mu[..., <span class="va">None</span>])</span></code></pre></div>
+<span id="cb11-38"><a href="#cb11-38" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Intercept.</span></span>
+<span id="cb11-39"><a href="#cb11-39" aria-hidden="true" tabindex="-1"></a>    intercept <span class="op">=</span> numpyro.sample(<span class="st">"intercept"</span>, dist.Normal(loc<span class="op">=</span><span class="fl">0.0</span>, scale<span class="op">=</span><span class="fl">2.0</span>))</span>
+<span id="cb11-40"><a href="#cb11-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-41"><a href="#cb11-41" aria-hidden="true" tabindex="-1"></a>    <span class="co"># GP parameters (amplitude and length-scale priors are the preliz maxent fits).</span></span>
+<span id="cb11-42"><a href="#cb11-42" aria-hidden="true" tabindex="-1"></a>    alpha <span class="op">=</span> numpyro.sample(<span class="st">"alpha"</span>, AMPLITUDE_PRIOR)</span>
+<span id="cb11-43"><a href="#cb11-43" aria-hidden="true" tabindex="-1"></a>    length_scale <span class="op">=</span> numpyro.sample(<span class="st">"length_scale"</span>, LENGTH_SCALE_PRIOR)</span>
+<span id="cb11-44"><a href="#cb11-44" aria-hidden="true" tabindex="-1"></a>    scale_factor <span class="op">=</span> numpyro.sample(<span class="st">"scale"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
+<span id="cb11-45"><a href="#cb11-45" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Degrees of freedom for the Student-t likelihood.</span></span>
+<span id="cb11-46"><a href="#cb11-46" aria-hidden="true" tabindex="-1"></a>    nu <span class="op">=</span> numpyro.sample(<span class="st">"nu"</span>, dist.Gamma(concentration<span class="op">=</span><span class="fl">8.0</span>, rate<span class="op">=</span><span class="fl">3.0</span>))</span>
+<span id="cb11-47"><a href="#cb11-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-48"><a href="#cb11-48" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Non-linear temperature effect as a Matérn 5/2 HSGP of the centered temperature.</span></span>
+<span id="cb11-49"><a href="#cb11-49" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ``hsgp_matern`` is annotated for float hyperparameters, so we cast the sampled scalars.</span></span>
+<span id="cb11-50"><a href="#cb11-50" aria-hidden="true" tabindex="-1"></a>    beta_temperature <span class="op">=</span> hsgp_matern(</span>
+<span id="cb11-51"><a href="#cb11-51" aria-hidden="true" tabindex="-1"></a>        x<span class="op">=</span>temperature <span class="op">-</span> TEMP_CENTER,</span>
+<span id="cb11-52"><a href="#cb11-52" aria-hidden="true" tabindex="-1"></a>        nu<span class="op">=</span><span class="dv">5</span> <span class="op">/</span> <span class="dv">2</span>,</span>
+<span id="cb11-53"><a href="#cb11-53" aria-hidden="true" tabindex="-1"></a>        alpha<span class="op">=</span>cast(<span class="st">"float"</span>, alpha),</span>
+<span id="cb11-54"><a href="#cb11-54" aria-hidden="true" tabindex="-1"></a>        length<span class="op">=</span>cast(<span class="st">"float"</span>, length_scale),</span>
+<span id="cb11-55"><a href="#cb11-55" aria-hidden="true" tabindex="-1"></a>        ell<span class="op">=</span>ell,</span>
+<span id="cb11-56"><a href="#cb11-56" aria-hidden="true" tabindex="-1"></a>        m<span class="op">=</span>m,</span>
+<span id="cb11-57"><a href="#cb11-57" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-58"><a href="#cb11-58" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"beta_temperature"</span>, beta_temperature)</span>
+<span id="cb11-59"><a href="#cb11-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-60"><a href="#cb11-60" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Calibration likelihood: anchor the latent temperature effect to the</span></span>
+<span id="cb11-61"><a href="#cb11-61" aria-hidden="true" tabindex="-1"></a>    <span class="co"># domain-knowledge value where temperature exceeds the threshold. The mask</span></span>
+<span id="cb11-62"><a href="#cb11-62" aria-hidden="true" tabindex="-1"></a>    <span class="co"># keeps only the high-temperature contributions, matching the blog's</span></span>
+<span id="cb11-63"><a href="#cb11-63" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ``beta_temperature[temperature_prior_idx]`` indexing.</span></span>
+<span id="cb11-64"><a href="#cb11-64" aria-hidden="true" tabindex="-1"></a>    high_temp_mask <span class="op">=</span> temperature <span class="op">&gt;</span> TEMP_THRESHOLD</span>
+<span id="cb11-65"><a href="#cb11-65" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> numpyro.handlers.mask(mask<span class="op">=</span>high_temp_mask):</span>
+<span id="cb11-66"><a href="#cb11-66" aria-hidden="true" tabindex="-1"></a>        numpyro.sample(</span>
+<span id="cb11-67"><a href="#cb11-67" aria-hidden="true" tabindex="-1"></a>            <span class="st">"temperature_prior"</span>,</span>
+<span id="cb11-68"><a href="#cb11-68" aria-hidden="true" tabindex="-1"></a>            dist.Normal(loc<span class="op">=</span>PRIOR_MEAN, scale<span class="op">=</span>PRIOR_SCALE),</span>
+<span id="cb11-69"><a href="#cb11-69" aria-hidden="true" tabindex="-1"></a>            obs<span class="op">=</span>beta_temperature,</span>
+<span id="cb11-70"><a href="#cb11-70" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb11-71"><a href="#cb11-71" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-72"><a href="#cb11-72" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Hour-of-day effect, tiled over the horizon with periodic_repeat.</span></span>
+<span id="cb11-73"><a href="#cb11-73" aria-hidden="true" tabindex="-1"></a>    scale_hour_of_day <span class="op">=</span> numpyro.sample(<span class="st">"scale_hour_of_day"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
+<span id="cb11-74"><a href="#cb11-74" aria-hidden="true" tabindex="-1"></a>    hour_of_day_effect <span class="op">=</span> numpyro.sample(</span>
+<span id="cb11-75"><a href="#cb11-75" aria-hidden="true" tabindex="-1"></a>        <span class="st">"hour_of_day_effect"</span>,</span>
+<span id="cb11-76"><a href="#cb11-76" aria-hidden="true" tabindex="-1"></a>        dist.ZeroSumNormal(scale<span class="op">=</span>scale_hour_of_day, event_shape<span class="op">=</span>(<span class="dv">24</span>,)),</span>
+<span id="cb11-77"><a href="#cb11-77" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-78"><a href="#cb11-78" aria-hidden="true" tabindex="-1"></a>    hour_of_day_effect <span class="op">=</span> periodic_repeat(hour_of_day_effect, duration, axis<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb11-79"><a href="#cb11-79" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-80"><a href="#cb11-80" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Day-of-week effect, indexed by the calendar covariate.</span></span>
+<span id="cb11-81"><a href="#cb11-81" aria-hidden="true" tabindex="-1"></a>    scale_day_of_week <span class="op">=</span> numpyro.sample(<span class="st">"scale_day_of_week"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="fl">0.5</span>))</span>
+<span id="cb11-82"><a href="#cb11-82" aria-hidden="true" tabindex="-1"></a>    day_of_week_effect <span class="op">=</span> numpyro.sample(</span>
+<span id="cb11-83"><a href="#cb11-83" aria-hidden="true" tabindex="-1"></a>        <span class="st">"day_of_week_effect"</span>,</span>
+<span id="cb11-84"><a href="#cb11-84" aria-hidden="true" tabindex="-1"></a>        dist.ZeroSumNormal(scale<span class="op">=</span>scale_day_of_week, event_shape<span class="op">=</span>(<span class="dv">7</span>,)),</span>
+<span id="cb11-85"><a href="#cb11-85" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-86"><a href="#cb11-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-87"><a href="#cb11-87" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Expected demand and a temperature-dependent Student-t noise scale.</span></span>
+<span id="cb11-88"><a href="#cb11-88" aria-hidden="true" tabindex="-1"></a>    mu <span class="op">=</span> (</span>
+<span id="cb11-89"><a href="#cb11-89" aria-hidden="true" tabindex="-1"></a>        beta_temperature <span class="op">*</span> temperature</span>
+<span id="cb11-90"><a href="#cb11-90" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> intercept</span>
+<span id="cb11-91"><a href="#cb11-91" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> hour_of_day_effect</span>
+<span id="cb11-92"><a href="#cb11-92" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> jnp.take(day_of_week_effect, day_of_week)</span>
+<span id="cb11-93"><a href="#cb11-93" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-94"><a href="#cb11-94" aria-hidden="true" tabindex="-1"></a>    scale <span class="op">=</span> scale_factor <span class="op">*</span> jnp.sqrt(temperature)</span>
+<span id="cb11-95"><a href="#cb11-95" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-96"><a href="#cb11-96" aria-hidden="true" tabindex="-1"></a>    predict(h, dist.StudentT(df<span class="op">=</span>nu, loc<span class="op">=</span><span class="fl">0.0</span>, scale<span class="op">=</span>scale[..., <span class="va">None</span>]), mu[..., <span class="va">None</span>])</span></code></pre></div>
 </div>
 <p>The model function is a plain NumPyro model callable <code>(covariates, data=None)</code>, so we can render its structure directly. The rendered graph shows the new observed <code>temperature_prior</code> node next to the demand <code>obs</code> node.</p>
-<div id="a4af4d4b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:09.496304Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:09.496183Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:09.676254Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:09.675419Z&quot;}}" data-execution_count="9">
+<div id="a4af4d4b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:53.300150Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:53.300016Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:53.522884Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:53.522097Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>numpyro.render_model(</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    calibrated_electricity_model,</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    model_args<span class="op">=</span>(covariates_train, data_train),</span>
@@ -711,7 +711,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="prior-predictive-checks" class="level1">
 <h1>Prior predictive checks</h1>
 <p>Before we fit the model, let’s visualize the prior predictive distribution. The model function is a plain NumPyro model, so we hand it to <code>Predictive</code> directly. We draw the bands with ArviZ’s <code>plot_lm</code>, which computes the <span class="math inline">50\%</span> and <span class="math inline">94\%</span> HDI internally; since the time axis is a <code>datetime64</code> array we pass it as matplotlib date numbers (<code>mdates.date2num</code>) and restore the date formatter on the returned axis.</p>
-<div id="85f468b0" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:09.677714Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:09.677616Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:13.103647Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:13.103301Z&quot;}}" data-execution_count="10">
+<div id="85f468b0" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:53.524378Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:53.524253Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:52:56.873249Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:52:56.872760Z&quot;}}" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>prior_predictive <span class="op">=</span> Predictive(</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    calibrated_electricity_model, num_samples<span class="op">=</span><span class="dv">2_000</span>, return_sites<span class="op">=</span>[<span class="st">"obs"</span>]</span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>)</span>
@@ -764,8 +764,8 @@ covariates shape: (1344, 2)</code></pre>
 </section>
 <section id="inference-with-svi" class="level1">
 <h1>Inference with SVI</h1>
-<p>We fit the model with plain NumPyro stochastic variational inference: an <code>AutoNormal</code> guide, <code>Adam</code>, and <code>SVI.run</code>, which returns the fitted <code>params</code> and the ELBO <code>losses</code>. As in the baseline example, the posterior is multimodal: the multiplicative <code>beta_temperature * temperature</code> term trades off against the overall level, so the starting point of the guide decides which mode SVI reaches. We initialize the guide at a feasible point (<code>init_to_feasible</code>). The <em>Accuracy of the HSGP approximation</em> section below shows which parts of the fitted coefficient depend on the HSGP setup. We keep the same optimizer (<code>Adam(step_size=0.005)</code>) and number of steps (<code>50_000</code>) as the blog post.</p>
-<div id="c29496a4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:13.104977Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:13.104894Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:22.749846Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:22.749275Z&quot;}}" data-execution_count="11">
+<p>We fit the model with plain NumPyro stochastic variational inference: an <code>AutoNormal</code> guide, <code>Adam</code>, and <code>SVI.run</code>, which returns the fitted <code>params</code> and the ELBO <code>losses</code>. As in the baseline example, the posterior is multimodal: the multiplicative <code>beta_temperature * temperature</code> term trades off against the overall level, so the starting point of the guide decides which mode SVI reaches. We initialize the guide at a feasible point (<code>init_to_feasible</code>). Two sections below check how accurate the HSGP approximation is at the fitted length scale and which parts of the fitted coefficient depend on the HSGP box. We keep the same optimizer (<code>Adam(step_size=0.005)</code>) and number of steps (<code>50_000</code>) as the blog post.</p>
+<div id="c29496a4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:52:56.874492Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:52:56.874411Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:53:07.130566Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:53:07.129767Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>guide <span class="op">=</span> AutoNormal(calibrated_electricity_model, init_loc_fn<span class="op">=</span>init_to_feasible)</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>svi <span class="op">=</span> SVI(calibrated_electricity_model, guide, Adam(step_size<span class="op">=</span><span class="fl">0.005</span>), Trace_ELBO())</span>
@@ -788,7 +788,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="posterior-predictive-checks" class="level1">
 <h1>Posterior predictive checks</h1>
 <p>We now draw posterior latents from the fitted guide with <a href="../../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior</a>, push them through the model over the training window with <a href="../../reference/predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample</a>, and forecast the held-out two weeks with <a href="../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast</a> and the full-horizon covariates. Their temperature column holds the realized temperatures of the test window, so this forecast assumes a perfect weather forecast (the <a href="electricity_forecast.html">baseline example</a> also scores a forecast with a temperature path known at forecast time). <a href="../../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior</a> returns the deterministic sites along with the latents, so the posterior dictionary already carries <code>beta_temperature</code> for the calibrated temperature-effect plot later.</p>
-<div id="48526693" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:22.751484Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:22.751349Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:23.987761Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:23.986922Z&quot;}}" data-execution_count="12">
+<div id="48526693" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:53:07.132468Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:53:07.132322Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:53:08.428100Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:53:08.426840Z&quot;}}" data-execution_count="12">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>num_posterior_samples <span class="op">=</span> <span class="dv">5_000</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>rng_key, key_post, key_pp, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">4</span>)</span>
@@ -798,52 +798,49 @@ covariates shape: (1344, 2)</code></pre>
 </div>
 <section id="forecast-evaluation" class="level2">
 <h2 class="anchored" data-anchor-id="forecast-evaluation">Forecast evaluation</h2>
-<p>We score the train and test forecasts with <a href="../../reference/evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast</a>, which reports several metrics at once: CRPS (the <a href="https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score">Continuous Ranked Probability Score</a>), mean absolute error, root mean squared error, and the empirical coverage of the central <span class="math inline">90\%</span> prediction interval.</p>
-<div id="fad46ff5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:23.989237Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:23.989122Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:27.827975Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:27.827307Z&quot;}}" data-execution_count="13">
+<p>We score the train and test forecasts with <a href="../../reference/evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast</a>, which reports several metrics at once: CRPS (the <a href="https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score">Continuous Ranked Probability Score</a>), mean absolute error, root mean squared error, and the empirical coverage of the central <span class="math inline">90\%</span> prediction interval. The point chart below shows the CRPS and the coverage of each forecast.</p>
+<div id="fad46ff5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:53:08.430355Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:53:08.430072Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:53:12.078746Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:53:12.078133Z&quot;}}" data-execution_count="13">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>train_metrics <span class="op">=</span> evaluate_forecast(train_pp, data_train)</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>test_metrics <span class="op">=</span> evaluate_forecast(forecast_draws, data_test)</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>metrics_table <span class="op">=</span> pd.DataFrame({<span class="st">"train"</span>: train_metrics, <span class="st">"test"</span>: test_metrics})</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>metrics_table</span></code></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="13">
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Point chart of CRPS and coverage, one point per forecast, with the values annotated.</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>score_labels <span class="op">=</span> [<span class="st">"train"</span>, <span class="st">"test"</span>]</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>scores <span class="op">=</span> [train_metrics, test_metrics]</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">1</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">6</span>), layout<span class="op">=</span><span class="st">"constrained"</span>)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>score_panels <span class="op">=</span> [</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    (ax[<span class="dv">0</span>], <span class="st">"crps"</span>, <span class="st">"CRPS (lower is better)"</span>),</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    (ax[<span class="dv">1</span>], <span class="st">"coverage"</span>, <span class="vs">r"Coverage of the central </span><span class="dv">$</span><span class="vs">90</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> interval"</span>),</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> panel, metric, title <span class="kw">in</span> score_panels:</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    values <span class="op">=</span> [<span class="bu">float</span>(score[metric]) <span class="cf">for</span> score <span class="kw">in</span> scores]</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>    panel.plot(<span class="bu">range</span>(<span class="bu">len</span>(values)), values, <span class="st">"o"</span>, color<span class="op">=</span><span class="st">"C0"</span>, markersize<span class="op">=</span><span class="dv">10</span>)</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> position, value <span class="kw">in</span> <span class="bu">enumerate</span>(values):</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>        panel.annotate(</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>value<span class="sc">:.3f}</span><span class="ss">"</span>,</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>            xy<span class="op">=</span>(position, value),</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>            xytext<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">0</span>),</span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>            textcoords<span class="op">=</span><span class="st">"offset points"</span>,</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>            va<span class="op">=</span><span class="st">"center"</span>,</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>    panel.<span class="bu">set</span>(title<span class="op">=</span>title, xticks<span class="op">=</span><span class="bu">range</span>(<span class="bu">len</span>(values)), xticklabels<span class="op">=</span>score_labels)</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>    panel.set_xlim(<span class="op">-</span><span class="fl">0.5</span>, <span class="bu">len</span>(values) <span class="op">-</span> <span class="fl">0.3</span>)</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>nominal_line <span class="op">=</span> ax[<span class="dv">1</span>].axhline(<span class="fl">0.9</span>, color<span class="op">=</span><span class="st">"black"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="vs">r"nominal </span><span class="dv">$</span><span class="vs">90</span><span class="ch">\%</span><span class="dv">$</span><span class="vs">"</span>)</span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>fig.legend(handles<span class="op">=</span>[nominal_line], loc<span class="op">=</span><span class="st">"outside lower center"</span>)</span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="st">"Forecast Scores"</span>, fontsize<span class="op">=</span><span class="dv">18</span>, fontweight<span class="op">=</span><span class="st">"bold"</span>)<span class="op">;</span></span></code></pre></div>
+<div class="cell-output cell-output-display">
 <div>
-
-<table class="dataframe table table-sm table-striped small">
-  <thead>
-    <tr>
-      <th></th>
-      <th>train</th>
-      <th>test</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>mae</th>
-      <td>0.385787</td>
-      <td>0.262353</td>
-    </tr>
-    <tr>
-      <th>rmse</th>
-      <td>0.519173</td>
-      <td>0.332261</td>
-    </tr>
-    <tr>
-      <th>crps</th>
-      <td>0.279181</td>
-      <td>0.190729</td>
-    </tr>
-    <tr>
-      <th>coverage</th>
-      <td>0.917659</td>
-      <td>0.994048</td>
-    </tr>
-  </tbody>
-</table>
+<figure class="figure">
+<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-14-output-1.png" width="1211" height="606" class="figure-img"></p>
+</figure>
 </div>
 </div>
 </div>
-<p>The test scores are conditional on the realized temperatures of the test window, so they are an optimistic reading of the forecast accuracy. The test CRPS (0.191) is lower than the train CRPS (0.279), but the train column scores the data the model was fitted to, so the two columns do not test generalization. The central <span class="math inline">90\%</span> interval covers 0.918 of the training hours and 0.994 of the test hours, so it is too wide on the test window. Next we compare the posterior predictive distribution with the training and test data.</p>
-<div id="ca095dba" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:27.829170Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:27.829069Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:28.225429Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:28.224847Z&quot;}}" data-execution_count="14">
+<p>The test scores are conditional on the realized temperatures of the test window, so they are an optimistic reading of the forecast accuracy. The test CRPS (0.191) is lower than the train CRPS (0.279), but the train score is computed on the data the model was fitted to, so the two do not test generalization. The central <span class="math inline">90\%</span> interval covers 0.918 of the training hours and 0.994 of the test hours, so it is too wide on the test window. Next we compare the posterior predictive distribution with the training and test data.</p>
+<div id="ca095dba" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:53:12.080370Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:53:12.080240Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:53:12.510298Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:53:12.509093Z&quot;}}" data-execution_count="14">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>train_obs <span class="op">=</span> train_pp[..., <span class="dv">0</span>]</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>forecast_obs <span class="op">=</span> forecast_draws[..., <span class="dv">0</span>]</span>
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -929,23 +926,23 @@ covariates shape: (1344, 2)</code></pre>
 </div>
 </div>
 </div>
-<p>The forecast bands follow the test demand closely, because the forecast reads the realized test temperatures. The forecast bands are wide on the test window, most of all on the warmest test day at its end, which matches the test coverage of 0.994 in the table.</p>
+<p>The forecast bands follow the test demand closely, because the forecast reads the realized test temperatures. The forecast bands are wide on the test window, most of all on the warmest test day at its end, which matches the test coverage of 0.994 in the score chart.</p>
 </section>
 <section id="accuracy-of-the-hsgp-approximation" class="level2">
 <h2 class="anchored" data-anchor-id="accuracy-of-the-hsgp-approximation">Accuracy of the HSGP approximation</h2>
-<p>Before we read the fitted temperature coefficient, we check how well the HSGP approximation matches the Matérn 5/2 kernel at the length scale the fit selects. The left panel compares the posterior length scale with its prior. The right panel shows the prior variance of the approximate GP along the training temperature range (the exact Matérn 5/2 kernel with amplitude 1 has variance 1 everywhere) at the two prior bounds and at the posterior mean. Its legend gives the largest gap between the approximate and the exact correlation over a grid of 200 training temperatures. The check needs no refit: <code>hsgp_correlation</code> builds the basis with the model’s <code>TEMP_CENTER</code>, <code>ELL</code> and <code>M</code>.</p>
-<div id="52f35bc2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:28.227859Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:28.227770Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:29.494148Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:29.493448Z&quot;}}" data-execution_count="15">
+<p>Before we read the fitted temperature coefficient, we check how well the HSGP approximation matches the Matérn 5/2 kernel at the length scale the fit selects. <code>matern52_correlation</code> computes the exact Matérn 5/2 correlation between pairs of temperatures, and <code>hsgp_correlation</code> computes its HSGP approximation, by default with the model’s <code>TEMP_CENTER</code>, <code>ELL</code> and <code>M</code>. The <strong>kernel error</strong> is the largest absolute gap between the two over an evenly spaced grid on the training temperature range. The left panel compares the posterior length scale with its prior. The right panel shows the prior variance of the approximate GP along the training temperature range (the exact kernel with amplitude 1 has variance 1 everywhere) at the two prior bounds and at the posterior mean, with the kernel error of each in the legend; its title applies the box rule of Riutort-Mayol et al.&nbsp;(2023) from <em>Model specification</em>. The check needs no refit.</p>
+<div id="52f35bc2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:53:12.512544Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:53:12.512419Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:53:13.475220Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:53:13.474545Z&quot;}}" data-execution_count="15">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> matern52_correlation(x: Array, length_scale: <span class="bu">float</span>) <span class="op">-&gt;</span> Array:</span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Exact Matérn 5/2 correlation between every pair of inputs."""</span></span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    s <span class="op">=</span> jnp.sqrt(<span class="fl">5.0</span>) <span class="op">*</span> jnp.<span class="bu">abs</span>(x[:, <span class="va">None</span>] <span class="op">-</span> x[<span class="va">None</span>, :]) <span class="op">/</span> length_scale</span>
 <span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (<span class="dv">1</span> <span class="op">+</span> s <span class="op">+</span> s<span class="op">**</span><span class="dv">2</span> <span class="op">/</span> <span class="dv">3</span>) <span class="op">*</span> jnp.exp(<span class="op">-</span>s)</span>
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hsgp_correlation(x: Array, length_scale: <span class="bu">float</span>) <span class="op">-&gt;</span> Array:</span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""HSGP approximation of the same correlation, with the model's center, box and basis."""</span></span>
-<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    phi <span class="op">=</span> eigenfunctions(x<span class="op">=</span>x <span class="op">-</span> TEMP_CENTER, ell<span class="op">=</span>ELL, m<span class="op">=</span>M)</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hsgp_correlation(x: Array, length_scale: <span class="bu">float</span>, ell: <span class="bu">float</span> <span class="op">=</span> ELL, m: <span class="bu">int</span> <span class="op">=</span> M) <span class="op">-&gt;</span> Array:</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""HSGP approximation of the same correlation, by default with the model's box and basis."""</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    phi <span class="op">=</span> eigenfunctions(x<span class="op">=</span>x <span class="op">-</span> TEMP_CENTER, ell<span class="op">=</span>ell, m<span class="op">=</span>m)</span>
 <span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>    spd <span class="op">=</span> diag_spectral_density_matern(</span>
-<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>        nu<span class="op">=</span><span class="dv">5</span> <span class="op">/</span> <span class="dv">2</span>, alpha<span class="op">=</span><span class="fl">1.0</span>, length<span class="op">=</span>length_scale, ell<span class="op">=</span>ELL, m<span class="op">=</span>M, dim<span class="op">=</span><span class="dv">1</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>        nu<span class="op">=</span><span class="dv">5</span> <span class="op">/</span> <span class="dv">2</span>, alpha<span class="op">=</span><span class="fl">1.0</span>, length<span class="op">=</span>length_scale, ell<span class="op">=</span>ell, m<span class="op">=</span>m, dim<span class="op">=</span><span class="dv">1</span></span>
 <span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>    )</span>
 <span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (phi <span class="op">*</span> spd) <span class="op">@</span> phi.T</span>
 <span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a></span>
@@ -954,82 +951,89 @@ covariates shape: (1344, 2)</code></pre>
 <span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>length_scale_draws <span class="op">=</span> np.asarray(posterior[<span class="st">"length_scale"</span>])</span>
 <span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>posterior_length_scale <span class="op">=</span> <span class="bu">float</span>(length_scale_draws.mean())</span>
 <span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>length_scale_hdi <span class="op">=</span> az.hdi(length_scale_draws, prob<span class="op">=</span><span class="fl">0.94</span>)</span>
-<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>prior_tail <span class="op">=</span> <span class="bu">float</span>(<span class="dv">1</span> <span class="op">-</span> LENGTH_SCALE_PRIOR.cdf(jnp.asarray(posterior_length_scale)))</span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>prior_tail <span class="op">=</span> <span class="bu">float</span>(<span class="dv">1</span> <span class="op">-</span> length_scale_params.cdf(posterior_length_scale))  <span class="co"># float64</span></span>
 <span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>mantissa, exponent <span class="op">=</span> <span class="ss">f"</span><span class="sc">{</span>prior_tail<span class="sc">:.1e}</span><span class="ss">"</span>.split(<span class="st">"e"</span>)</span>
 <span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Largest kernel error on a grid over the training temperatures.</span></span>
-<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>temperature_grid <span class="op">=</span> jnp.linspace(temperature_train.<span class="bu">min</span>(), temperature_train.<span class="bu">max</span>(), <span class="dv">200</span>)</span>
-<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>checked_length_scales <span class="op">=</span> (LENGTH_SCALE_LOWER, LENGTH_SCALE_UPPER, posterior_length_scale)</span>
-<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>max_errors <span class="op">=</span> [</span>
-<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>    <span class="bu">float</span>(</span>
-<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>        jnp.<span class="bu">max</span>(</span>
-<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a>            jnp.<span class="bu">abs</span>(</span>
-<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>                hsgp_correlation(temperature_grid, length_scale)</span>
-<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>                <span class="op">-</span> matern52_correlation(temperature_grid, length_scale)</span>
-<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>            )</span>
-<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> length_scale <span class="kw">in</span> checked_length_scales</span>
-<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(</span>
-<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">1</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">8</span>), width_ratios<span class="op">=</span>[<span class="dv">1</span>, <span class="fl">1.2</span>], layout<span class="op">=</span><span class="st">"constrained"</span></span>
-<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a>length_scale_grid <span class="op">=</span> np.linspace(<span class="fl">0.5</span>, <span class="fl">1.2</span> <span class="op">*</span> length_scale_draws.<span class="bu">max</span>(), <span class="dv">1_000</span>)</span>
-<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].plot(</span>
-<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a>    length_scale_grid,</span>
-<span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>    np.exp(np.asarray(LENGTH_SCALE_PRIOR.log_prob(jnp.asarray(length_scale_grid)))),</span>
-<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>    c<span class="op">=</span><span class="st">"C0"</span>,</span>
-<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"prior density"</span>,</span>
-<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].axvspan(</span>
-<span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a>    LENGTH_SCALE_LOWER,</span>
-<span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a>    LENGTH_SCALE_UPPER,</span>
-<span id="cb18-51"><a href="#cb18-51" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"C0"</span>,</span>
-<span id="cb18-52"><a href="#cb18-52" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span><span class="fl">0.2</span>,</span>
-<span id="cb18-53"><a href="#cb18-53" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="vs">rf"prior </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> mass: </span><span class="pp">[</span><span class="sc">{</span>LENGTH_SCALE_LOWER<span class="sc">:.0f}</span><span class="pp">, </span><span class="sc">{</span>LENGTH_SCALE_UPPER<span class="sc">:.0f}</span><span class="pp">]</span><span class="vs"> °C"</span>,</span>
-<span id="cb18-54"><a href="#cb18-54" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-55"><a href="#cb18-55" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].axvspan(</span>
-<span id="cb18-56"><a href="#cb18-56" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>length_scale_hdi,</span>
-<span id="cb18-57"><a href="#cb18-57" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"C1"</span>,</span>
-<span id="cb18-58"><a href="#cb18-58" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span><span class="fl">0.4</span>,</span>
-<span id="cb18-59"><a href="#cb18-59" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="vs">rf"posterior </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI: </span><span class="pp">[</span><span class="sc">{</span>length_scale_hdi[<span class="dv">0</span>]<span class="sc">:.2f}</span><span class="pp">, </span><span class="sc">{</span>length_scale_hdi[<span class="dv">1</span>]<span class="sc">:.2f}</span><span class="pp">]</span><span class="vs"> °C"</span>,</span>
-<span id="cb18-60"><a href="#cb18-60" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-61"><a href="#cb18-61" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].axvline(</span>
-<span id="cb18-62"><a href="#cb18-62" aria-hidden="true" tabindex="-1"></a>    posterior_length_scale,</span>
-<span id="cb18-63"><a href="#cb18-63" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"C1"</span>,</span>
-<span id="cb18-64"><a href="#cb18-64" aria-hidden="true" tabindex="-1"></a>    linestyle<span class="op">=</span><span class="st">"--"</span>,</span>
-<span id="cb18-65"><a href="#cb18-65" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="ss">f"posterior mean: </span><span class="sc">{</span>posterior_length_scale<span class="sc">:.2f}</span><span class="ss"> °C"</span>,</span>
-<span id="cb18-66"><a href="#cb18-66" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-67"><a href="#cb18-67" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].<span class="bu">set</span>(</span>
-<span id="cb18-68"><a href="#cb18-68" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span>(</span>
-<span id="cb18-69"><a href="#cb18-69" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Length scale</span><span class="ch">\n</span><span class="st">prior probability above the posterior mean: "</span></span>
-<span id="cb18-70"><a href="#cb18-70" aria-hidden="true" tabindex="-1"></a>        <span class="vs">rf"</span><span class="dv">$</span><span class="sc">{</span>mantissa<span class="sc">}</span><span class="vs"> </span><span class="ch">\t</span><span class="vs">imes 10</span><span class="dv">^</span><span class="ch">{{</span><span class="sc">{</span><span class="bu">int</span>(exponent)<span class="sc">}</span><span class="ch">}}</span><span class="dv">$</span><span class="vs">"</span></span>
-<span id="cb18-71"><a href="#cb18-71" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb18-72"><a href="#cb18-72" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"Length scale (°C)"</span>,</span>
-<span id="cb18-73"><a href="#cb18-73" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"Prior density"</span>,</span>
-<span id="cb18-74"><a href="#cb18-74" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-75"><a href="#cb18-75" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-76"><a href="#cb18-76" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> color, length_scale, max_error <span class="kw">in</span> <span class="bu">zip</span>(</span>
-<span id="cb18-77"><a href="#cb18-77" aria-hidden="true" tabindex="-1"></a>    [<span class="st">"C0"</span>, <span class="st">"C2"</span>, <span class="st">"C1"</span>], checked_length_scales, max_errors, strict<span class="op">=</span><span class="va">True</span></span>
-<span id="cb18-78"><a href="#cb18-78" aria-hidden="true" tabindex="-1"></a>):</span>
-<span id="cb18-79"><a href="#cb18-79" aria-hidden="true" tabindex="-1"></a>    ax[<span class="dv">1</span>].plot(</span>
-<span id="cb18-80"><a href="#cb18-80" aria-hidden="true" tabindex="-1"></a>        temperature_grid,</span>
-<span id="cb18-81"><a href="#cb18-81" aria-hidden="true" tabindex="-1"></a>        jnp.diag(hsgp_correlation(temperature_grid, length_scale)),</span>
-<span id="cb18-82"><a href="#cb18-82" aria-hidden="true" tabindex="-1"></a>        c<span class="op">=</span>color,</span>
-<span id="cb18-83"><a href="#cb18-83" aria-hidden="true" tabindex="-1"></a>        label<span class="op">=</span><span class="ss">f"HSGP, length scale </span><span class="sc">{</span>length_scale<span class="sc">:.2f}</span><span class="ss"> °C: max kernel error </span><span class="sc">{</span>max_error<span class="sc">:.3f}</span><span class="ss">"</span>,</span>
-<span id="cb18-84"><a href="#cb18-84" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb18-85"><a href="#cb18-85" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-86"><a href="#cb18-86" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">1</span>].axhline(<span class="fl">1.0</span>, color<span class="op">=</span><span class="st">"black"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"exact Matérn 5/2"</span>)</span>
-<span id="cb18-87"><a href="#cb18-87" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">1</span>].<span class="bu">set</span>(</span>
-<span id="cb18-88"><a href="#cb18-88" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Prior variance of the HSGP (amplitude 1)"</span>,</span>
-<span id="cb18-89"><a href="#cb18-89" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"Temperature (°C)"</span>,</span>
-<span id="cb18-90"><a href="#cb18-90" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"Variance"</span>,</span>
-<span id="cb18-91"><a href="#cb18-91" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-92"><a href="#cb18-92" aria-hidden="true" tabindex="-1"></a>handles_0, labels_0 <span class="op">=</span> ax[<span class="dv">0</span>].get_legend_handles_labels()</span>
-<span id="cb18-93"><a href="#cb18-93" aria-hidden="true" tabindex="-1"></a>handles_1, labels_1 <span class="op">=</span> ax[<span class="dv">1</span>].get_legend_handles_labels()</span>
-<span id="cb18-94"><a href="#cb18-94" aria-hidden="true" tabindex="-1"></a>fig.legend(handles_0 <span class="op">+</span> handles_1, labels_0 <span class="op">+</span> labels_1, loc<span class="op">=</span><span class="st">"outside lower center"</span>, ncols<span class="op">=</span><span class="dv">2</span>)</span>
-<span id="cb18-95"><a href="#cb18-95" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="st">"HSGP Approximation at the Posterior Length Scale"</span>, fontsize<span class="op">=</span><span class="dv">18</span>, fontweight<span class="op">=</span><span class="st">"bold"</span>)<span class="op">;</span></span></code></pre></div>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Largest kernel error on an evenly spaced grid over the training temperature range.</span></span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>box_factor <span class="op">=</span> ELL <span class="op">/</span> TEMP_HALF_RANGE</span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>accurate_up_to <span class="op">=</span> box_factor <span class="op">*</span> TEMP_HALF_RANGE <span class="op">/</span> <span class="fl">4.1</span>  <span class="co"># rule: c &gt;= 4.1 * length_scale / S</span></span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>needed_box_factor <span class="op">=</span> <span class="fl">4.1</span> <span class="op">*</span> posterior_length_scale <span class="op">/</span> TEMP_HALF_RANGE</span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>temperature_grid <span class="op">=</span> jnp.linspace(temperature_train.<span class="bu">min</span>(), temperature_train.<span class="bu">max</span>(), <span class="dv">200</span>)</span>
+<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>checked_length_scales <span class="op">=</span> (LENGTH_SCALE_LOWER, LENGTH_SCALE_UPPER, posterior_length_scale)</span>
+<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a>max_errors <span class="op">=</span> [</span>
+<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>    <span class="bu">float</span>(</span>
+<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>        jnp.<span class="bu">max</span>(</span>
+<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>            jnp.<span class="bu">abs</span>(</span>
+<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>                hsgp_correlation(temperature_grid, length_scale)</span>
+<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>                <span class="op">-</span> matern52_correlation(temperature_grid, length_scale)</span>
+<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> length_scale <span class="kw">in</span> checked_length_scales</span>
+<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(</span>
+<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">1</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">8</span>), width_ratios<span class="op">=</span>[<span class="dv">1</span>, <span class="fl">1.2</span>], layout<span class="op">=</span><span class="st">"constrained"</span></span>
+<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>length_scale_grid <span class="op">=</span> np.linspace(<span class="fl">0.5</span>, <span class="fl">1.2</span> <span class="op">*</span> length_scale_draws.<span class="bu">max</span>(), <span class="dv">1_000</span>)</span>
+<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].plot(</span>
+<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a>    length_scale_grid,</span>
+<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>    np.exp(np.asarray(LENGTH_SCALE_PRIOR.log_prob(jnp.asarray(length_scale_grid)))),</span>
+<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a>    c<span class="op">=</span><span class="st">"C0"</span>,</span>
+<span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"prior density"</span>,</span>
+<span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-51"><a href="#cb18-51" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].axvspan(</span>
+<span id="cb18-52"><a href="#cb18-52" aria-hidden="true" tabindex="-1"></a>    LENGTH_SCALE_LOWER,</span>
+<span id="cb18-53"><a href="#cb18-53" aria-hidden="true" tabindex="-1"></a>    LENGTH_SCALE_UPPER,</span>
+<span id="cb18-54"><a href="#cb18-54" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"C0"</span>,</span>
+<span id="cb18-55"><a href="#cb18-55" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span><span class="fl">0.2</span>,</span>
+<span id="cb18-56"><a href="#cb18-56" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="vs">rf"prior </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> mass: </span><span class="pp">[</span><span class="sc">{</span>LENGTH_SCALE_LOWER<span class="sc">:.0f}</span><span class="pp">, </span><span class="sc">{</span>LENGTH_SCALE_UPPER<span class="sc">:.0f}</span><span class="pp">]</span><span class="vs"> °C"</span>,</span>
+<span id="cb18-57"><a href="#cb18-57" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-58"><a href="#cb18-58" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].axvspan(</span>
+<span id="cb18-59"><a href="#cb18-59" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>length_scale_hdi,</span>
+<span id="cb18-60"><a href="#cb18-60" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"C1"</span>,</span>
+<span id="cb18-61"><a href="#cb18-61" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span><span class="fl">0.4</span>,</span>
+<span id="cb18-62"><a href="#cb18-62" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="vs">rf"posterior </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI: </span><span class="pp">[</span><span class="sc">{</span>length_scale_hdi[<span class="dv">0</span>]<span class="sc">:.2f}</span><span class="pp">, </span><span class="sc">{</span>length_scale_hdi[<span class="dv">1</span>]<span class="sc">:.2f}</span><span class="pp">]</span><span class="vs"> °C"</span>,</span>
+<span id="cb18-63"><a href="#cb18-63" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-64"><a href="#cb18-64" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].axvline(</span>
+<span id="cb18-65"><a href="#cb18-65" aria-hidden="true" tabindex="-1"></a>    posterior_length_scale,</span>
+<span id="cb18-66"><a href="#cb18-66" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"C1"</span>,</span>
+<span id="cb18-67"><a href="#cb18-67" aria-hidden="true" tabindex="-1"></a>    linestyle<span class="op">=</span><span class="st">"--"</span>,</span>
+<span id="cb18-68"><a href="#cb18-68" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="ss">f"posterior mean: </span><span class="sc">{</span>posterior_length_scale<span class="sc">:.2f}</span><span class="ss"> °C"</span>,</span>
+<span id="cb18-69"><a href="#cb18-69" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-70"><a href="#cb18-70" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].<span class="bu">set</span>(</span>
+<span id="cb18-71"><a href="#cb18-71" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span>(</span>
+<span id="cb18-72"><a href="#cb18-72" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Length scale</span><span class="ch">\n</span><span class="st">prior probability above</span><span class="ch">\n</span><span class="st">"</span></span>
+<span id="cb18-73"><a href="#cb18-73" aria-hidden="true" tabindex="-1"></a>        <span class="vs">rf"the posterior mean: </span><span class="dv">$</span><span class="sc">{</span>mantissa<span class="sc">}</span><span class="vs"> </span><span class="ch">\t</span><span class="vs">imes 10</span><span class="dv">^</span><span class="ch">{{</span><span class="sc">{</span><span class="bu">int</span>(exponent)<span class="sc">}</span><span class="ch">}}</span><span class="dv">$</span><span class="vs">"</span></span>
+<span id="cb18-74"><a href="#cb18-74" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb18-75"><a href="#cb18-75" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"Length scale (°C)"</span>,</span>
+<span id="cb18-76"><a href="#cb18-76" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"Prior density"</span>,</span>
+<span id="cb18-77"><a href="#cb18-77" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-78"><a href="#cb18-78" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-79"><a href="#cb18-79" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> color, length_scale, max_error <span class="kw">in</span> <span class="bu">zip</span>(</span>
+<span id="cb18-80"><a href="#cb18-80" aria-hidden="true" tabindex="-1"></a>    [<span class="st">"C0"</span>, <span class="st">"C2"</span>, <span class="st">"C1"</span>], checked_length_scales, max_errors, strict<span class="op">=</span><span class="va">True</span></span>
+<span id="cb18-81"><a href="#cb18-81" aria-hidden="true" tabindex="-1"></a>):</span>
+<span id="cb18-82"><a href="#cb18-82" aria-hidden="true" tabindex="-1"></a>    ax[<span class="dv">1</span>].plot(</span>
+<span id="cb18-83"><a href="#cb18-83" aria-hidden="true" tabindex="-1"></a>        temperature_grid,</span>
+<span id="cb18-84"><a href="#cb18-84" aria-hidden="true" tabindex="-1"></a>        jnp.diag(hsgp_correlation(temperature_grid, length_scale)),</span>
+<span id="cb18-85"><a href="#cb18-85" aria-hidden="true" tabindex="-1"></a>        c<span class="op">=</span>color,</span>
+<span id="cb18-86"><a href="#cb18-86" aria-hidden="true" tabindex="-1"></a>        label<span class="op">=</span><span class="ss">f"HSGP, length scale </span><span class="sc">{</span>length_scale<span class="sc">:.2f}</span><span class="ss"> °C: max kernel error </span><span class="sc">{</span>max_error<span class="sc">:.3f}</span><span class="ss">"</span>,</span>
+<span id="cb18-87"><a href="#cb18-87" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb18-88"><a href="#cb18-88" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-89"><a href="#cb18-89" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">1</span>].axhline(<span class="fl">1.0</span>, color<span class="op">=</span><span class="st">"black"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"exact Matérn 5/2"</span>)</span>
+<span id="cb18-90"><a href="#cb18-90" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">1</span>].<span class="bu">set</span>(</span>
+<span id="cb18-91"><a href="#cb18-91" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span>(</span>
+<span id="cb18-92"><a href="#cb18-92" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Prior variance of the HSGP (amplitude 1)</span><span class="ch">\n</span><span class="st">"</span></span>
+<span id="cb18-93"><a href="#cb18-93" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"c = </span><span class="sc">{</span>box_factor<span class="sc">:.0f}</span><span class="ss"> is accurate up to </span><span class="sc">{</span>accurate_up_to<span class="sc">:.1f}</span><span class="ss"> °C</span><span class="ch">\n</span><span class="ss">"</span></span>
+<span id="cb18-94"><a href="#cb18-94" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"the posterior mean needs c ≥ </span><span class="sc">{</span>needed_box_factor<span class="sc">:.1f}</span><span class="ss">"</span></span>
+<span id="cb18-95"><a href="#cb18-95" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb18-96"><a href="#cb18-96" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"Temperature (°C)"</span>,</span>
+<span id="cb18-97"><a href="#cb18-97" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"Variance"</span>,</span>
+<span id="cb18-98"><a href="#cb18-98" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-99"><a href="#cb18-99" aria-hidden="true" tabindex="-1"></a>handles_0, labels_0 <span class="op">=</span> ax[<span class="dv">0</span>].get_legend_handles_labels()</span>
+<span id="cb18-100"><a href="#cb18-100" aria-hidden="true" tabindex="-1"></a>handles_1, labels_1 <span class="op">=</span> ax[<span class="dv">1</span>].get_legend_handles_labels()</span>
+<span id="cb18-101"><a href="#cb18-101" aria-hidden="true" tabindex="-1"></a>fig.legend(handles_0 <span class="op">+</span> handles_1, labels_0 <span class="op">+</span> labels_1, loc<span class="op">=</span><span class="st">"outside lower center"</span>, ncols<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb18-102"><a href="#cb18-102" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="st">"HSGP Approximation at the Posterior Length Scale"</span>, fontsize<span class="op">=</span><span class="dv">18</span>, fontweight<span class="op">=</span><span class="st">"bold"</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -1038,12 +1042,12 @@ covariates shape: (1344, 2)</code></pre>
 </div>
 </div>
 </div>
-<p>At both bounds of the prior range the approximation is accurate: the largest kernel error is 0.015 at a length scale of 3 °C and 0.019 at a length scale of 10 °C. The posterior length scale is 42.31 °C (<span class="math inline">94\%</span> HDI [41.77, 42.82] °C), far outside that range: the prior gives a probability of <span class="math inline">4.8 \times 10^{-7}</span> to a length scale above it, so the data and the prior disagree. At the posterior length scale the approximate kernel is far from the Matérn 5/2 kernel (largest error 0.715). Its prior variance is well below 1 over the whole range and lowest at both ends, because the basis functions vanish at the box edges <span class="math inline">\pm L</span>. So the shape of the calibrated coefficient near the ends of the temperature range, and the location of its minimum, are outputs of this approximation, not findings about demand. We read the coefficient with this in mind in the next section.</p>
+<p>At both bounds of the prior range the approximation is accurate: the kernel error is 0.015 at a length scale of 3 °C and 0.019 at a length scale of 10 °C. The posterior length scale is 42.31 °C (<span class="math inline">94\%</span> HDI [41.77, 42.82] °C), far outside that range: the prior gives a probability of <span class="math inline">4.7 \times 10^{-7}</span> to a length scale above it, so the data and the prior disagree. By the rule of Riutort-Mayol et al., <span class="math inline">c = 2</span> is accurate only up to a length scale of 7.8 °C, and the posterior mean would need <span class="math inline">c \ge 10.8</span>. At the posterior length scale the kernel error is 0.715, and the prior variance of the approximation is well below 1 over the whole range. So the fitted coefficient is not the posterior of a Matérn 5/2 GP. The next section reads the coefficient, and the section after it checks which of its features depend on the box.</p>
 </section>
 <section id="temperature-effect-on-demand" class="level2">
 <h2 class="anchored" data-anchor-id="temperature-effect-on-demand">Temperature effect on demand</h2>
 <p>This is where the calibration shows up. We plot the posterior distribution of the Gaussian Process component <code>beta_temperature</code> against temperature, sorting by temperature so the HDI band reads cleanly. The vertical line marks the <code>32 °C</code> threshold and the shaded band shows the calibration target of <code>0.13 ± 0.01</code> for temperatures above it. The black point is the coefficient averaged over the training hours above the threshold, with its <span class="math inline">94\%</span> HDI. The annotations give the posterior mean coefficient and contribution <code>beta_temperature * temperature</code> at the coldest training hour, at the lowest coefficient and at the hottest training hour, and the title counts the hours above the threshold in each window.</p>
-<div id="eace5648" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:33:29.495643Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:33:29.495543Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:33:29.992502Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:33:29.991952Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="16">
+<div id="eace5648" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:53:13.477148Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:53:13.477010Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:53:14.023989Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:53:14.023419Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="16">
 <div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>temperature_test <span class="op">=</span> np.asarray(temperature[t_train:])</span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>order <span class="op">=</span> np.argsort(temperature_train)</span>
 <span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>beta_temperature <span class="op">=</span> posterior[<span class="st">"beta_temperature"</span>]</span>
@@ -1152,7 +1156,107 @@ covariates shape: (1344, 2)</code></pre>
 </div>
 </div>
 </div>
-<p>Above the threshold the coefficient sits inside the target band: averaged over the 111 training hours above 32 °C, it has posterior mean 0.129 with <span class="math inline">94\%</span> HDI [0.126, 0.132] (the black point), against the target 0.13 ± 0.01. The test window has only 2 hours above 32 °C, so the test scores above cannot show what the calibration changes. Below the threshold the coefficient has its minimum at 18.75 °C (0.094) and is higher at the coldest training hour (0.114 at 10.95 °C), but the <em>Accuracy of the HSGP approximation</em> section showed that this part of the curve is an output of the approximation. The contribution of temperature to demand also grows with temperature at the cold end: 1.24 GW at 10.95 °C against 1.76 GW at 18.75 °C.</p>
+<p>Above the threshold the coefficient sits inside the target band: averaged over the 111 training hours above 32 °C, it has posterior mean 0.129 with <span class="math inline">94\%</span> HDI [0.126, 0.132] (the black point), against the target 0.13 ± 0.01. The test window has only 2 hours above 32 °C, so the test scores above cannot show what the calibration changes. Below the threshold the coefficient is higher at the coldest training hour (0.114 at 10.95 °C) than at its minimum (0.094 at 18.75 °C), but the contribution <code>beta_temperature * temperature</code> still grows with temperature there: 1.24 GW at 10.95 °C against 1.76 GW at 18.75 °C. The next section checks which of these features depend on the HSGP box.</p>
+</section>
+<section id="which-parts-of-the-coefficient-depend-on-the-box" class="level2">
+<h2 class="anchored" data-anchor-id="which-parts-of-the-coefficient-depend-on-the-box">Which parts of the coefficient depend on the box</h2>
+<p>The data cannot pin down the whole coefficient curve. The temperature <span class="math inline">T</span> enters the mean only through the product <code>beta_temperature * temperature</code>, and the mean also has an intercept. Adding <span class="math inline">k / T</span> to the coefficient <span class="math inline">\beta(T)</span> adds the same constant <span class="math inline">k</span> to the mean at every hour,</p>
+<p><span class="math display">
+\left(\beta(T) + \frac{k}{T}\right) T + \text{intercept} = \beta(T)\,T + (\text{intercept} + k),
+</span></p>
+<p>so the likelihood of the demand cannot tell the two curves apart once the intercept absorbs <span class="math inline">k</span>. The term <span class="math inline">k / T</span> is about four times larger at the coldest training hour (10.95 °C) than at the hottest (43.10 °C), so this freedom moves the cold end of the coefficient most, and the GP prior, through the HSGP approximation, decides that part of the curve. A difference of contributions between two hours does not change with <span class="math inline">k</span>. We use the <strong>contribution gap</strong>: the posterior mean of the contribution <code>beta_temperature * temperature</code> at the hottest training hour minus the one at the coldest training hour. In this notebook the calibration term also observes the coefficient above 32 °C, so it limits <span class="math inline">k</span> as well.</p>
+<p>To see what depends on the box, we refit the same model with a box of five times the training half-range and the number of basis functions that the rule asks for at the lower prior bound of 3 °C. By the rule, this box is accurate for length scales from 3 °C up to about 19.6 °C. The model function takes <code>ell</code> and <code>m</code> as keyword arguments, so <code>functools.partial</code> gives the refit the <code>(covariates, data=None)</code> signature. The refit reuses the keys of the first fit.</p>
+<div id="7bef53d2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:53:14.025711Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:53:14.025554Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:53:16.881624Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:53:16.881047Z&quot;}}" data-execution_count="17">
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Box of five times the training half-range, with the number of basis functions that the rule</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="co"># m &gt;= 2.65 * c * S / length_scale asks for at the lower prior bound.</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>WIDE_BOX_FACTOR <span class="op">=</span> <span class="fl">5.0</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>WIDE_ELL <span class="op">=</span> WIDE_BOX_FACTOR <span class="op">*</span> TEMP_HALF_RANGE</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>WIDE_M <span class="op">=</span> <span class="bu">int</span>(np.ceil(<span class="fl">2.65</span> <span class="op">*</span> WIDE_BOX_FACTOR <span class="op">*</span> TEMP_HALF_RANGE <span class="op">/</span> LENGTH_SCALE_LOWER))</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>wide_model <span class="op">=</span> partial(calibrated_electricity_model, ell<span class="op">=</span>WIDE_ELL, m<span class="op">=</span>WIDE_M)</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Same guide, optimizer, steps and keys as the first fit.</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>wide_guide <span class="op">=</span> AutoNormal(wide_model, init_loc_fn<span class="op">=</span>init_to_feasible)</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>wide_svi <span class="op">=</span> SVI(wide_model, wide_guide, Adam(step_size<span class="op">=</span><span class="fl">0.005</span>), Trace_ELBO())</span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>wide_result <span class="op">=</span> wide_svi.run(rng_subkey, <span class="dv">50_000</span>, covariates_train, data_train, progress_bar<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>wide_posterior <span class="op">=</span> draw_posterior(key_post, wide_guide, wide_result.params, num_posterior_samples)</span></code></pre></div>
+</div>
+<p>The figure compares the posterior coefficient of the two fits. Each legend entry gives the box, the posterior length scale of the fit, the kernel error at that length scale, the posterior mean coefficient at the coldest and the hottest training hour, and the contribution gap.</p>
+<div id="fa3166c4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-07T19:53:16.883101Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-07T19:53:16.882982Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-07T19:53:20.693102Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-07T19:53:20.692071Z&quot;}}" data-execution_count="18">
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># One entry per box: label, posterior draws, box half-width, basis functions, color.</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>box_fits <span class="op">=</span> [</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    (<span class="ss">f"c = </span><span class="sc">{</span>box_factor<span class="sc">:.0f}</span><span class="ss">, M = </span><span class="sc">{</span>M<span class="sc">}</span><span class="ss">"</span>, posterior, ELL, M, <span class="st">"C1"</span>),</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"c = </span><span class="sc">{</span>WIDE_BOX_FACTOR<span class="sc">:.0f}</span><span class="ss">, M = </span><span class="sc">{</span>WIDE_M<span class="sc">}</span><span class="ss">"</span>,</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>        wide_posterior,</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>        WIDE_ELL,</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>        WIDE_M,</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">"C4"</span>,</span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>coldest, hottest <span class="op">=</span> order[<span class="dv">0</span>], order[<span class="op">-</span><span class="dv">1</span>]</span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>temperature_sorted <span class="op">=</span> temperature_train[order]</span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">9</span>))</span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> label, draws, ell, m, color <span class="kw">in</span> box_fits:</span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    <span class="co"># (samples, 1008) coefficient draws at the training hours.</span></span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>    beta <span class="op">=</span> np.asarray(draws[<span class="st">"beta_temperature"</span>])</span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>    length_scale <span class="op">=</span> <span class="bu">float</span>(np.asarray(draws[<span class="st">"length_scale"</span>]).mean())</span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>    max_error <span class="op">=</span> <span class="bu">float</span>(</span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>        jnp.<span class="bu">max</span>(</span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>            jnp.<span class="bu">abs</span>(</span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>                hsgp_correlation(temperature_grid, length_scale, ell<span class="op">=</span>ell, m<span class="op">=</span>m)</span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a>                <span class="op">-</span> matern52_correlation(temperature_grid, length_scale)</span>
+<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb21-28"><a href="#cb21-28" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb21-29"><a href="#cb21-29" aria-hidden="true" tabindex="-1"></a>    contribution_gap <span class="op">=</span> <span class="bu">float</span>(</span>
+<span id="cb21-30"><a href="#cb21-30" aria-hidden="true" tabindex="-1"></a>        np.mean(</span>
+<span id="cb21-31"><a href="#cb21-31" aria-hidden="true" tabindex="-1"></a>            beta[:, hottest] <span class="op">*</span> temperature_train[hottest]</span>
+<span id="cb21-32"><a href="#cb21-32" aria-hidden="true" tabindex="-1"></a>            <span class="op">-</span> beta[:, coldest] <span class="op">*</span> temperature_train[coldest]</span>
+<span id="cb21-33"><a href="#cb21-33" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb21-34"><a href="#cb21-34" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb21-35"><a href="#cb21-35" aria-hidden="true" tabindex="-1"></a>    beta_hdi <span class="op">=</span> az.hdi(beta[:, order], prob<span class="op">=</span><span class="fl">0.94</span>, axis<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb21-36"><a href="#cb21-36" aria-hidden="true" tabindex="-1"></a>    ax.fill_between(</span>
+<span id="cb21-37"><a href="#cb21-37" aria-hidden="true" tabindex="-1"></a>        temperature_sorted,</span>
+<span id="cb21-38"><a href="#cb21-38" aria-hidden="true" tabindex="-1"></a>        beta_hdi[:, <span class="dv">0</span>],</span>
+<span id="cb21-39"><a href="#cb21-39" aria-hidden="true" tabindex="-1"></a>        beta_hdi[:, <span class="dv">1</span>],</span>
+<span id="cb21-40"><a href="#cb21-40" aria-hidden="true" tabindex="-1"></a>        color<span class="op">=</span>color,</span>
+<span id="cb21-41"><a href="#cb21-41" aria-hidden="true" tabindex="-1"></a>        alpha<span class="op">=</span><span class="fl">0.3</span>,</span>
+<span id="cb21-42"><a href="#cb21-42" aria-hidden="true" tabindex="-1"></a>        label<span class="op">=</span><span class="vs">rf"</span><span class="sc">{</span>label<span class="sc">}</span><span class="vs">: </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>,</span>
+<span id="cb21-43"><a href="#cb21-43" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb21-44"><a href="#cb21-44" aria-hidden="true" tabindex="-1"></a>    ax.plot(</span>
+<span id="cb21-45"><a href="#cb21-45" aria-hidden="true" tabindex="-1"></a>        temperature_sorted,</span>
+<span id="cb21-46"><a href="#cb21-46" aria-hidden="true" tabindex="-1"></a>        beta[:, order].mean(axis<span class="op">=</span><span class="dv">0</span>),</span>
+<span id="cb21-47"><a href="#cb21-47" aria-hidden="true" tabindex="-1"></a>        color<span class="op">=</span>color,</span>
+<span id="cb21-48"><a href="#cb21-48" aria-hidden="true" tabindex="-1"></a>        label<span class="op">=</span>(</span>
+<span id="cb21-49"><a href="#cb21-49" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>label<span class="sc">}</span><span class="ss">: posterior mean, length scale </span><span class="sc">{</span>length_scale<span class="sc">:.2f}</span><span class="ss"> °C</span><span class="ch">\n</span><span class="ss">"</span></span>
+<span id="cb21-50"><a href="#cb21-50" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"kernel error </span><span class="sc">{</span>max_error<span class="sc">:.3f}</span><span class="ch">\n</span><span class="ss">"</span></span>
+<span id="cb21-51"><a href="#cb21-51" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"coefficient </span><span class="sc">{</span>beta[:, coldest]<span class="sc">.</span>mean()<span class="sc">:.3f}</span><span class="ss"> at </span><span class="sc">{</span>temperature_train[coldest]<span class="sc">:.2f}</span><span class="ss"> °C, "</span></span>
+<span id="cb21-52"><a href="#cb21-52" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>beta[:, hottest]<span class="sc">.</span>mean()<span class="sc">:.3f}</span><span class="ss"> at </span><span class="sc">{</span>temperature_train[hottest]<span class="sc">:.2f}</span><span class="ss"> °C</span><span class="ch">\n</span><span class="ss">"</span></span>
+<span id="cb21-53"><a href="#cb21-53" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"contribution gap </span><span class="sc">{</span>contribution_gap<span class="sc">:.2f}</span><span class="ss"> GW"</span></span>
+<span id="cb21-54"><a href="#cb21-54" aria-hidden="true" tabindex="-1"></a>        ),</span>
+<span id="cb21-55"><a href="#cb21-55" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb21-56"><a href="#cb21-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-57"><a href="#cb21-57" aria-hidden="true" tabindex="-1"></a>ax.legend(loc<span class="op">=</span><span class="st">"upper center"</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.1</span>), ncol<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb21-58"><a href="#cb21-58" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
+<span id="cb21-59"><a href="#cb21-59" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span>(</span>
+<span id="cb21-60"><a href="#cb21-60" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Temperature Coefficient in Two HSGP Boxes</span><span class="ch">\n</span><span class="st">"</span></span>
+<span id="cb21-61"><a href="#cb21-61" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"(c = </span><span class="sc">{</span>WIDE_BOX_FACTOR<span class="sc">:.0f}</span><span class="ss"> is accurate up to "</span></span>
+<span id="cb21-62"><a href="#cb21-62" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"</span><span class="sc">{</span>WIDE_BOX_FACTOR <span class="op">*</span> TEMP_HALF_RANGE <span class="op">/</span> <span class="fl">4.1</span><span class="sc">:.1f}</span><span class="ss"> °C by the rule)"</span></span>
+<span id="cb21-63"><a href="#cb21-63" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb21-64"><a href="#cb21-64" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"Temperature (°C)"</span>,</span>
+<span id="cb21-65"><a href="#cb21-65" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"Coefficient (GW per °C)"</span>,</span>
+<span id="cb21-66"><a href="#cb21-66" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="electricity_forecast_calibration_files/figure-html/_src-electricity_forecast_calibration-cell-19-output-1.png" width="1217" height="911" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>The wide box is not accurate either. Its posterior length scale is 86.46 °C, beyond the 19.6 °C the rule allows, with a kernel error of 0.370. Unlike in the <a href="electricity_forecast.html">baseline example</a>, the two fits agree on the shape. In both, the coefficient falls from the coldest training hour (0.114 with <span class="math inline">c = 2</span>, 0.106 with <span class="math inline">c = 5</span>) to a minimum at mild temperatures and rises into the target band above 32 °C (0.133 and 0.135 at 43.10 °C). The contribution gap is 4.48 GW and 4.66 GW. The calibration term observes the coefficient above 32 °C, which fixes the constant <span class="math inline">k</span> that the demand data leave free, so the cold side now follows from the assumed calibration target together with the demand data, not from the box. In the <span class="math inline">c = 2</span> fit the contribution still grows with temperature at the cold end (previous figure), so the model shows no heating effect in demand terms.</p>
 </section>
 </section>
 <section id="discussion" class="level1">
@@ -1161,7 +1265,7 @@ covariates shape: (1344, 2)</code></pre>
 <p><strong>Open weaknesses.</strong></p>
 <ul>
 <li>The test window has only 2 hours above 32 °C, so the test scores cannot show whether the calibration improves forecasts on hot days.</li>
-<li>The posterior length scale (42.31 °C) sits far above the prior range [3, 10] °C, where the HSGP approximation is off by up to 0.715 in correlation, so the cold-side rise of the coefficient and the location of its minimum are not findings about demand.</li>
+<li>The posterior length scale (42.31 °C) sits far above the prior range [3, 10] °C, and there the HSGP approximation is off by up to 0.715 in correlation. A wider box does not help, because the posterior length scale grows with the box. The two boxes agree on the shape of the coefficient below the threshold only because the calibration target fixes its level, so that shape rests on the assumed target. Only a different prior on the length scale or a different model form can make the approximation accurate.</li>
 <li>The calibration target is assumed, not estimated here. With a scale of 0.01 the calibration term pulls the coefficient just as firmly toward a wrong target.</li>
 <li>The central <span class="math inline">90\%</span> interval covers 0.994 of the test hours, so the forecast bands are too wide for the test window.</li>
 </ul>

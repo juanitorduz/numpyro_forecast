@@ -23,6 +23,7 @@ warnings.filterwarnings("ignore", message="PyMC not installed", category=UserWar
 %jaxtyping.typechecker beartype.beartype
 %config InlineBackend.figure_format = "retina"
 
+from functools import partial
 from typing import cast
 
 import arviz as az
@@ -32,7 +33,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-import pandas as pd
 import preliz as pz
 from jax import random
 from numpyro.contrib.hsgp.approximation import hsgp_matern
@@ -194,28 +194,20 @@ We split the data as in the original example, holding out the last two weeks. In
 num_forecast_steps = 24 * 7 * 2  # two weeks
 t_train = duration - num_forecast_steps
 
-data_train = demand[:t_train]
-data_test = demand[t_train:]
+data_train = demand[:t_train]  # (1008, 1)
+data_test = demand[t_train:]  # (336, 1)
 
 dates_train = demand_dates[:t_train]
 dates_test = demand_dates[t_train:]
 
 day_of_week = np.array([d.weekday() for d in demand_dates.astype("datetime64[D]").astype(object)])
 
+# (1344, 2): temperature, day of week
 covariates = jnp.stack([temperature, jnp.asarray(day_of_week, dtype=jnp.float32)], axis=-1)
-covariates_train = covariates[:t_train]
-temperature_train = np.asarray(temperature[:t_train])
-temperature_test = np.asarray(temperature[t_train:])
-
-print("data_train shape:", data_train.shape)
-print("data_test shape:", data_test.shape)
-print("covariates shape:", covariates.shape)
+covariates_train = covariates[:t_train]  # (1008, 2)
+temperature_train = np.asarray(temperature[:t_train])  # (1008,)
+temperature_test = np.asarray(temperature[t_train:])  # (336,)
 ```
-
-
-    data_train shape: (1008, 1)
-    data_test shape: (336, 1)
-    covariates shape: (1344, 2)
 
 
 We can now visualize the training and test split of the demand and of the temperature. The panel titles give the spread of each window.
@@ -275,7 +267,11 @@ Here is the modeling strategy, re-expressed as a plain NumPyro model function bu
 
 The model function `(covariates, data=None)` opens with `Horizon.from_data(covariates, data)`, which derives the training window and the forecast horizon from the two shapes, reads its exogenous inputs from `covariates`, and calls [predict](../../reference/models.predict.md#numpyro_forecast.models.predict) exactly once with a zero-centered noise distribution and the deterministic mean. Because there is no random-walk latent here, the model is purely covariate-driven and [predict](../../reference/models.predict.md#numpyro_forecast.models.predict) handles both the in-sample fit (the `obs` site) and the forecast suffix (`obs_future` and the [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) deterministic), including the per-timestep noise scale. Over the forecast horizon the model reads the temperature from `covariates`, as it reads the calendar. The calendar is known in advance, but the temperature is not, so the temperature path we pass decides what the forecast knows about the weather. We come back to this in the forecast evaluation.
 
-The GP input is the temperature minus `TEMP_CENTER`, the midpoint of the training temperature range. NumPyro's `ell` argument (the constant `ELL`) is the half-width L of the box \[-L, L\] that must contain the GP input; it is not a factor of the data range, as `c` is in PyMC. We set L to twice the training half-range, so the centered training temperatures fill the middle half of the box (Riutort-Mayol et al., 2023, discuss this choice). `TEMP_CENTER` and `ELL` are module constants computed from the training temperatures, and the number of basis functions `M` is a module constant too. A center computed inside the model from `covariates` would be a statistic of the training window during the fit and of the full horizon during the forecast, so the basis functions would change between the two. The linear term `beta_temperature * temperature` and the noise scale use the raw temperature.
+The GP input is the temperature minus `TEMP_CENTER`, the midpoint of the training temperature range. NumPyro's `ell` argument (the constant `ELL`) is the half-width L of the box \[-L, L\] that must contain the GP input; it is not a factor of the data range, as `c` is in PyMC. We set L to twice the training half-range S, so the centered training temperatures fill the middle half of the box. For a Matérn 5/2 kernel, Riutort-Mayol et al. (2023) give the box factor c = L / S and the number of basis functions M that keep the approximation accurate at a length scale \ell:
+
+ c \ge \max\left(1.2,\\ 4.1\\\frac{\ell}{S}\right), \qquad M \ge 2.65\\\frac{c\\S}{\ell}. 
+
+The *Accuracy of the HSGP approximation* section applies this rule to the length scale the fit selects. `TEMP_CENTER` and `ELL` are module constants computed from the training temperatures, and the number of basis functions `M` is a module constant too. A center computed inside the model from `covariates` would be a statistic of the training window during the fit and of the full horizon during the forecast, so the basis functions would change between the two. The linear term `beta_temperature * temperature` and the noise scale use the raw temperature.
 
 
 ## GP prior parameters
@@ -336,8 +332,13 @@ LENGTH_SCALE_PRIOR = dist.InverseGamma(
 )
 
 
-def electricity_model(covariates: Array, data: Array | None = None) -> None:
-    """HSGP temperature effect plus hour/day seasonality with a Student-t likelihood."""
+def electricity_model(
+    covariates: Array, data: Array | None = None, *, ell: float = ELL, m: int = M
+) -> None:
+    """HSGP temperature effect plus hour/day seasonality with a Student-t likelihood.
+
+    ``ell`` and ``m`` set the HSGP box half-width and the number of basis functions.
+    """
     h = Horizon.from_data(covariates, data)
     duration = covariates.shape[-2]
     temperature = covariates[..., 0]
@@ -360,8 +361,8 @@ def electricity_model(covariates: Array, data: Array | None = None) -> None:
         nu=5 / 2,
         alpha=cast("float", alpha),
         length=cast("float", length_scale),
-        ell=ELL,
-        m=M,
+        ell=ell,
+        m=m,
     )
     numpyro.deterministic("beta_temperature", beta_temperature)
 
@@ -468,7 +469,7 @@ The prior predictive 94\\ band is several times wider than the range of the trai
 
 # Inference with SVI
 
-We fit the model with plain NumPyro stochastic variational inference: an `AutoNormal` guide, `Adam`, and `SVI.run`, which returns the fitted `params` and the ELBO `losses`. The posterior is multimodal: the multiplicative `beta_temperature * temperature` term trades off against the overall level, so the starting point of the guide decides which mode SVI reaches. We initialize the guide at a feasible point (`init_to_feasible`). The *Accuracy of the HSGP approximation* section below shows which parts of the fitted coefficient depend on the HSGP setup.
+We fit the model with plain NumPyro stochastic variational inference: an `AutoNormal` guide, `Adam`, and `SVI.run`, which returns the fitted `params` and the ELBO `losses`. The posterior is multimodal: the multiplicative `beta_temperature * temperature` term trades off against the overall level, so the starting point of the guide decides which mode SVI reaches. We initialize the guide at a feasible point (`init_to_feasible`). Two sections below check how accurate the HSGP approximation is at the fitted length scale and which parts of the fitted coefficient depend on the HSGP box.
 
 
 ``` python
@@ -508,6 +509,7 @@ forecast_draws = forecast(key_fc, electricity_model, posterior, data_train, cova
 # Climatology: the hour-of-day mean of the training temperatures. The training window holds
 # whole days that start at midnight, so each row of the reshape is one day.
 temperature_climatology = temperature_train.reshape(-1, 24).mean(axis=0)
+# (1344, 2): temperature (realized in training, climatology over the test window), day of week
 covariates_climatology = covariates.at[t_train:, 0].set(
     jnp.tile(temperature_climatology, num_forecast_steps // 24)
 )
@@ -520,35 +522,51 @@ forecast_climatology = forecast(
 
 ## Forecast evaluation
 
-We score the train and test forecasts with [evaluate_forecast](../../reference/evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast), which reports several metrics at once: CRPS (the [Continuous Ranked Probability Score](https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score)), mean absolute error, root mean squared error, and the empirical coverage of the central 90\\ prediction interval. Both test forecasts are scored against the same held-out demand.
+We score the train and test forecasts with [evaluate_forecast](../../reference/evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast), which reports several metrics at once: CRPS (the [Continuous Ranked Probability Score](https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score)), mean absolute error, root mean squared error, and the empirical coverage of the central 90\\ prediction interval. Both test forecasts are scored against the same held-out demand, and the point chart below shows the CRPS and the coverage of each forecast.
 
 
 ``` python
 train_metrics = evaluate_forecast(train_pp, data_train)
 test_metrics = evaluate_forecast(forecast_draws, data_test)
-
 climatology_metrics = evaluate_forecast(forecast_climatology, data_test)
 
-metrics_table = pd.DataFrame(
-    {
-        "train": train_metrics,
-        "test": test_metrics,
-        "test (climatology)": climatology_metrics,
-    }
-)
-metrics_table
+# Point chart of CRPS and coverage, one point per forecast, with the values annotated.
+score_labels = ["train", "test", "test (climatology)"]
+scores = [train_metrics, test_metrics, climatology_metrics]
+fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(12, 6), layout="constrained")
+score_panels = [
+    (ax[0], "crps", "CRPS (lower is better)"),
+    (ax[1], "coverage", r"Coverage of the central $90\%$ interval"),
+]
+
+for panel, metric, title in score_panels:
+    values = [float(score[metric]) for score in scores]
+    panel.plot(range(len(values)), values, "o", color="C0", markersize=10)
+
+    for position, value in enumerate(values):
+        panel.annotate(
+            f"{value:.3f}",
+            xy=(position, value),
+            xytext=(12, 0),
+            textcoords="offset points",
+            va="center",
+        )
+
+    panel.set(title=title, xticks=range(len(values)), xticklabels=score_labels)
+    panel.set_xlim(-0.5, len(values) - 0.3)
+
+nominal_line = ax[1].axhline(0.9, color="black", linestyle="--", label=r"nominal $90\%$")
+fig.legend(handles=[nominal_line], loc="outside lower center")
+fig.suptitle("Forecast Scores", fontsize=18, fontweight="bold");
 ```
 
 
-|          | train    | test     | test (climatology) |
-|----------|----------|----------|--------------------|
-| mae      | 0.374790 | 0.257167 | 0.435522           |
-| rmse     | 0.510296 | 0.323974 | 0.559460           |
-| crps     | 0.272882 | 0.186578 | 0.309576           |
-| coverage | 0.917659 | 0.991071 | 0.854167           |
+<figure class="figure">
+<p><img src="electricity_forecast_files/figure-html/_src-electricity_forecast-cell-17-output-1.png" class="figure-img" width="1211" height="606" /></p>
+</figure>
 
 
-The `test` column is conditional on the realized temperatures of the test window: it scores the model with a perfect weather forecast, so it is an optimistic reading of the forecast accuracy. Its CRPS (0.187) is lower than the train CRPS (0.273), but the two columns do not test generalization. The train column scores the data the model was fitted to, and the test window is calmer and milder (see the split plot above). The central 90\\ interval covers 0.918 of the training hours and 0.991 of the test hours, so it is too wide on the test window. The `test (climatology)` column uses only what is known at forecast time: the test CRPS is 0.187 with the realized temperatures and 0.310 with the climatology path. Its coverage drops to 0.854, but the climatology forecast treats one temperature path as known, so its bands leave out the uncertainty of the weather and its coverage is conditional on that path. We can now compare the posterior predictive distribution with the training and test data.
+The `test` score is conditional on the realized temperatures of the test window: it scores the model with a perfect weather forecast, so it is an optimistic reading of the forecast accuracy. Its CRPS (0.187) is lower than the train CRPS (0.273), but the two do not test generalization. The train score is computed on the data the model was fitted to, and the test window is calmer and milder (see the split plot above). The central 90\\ interval covers 0.918 of the training hours and 0.991 of the test hours, so it is too wide on the test window. The `test (climatology)` forecast uses only what is known at forecast time, and its CRPS is 0.310. Its coverage drops to 0.854, but that forecast treats one temperature path as known, so its bands leave out the uncertainty of the weather and its coverage is conditional on that path. We can now compare the posterior predictive distribution with the training and test data.
 
 
 ``` python
@@ -637,12 +655,12 @@ fig.suptitle("Posterior Predictive Checks", fontsize=18, fontweight="bold");
 </figure>
 
 
-The in-sample bands follow the daily cycle and the heat-wave peaks of mid January. The forecast bands follow the test demand closely, because the forecast reads the realized test temperatures. The forecast bands are wide on the test window, most of all on the warmest test day at its end, which matches the test coverage of 0.991 in the table.
+The in-sample bands follow the daily cycle and the heat-wave peaks of mid January. The forecast bands follow the test demand closely, because the forecast reads the realized test temperatures. The forecast bands are wide on the test window, most of all on the warmest test day at its end, which matches the test coverage of 0.991 in the score chart.
 
 
 ## Accuracy of the HSGP approximation
 
-Before we read the fitted temperature coefficient, we check how well the HSGP approximation matches the Matérn 5/2 kernel at the length scale the fit selects. The left panel compares the posterior length scale with its prior. The right panel shows the prior variance of the approximate GP along the training temperature range (the exact Matérn 5/2 kernel with amplitude 1 has variance 1 everywhere) at the two prior bounds and at the posterior mean. Its legend gives the largest gap between the approximate and the exact correlation over a grid of 200 training temperatures. The check needs no refit: `hsgp_correlation` builds the basis with the model's `TEMP_CENTER`, `ELL` and `M`.
+Before we read the fitted temperature coefficient, we check how well the HSGP approximation matches the Matérn 5/2 kernel at the length scale the fit selects. `matern52_correlation` computes the exact Matérn 5/2 correlation between pairs of temperatures, and `hsgp_correlation` computes its HSGP approximation, by default with the model's `TEMP_CENTER`, `ELL` and `M`. The **kernel error** is the largest absolute gap between the two over an evenly spaced grid on the training temperature range. The left panel compares the posterior length scale with its prior. The right panel shows the prior variance of the approximate GP along the training temperature range (the exact kernel with amplitude 1 has variance 1 everywhere) at the two prior bounds and at the posterior mean, with the kernel error of each in the legend; its title applies the box rule of Riutort-Mayol et al. (2023) from *Model specification*. The check needs no refit.
 
 
 ``` python
@@ -652,11 +670,11 @@ def matern52_correlation(x: Array, length_scale: float) -> Array:
     return (1 + s + s**2 / 3) * jnp.exp(-s)
 
 
-def hsgp_correlation(x: Array, length_scale: float) -> Array:
-    """HSGP approximation of the same correlation, with the model's center, box and basis."""
-    phi = eigenfunctions(x=x - TEMP_CENTER, ell=ELL, m=M)
+def hsgp_correlation(x: Array, length_scale: float, ell: float = ELL, m: int = M) -> Array:
+    """HSGP approximation of the same correlation, by default with the model's box and basis."""
+    phi = eigenfunctions(x=x - TEMP_CENTER, ell=ell, m=m)
     spd = diag_spectral_density_matern(
-        nu=5 / 2, alpha=1.0, length=length_scale, ell=ELL, m=M, dim=1
+        nu=5 / 2, alpha=1.0, length=length_scale, ell=ell, m=m, dim=1
     )
     return (phi * spd) @ phi.T
 
@@ -665,10 +683,13 @@ def hsgp_correlation(x: Array, length_scale: float) -> Array:
 length_scale_draws = np.asarray(posterior["length_scale"])
 posterior_length_scale = float(length_scale_draws.mean())
 length_scale_hdi = az.hdi(length_scale_draws, prob=0.94)
-prior_tail = float(1 - LENGTH_SCALE_PRIOR.cdf(jnp.asarray(posterior_length_scale)))
+prior_tail = float(1 - length_scale_params.cdf(posterior_length_scale))  # float64
 mantissa, exponent = f"{prior_tail:.1e}".split("e")
 
-# Largest kernel error on a grid over the training temperatures.
+# Largest kernel error on an evenly spaced grid over the training temperature range.
+box_factor = ELL / TEMP_HALF_RANGE
+accurate_up_to = box_factor * TEMP_HALF_RANGE / 4.1  # rule: c >= 4.1 * length_scale / S
+needed_box_factor = 4.1 * posterior_length_scale / TEMP_HALF_RANGE
 temperature_grid = jnp.linspace(temperature_train.min(), temperature_train.max(), 200)
 checked_length_scales = (LENGTH_SCALE_LOWER, LENGTH_SCALE_UPPER, posterior_length_scale)
 max_errors = [
@@ -714,8 +735,8 @@ ax[0].axvline(
 )
 ax[0].set(
     title=(
-        "Length scale\nprior probability above the posterior mean: "
-        rf"${mantissa} \times 10^{{{int(exponent)}}}$"
+        "Length scale\nprior probability above\n"
+        rf"the posterior mean: ${mantissa} \times 10^{{{int(exponent)}}}$"
     ),
     xlabel="Length scale (°C)",
     ylabel="Prior density",
@@ -733,7 +754,11 @@ for color, length_scale, max_error in zip(
 
 ax[1].axhline(1.0, color="black", linestyle="--", label="exact Matérn 5/2")
 ax[1].set(
-    title="Prior variance of the HSGP (amplitude 1)",
+    title=(
+        "Prior variance of the HSGP (amplitude 1)\n"
+        f"c = {box_factor:.0f} is accurate up to {accurate_up_to:.1f} °C\n"
+        f"the posterior mean needs c ≥ {needed_box_factor:.1f}"
+    ),
     xlabel="Temperature (°C)",
     ylabel="Variance",
 )
@@ -749,7 +774,7 @@ fig.suptitle("HSGP Approximation at the Posterior Length Scale", fontsize=18, fo
 </figure>
 
 
-At both bounds of the prior range the approximation is accurate: the largest kernel error is 0.015 at a length scale of 3 °C and 0.019 at a length scale of 10 °C. The posterior length scale is 38.40 °C (94\\ HDI \[37.44, 39.31\] °C), far outside that range: the prior gives a probability of 1.2 \times 10^{-6} to a length scale above it, so the data and the prior disagree. At the posterior length scale the approximate kernel is far from the Matérn 5/2 kernel (largest error 0.657). Its prior variance is well below 1 over the whole range and lowest at both ends, because the basis functions vanish at the box edges \pm L. So the shape of the fitted coefficient near the ends of the temperature range, and the location of its minimum, are outputs of this approximation, not findings about demand. We read the coefficient with this in mind in the next section.
+At both bounds of the prior range the approximation is accurate: the kernel error is 0.015 at a length scale of 3 °C and 0.019 at a length scale of 10 °C. The posterior length scale is 38.40 °C (94\\ HDI \[37.44, 39.31\] °C), far outside that range: the prior gives a probability of 1.2 \times 10^{-6} to a length scale above it, so the data and the prior disagree. By the rule of Riutort-Mayol et al., c = 2 is accurate only up to a length scale of 7.8 °C, and the posterior mean would need c \ge 9.8. At the posterior length scale the kernel error is 0.657, and the prior variance of the approximation is well below 1 over the whole range. So the fitted coefficient is not the posterior of a Matérn 5/2 GP. The next section reads the coefficient, and the section after it checks which of its features depend on the box.
 
 
 ## Temperature effect on demand
@@ -783,7 +808,7 @@ band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
 band_94.set_label(r"$94\%$ HDI")
 band_50.set_label(r"$50\%$ HDI")
 ax.scatter(temperature_train, np.asarray(data_train[:, 0]), c="black", s=10)
-ax.legend(handles=[band_94, band_50])
+ax.legend(handles=[band_94, band_50], loc="upper left", bbox_to_anchor=(1.01, 1.0))
 ax.set(title="Demand vs Temperature", xlabel="Temperature (°C)", ylabel="Demand (GW)");
 ```
 
@@ -843,7 +868,7 @@ for i, offset, ha in annotated_hours:
         arrowprops={"arrowstyle": "->"},
     )
 
-ax.legend(handles=[band_94, band_50])
+ax.legend(handles=[band_94, band_50], loc="upper left", bbox_to_anchor=(1.01, 1.0))
 ax.set(
     title="Temperature Coefficient",
     xlabel="Temperature (°C)",
@@ -857,25 +882,133 @@ ax.set(
 </figure>
 
 
-The coefficient is largest at the hottest training hours (0.134 at 43.10 °C), and its 94\\ band there separates from the rest of the curve. This matches the steeper demand above 32 °C in the previous plot and the air-conditioning part of the exploratory comment by Hyndman and Athanasopoulos at https://otexts.com/fpp2/scatterplots.html:
+The coefficient rises from the mild temperatures to the hottest training hours, and its 94\\ band at the hot end separates from the rest of the curve. This matches the steeper demand above 32 °C in the previous plot and the air-conditioning part of the exploratory comment by Hyndman and Athanasopoulos at https://otexts.com/fpp2/scatterplots.html:
 
 > *"It is clear that high demand occurs when temperatures are high due to the effect of air-conditioning. But there is also a heating effect, where demand increases for very low temperatures."*
 
-The model does not show the heating part. The coefficient has its minimum at 17.00 °C (0.065) and is higher at the coldest training hour (0.075 at 10.95 °C), but the *Accuracy of the HSGP approximation* section showed that this part of the curve is an output of the approximation. The contribution of temperature to demand also grows with temperature at the cold end: 0.82 GW at 10.95 °C against 1.11 GW at 17.00 °C.
+The model does not show the heating part. The coefficient is higher at the coldest training hour (0.075 at 10.95 °C) than at its minimum (0.065 at 17.00 °C), but the contribution `beta_temperature * temperature` still grows with temperature there: 0.82 GW at 10.95 °C against 1.11 GW at 17.00 °C. The next section checks which of these features the data determine and which depend on the HSGP box.
+
+
+## Which parts of the coefficient depend on the box
+
+The data cannot pin down the whole coefficient curve. The temperature T enters the mean only through the product `beta_temperature * temperature`, and the mean also has an intercept. Adding k / T to the coefficient \beta(T) adds the same constant k to the mean at every hour,
+
+ \left(\beta(T) + \frac{k}{T}\right) T + \text{intercept} = \beta(T)\\T + (\text{intercept} + k), 
+
+so the likelihood of the demand cannot tell the two curves apart once the intercept absorbs k. The term k / T is about four times larger at the coldest training hour (10.95 °C) than at the hottest (43.10 °C), so this freedom moves the cold end of the coefficient most, and the GP prior, through the HSGP approximation, decides that part of the curve. A difference of contributions between two hours does not change with k. We use the **contribution gap**: the posterior mean of the contribution `beta_temperature * temperature` at the hottest training hour minus the one at the coldest training hour.
+
+To see what depends on the box, we refit the same model with a box of five times the training half-range and the number of basis functions that the rule asks for at the lower prior bound of 3 °C. By the rule, this box is accurate for length scales from 3 °C up to about 19.6 °C. The model function takes `ell` and `m` as keyword arguments, so `functools.partial` gives the refit the `(covariates, data=None)` signature. The refit reuses the keys of the first fit.
+
+
+``` python
+# Box of five times the training half-range, with the number of basis functions that the rule
+# m >= 2.65 * c * S / length_scale asks for at the lower prior bound.
+WIDE_BOX_FACTOR = 5.0
+WIDE_ELL = WIDE_BOX_FACTOR * TEMP_HALF_RANGE
+WIDE_M = int(np.ceil(2.65 * WIDE_BOX_FACTOR * TEMP_HALF_RANGE / LENGTH_SCALE_LOWER))
+wide_model = partial(electricity_model, ell=WIDE_ELL, m=WIDE_M)
+
+# Same guide, optimizer, steps and keys as the first fit.
+wide_guide = AutoNormal(wide_model, init_loc_fn=init_to_feasible)
+wide_svi = SVI(wide_model, wide_guide, Adam(step_size=0.005), Trace_ELBO())
+wide_result = wide_svi.run(rng_subkey, 50_000, covariates_train, data_train, progress_bar=False)
+wide_posterior = draw_posterior(key_post, wide_guide, wide_result.params, num_posterior_samples)
+```
+
+
+The figure compares the posterior coefficient of the two fits. Each legend entry gives the box, the posterior length scale of the fit, the kernel error at that length scale, the posterior mean coefficient at the coldest and the hottest training hour, and the contribution gap.
+
+
+``` python
+# One entry per box: label, posterior draws, box half-width, basis functions, color.
+box_fits = [
+    (f"c = {box_factor:.0f}, M = {M}", posterior, ELL, M, "C1"),
+    (
+        f"c = {WIDE_BOX_FACTOR:.0f}, M = {WIDE_M}",
+        wide_posterior,
+        WIDE_ELL,
+        WIDE_M,
+        "C4",
+    ),
+]
+coldest, hottest = order[0], order[-1]
+temperature_sorted = temperature_train[order]
+
+fig, ax = plt.subplots(figsize=(12, 9))
+
+for label, draws, ell, m, color in box_fits:
+    # (samples, 1008) coefficient draws at the training hours.
+    beta = np.asarray(draws["beta_temperature"])
+    length_scale = float(np.asarray(draws["length_scale"]).mean())
+    max_error = float(
+        jnp.max(
+            jnp.abs(
+                hsgp_correlation(temperature_grid, length_scale, ell=ell, m=m)
+                - matern52_correlation(temperature_grid, length_scale)
+            )
+        )
+    )
+    contribution_gap = float(
+        np.mean(
+            beta[:, hottest] * temperature_train[hottest]
+            - beta[:, coldest] * temperature_train[coldest]
+        )
+    )
+    beta_hdi = az.hdi(beta[:, order], prob=0.94, axis=0)
+    ax.fill_between(
+        temperature_sorted,
+        beta_hdi[:, 0],
+        beta_hdi[:, 1],
+        color=color,
+        alpha=0.3,
+        label=rf"{label}: $94\%$ HDI",
+    )
+    ax.plot(
+        temperature_sorted,
+        beta[:, order].mean(axis=0),
+        color=color,
+        label=(
+            f"{label}: posterior mean, length scale {length_scale:.2f} °C\n"
+            f"kernel error {max_error:.3f}\n"
+            f"coefficient {beta[:, coldest].mean():.3f} at {temperature_train[coldest]:.2f} °C, "
+            f"{beta[:, hottest].mean():.3f} at {temperature_train[hottest]:.2f} °C\n"
+            f"contribution gap {contribution_gap:.2f} GW"
+        ),
+    )
+
+ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=2)
+ax.set(
+    title=(
+        "Temperature Coefficient in Two HSGP Boxes\n"
+        f"(c = {WIDE_BOX_FACTOR:.0f} is accurate up to "
+        f"{WIDE_BOX_FACTOR * TEMP_HALF_RANGE / 4.1:.1f} °C by the rule)"
+    ),
+    xlabel="Temperature (°C)",
+    ylabel="Coefficient (GW per °C)",
+);
+```
+
+
+<figure class="figure">
+<p><img src="electricity_forecast_files/figure-html/_src-electricity_forecast-cell-23-output-1.png" class="figure-img" width="1230" height="911" /></p>
+</figure>
+
+
+The wide box does not make the approximation accurate. Its posterior length scale grows to 123.66 °C, far beyond the 19.6 °C the rule allows, and the kernel error at that length scale is 0.666, about the same as for c = 2 (0.657). The posterior length scale grows with the box, so a larger box alone does not give an accurate approximation here. The two fits agree on what the demand data determine: the coefficient rises toward the hottest training hours, and the contribution gap is 4.97 GW with c = 2 and 5.20 GW with c = 5. They disagree on the rest. With c = 5 the coefficient rises monotonically from 0.011 at 10.95 °C, with no minimum inside the range and no cold-side rise, and it reaches 0.123 at 43.10 °C against 0.134 with c = 2. So the cold side of the coefficient, its minimum and its level at the hot end depend on the box. Only a different prior on the length scale or a different model form can settle them.
 
 
 # Discussion
 
-**What the results say.** A covariate-only model (an HSGP temperature coefficient, hour-of-day and day-of-week effects and a Student-t likelihood with a temperature-dependent scale) tracks the training weeks, with a central 90\\ interval that covers 0.918 of the training hours. The per-degree effect of temperature on demand is largest on hot days: the coefficient reaches 0.134 at 43.10 °C, and its band there separates from the rest of the curve.
+**What the results say.** A covariate-only model (an HSGP temperature coefficient, hour-of-day and day-of-week effects and a Student-t likelihood with a temperature-dependent scale) tracks the training weeks, with a central 90\\ interval that covers 0.918 of the training hours. The temperature effect on demand grows on hot days: in both HSGP boxes the coefficient rises toward the hottest training hours, and the contribution of temperature at the hottest training hour exceeds the one at the coldest by 4.97 GW (c = 2) and 5.20 GW (c = 5).
 
 **Open weaknesses.**
 
-- The posterior length scale (38.40 °C) sits far above the prior range \[3, 10\] °C, where the HSGP approximation is off by up to 0.657 in correlation. The cold side of the coefficient and the location of its minimum depend on the box. Before they can be read as properties of the demand, the prior on the length scale or the box and the number of basis functions have to change.
+- The posterior length scale (38.40 °C) sits far above the prior range \[3, 10\] °C, and there the HSGP approximation is off by up to 0.657 in correlation. A wider box does not help, because the posterior length scale grows with the box. The cold side of the coefficient, its minimum and its level at the hot end depend on the box. Only a different prior on the length scale or a different model form can settle them.
 - The evaluation uses one split, and its test window is milder and calmer than the training weeks (peak 32.45 °C against 43.10 °C). The test score says little about heat-wave days, where demand peaks and the forecast bands are widest.
 - The central 90\\ interval covers 0.991 of the test hours, so the forecast bands are too wide for the calm test window.
 - The SVI posterior is multimodal, and the fit relies on `init_to_feasible` to land in the mode shown here.
 
-**Fairness notes.** The model knows the calendar over the forecast horizon, which a forecaster also knows, and the realized hourly temperature over the horizon, which no forecaster knows. The `test` column is therefore the score with a perfect weather forecast. The `test (climatology)` column replaces the realized temperature with the hour-of-day mean of the training temperatures, which is known at forecast time: its CRPS is 0.310 against 0.187. That forecast treats one temperature path as known, so its coverage leaves out the uncertainty of the weather. The model sees no demand from the test window.
+**Fairness notes.** The model knows the calendar over the forecast horizon, which a forecaster also knows, and the realized hourly temperature over the horizon, which no forecaster knows. The `test` score is therefore the score with a perfect weather forecast. The `test (climatology)` forecast replaces the realized temperature with the hour-of-day mean of the training temperatures, which is known at forecast time: its CRPS is 0.310 against 0.187. That forecast treats one temperature path as known, so its coverage leaves out the uncertainty of the weather. The model sees no demand from the test window.
 
 
 # References
