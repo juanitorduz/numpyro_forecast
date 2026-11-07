@@ -80,7 +80,8 @@ def fourier_features(
         cosine samples, negated sine samples (harmonic ``period - k`` when
         ``period`` is an integer). For an even integer ``period``,
         ``num_terms == period / 2`` is valid but its last sine column is zero up
-        to rounding; the matching cosine column carries the period-2 pattern.
+        to rounding; the matching cosine column alternates between ``1`` and
+        ``-1``.
 
     Returns
     -------
