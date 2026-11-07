@@ -21,8 +21,9 @@ GREAT_DOCS_YML = Path(__file__).resolve().parent.parent / "great-docs.yml"
 
 # Internal submodules whose public symbols are intentionally undocumented: their
 # members carry public names only so that other package modules can import them
-# without importing a private name (see "Conventions" in ``AGENTS.md``).
-IGNORED_MODULES: set[str] = {"offload", "validation"}
+# without importing a private name (see "Conventions" in ``AGENTS.md``), or, for
+# ``typecheck``, so that the jaxtyping import hook can resolve its typechecker.
+IGNORED_MODULES: set[str] = {"offload", "typecheck", "validation"}
 
 # Optional third-party dependencies: a module whose import fails on one of these
 # is covered by the extras CI leg instead of this walk. Any other ImportError
