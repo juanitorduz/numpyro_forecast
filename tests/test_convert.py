@@ -1936,14 +1936,18 @@ def test_predictions_to_datatree_integer_draws_with_float_observed() -> None:
     np.testing.assert_array_equal(np.asarray(tree["observed_data"]["obs"]), observed)
 
 
-def test_predictions_to_datatree_rejects_bool_arrays() -> None:
+def test_predictions_to_datatree_rejects_bool_and_complex_arrays() -> None:
+    # Real accepts integer and floating arrays only: a bool mask or a complex array is not a
+    # draw. Every case below has the right shape, so only the dtype check can raise.
     predictions, x, labels = _prediction_draws()
     with pytest.raises(TypeCheckError):
         predictions_to_datatree(predictions > 1.0, x, labels)
     with pytest.raises(TypeCheckError):
         predictions_to_datatree(predictions, x, labels, observed=predictions[0] > 1.0)
     with pytest.raises(TypeCheckError):
-        predictions_to_datatree(True, x, labels)
+        predictions_to_datatree(predictions + 0j, x, labels)
+    with pytest.raises(TypeCheckError):
+        predictions_to_datatree(predictions, x, labels, observed=predictions[0] + 0j)
 
 
 def test_predictions_to_datatree_plot_lm_integer_smoke() -> None:

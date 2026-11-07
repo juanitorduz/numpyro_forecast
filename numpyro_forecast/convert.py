@@ -1241,7 +1241,7 @@ def predictions_to_datatree(
     x
         Independent-variable values, shape ``(time,)``. Must be numeric:
         ``plot_lm`` cannot draw ``datetime64`` values (it concatenates ``x`` with
-        the float predictions internally), so pass
+        the predictions internally), so pass
         `matplotlib.dates.date2num()` floats and re-format the tick labels
         with `matplotlib.dates.ConciseDateFormatter`.
     series
