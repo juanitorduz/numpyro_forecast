@@ -99,6 +99,12 @@ annotations reject a mismatched array first and raise
 annotations, so the explicit check raises ``ValueError`` for it. Either way a
 mismatched ``truth`` never broadcasts into a wrong value.
 
+A NaN is a valid result: the built-in metrics return NaN when a ``truth``
+value or a forecast draw is NaN (see
+`~~numpyro_forecast.evaluate.DEFAULT_METRICS`), and the drivers pass it
+through without an error. A custom metric should follow the same rule, so that
+a NaN in a backtest table marks a window with missing input for every metric.
+
 ``pred`` and ``truth`` may have any real dtype. A count model (a discrete
 observation family in `~~numpyro_forecast.models.predict()`) needs integer
 data, so its forecast draws are integers. The built-in metrics cast an integer
