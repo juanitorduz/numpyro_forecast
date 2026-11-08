@@ -7,12 +7,17 @@ import jax
 import jax.numpy as jnp
 import numpyro
 import pytest
-from example_models import make_hierarchical_model, univariate_model
+from example_models import make_hierarchical_model, make_trend_inflation_model, univariate_model
 from jax import Array, random
-from numpyro.infer import SVI, Trace_ELBO
+from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
-from numpyro_forecast.datasets import bart_available, load_bart_hierarchical, load_bart_weekly
+from numpyro_forecast.datasets import (
+    bart_available,
+    load_bart_hierarchical,
+    load_bart_weekly,
+    load_us_inflation,
+)
 from numpyro_forecast.evaluate import eval_crps
 from numpyro_forecast.features import fourier_features
 from numpyro_forecast.predictive import draw_posterior, forecast
@@ -129,3 +134,73 @@ def test_hierarchical_bart_smoke(rng_key: Array) -> None:
     )
     assert pred.shape == (50, 4, 24, 4)
     assert jnp.isfinite(jnp.asarray(eval_crps(pred, y[:, -24:, :])))
+
+
+def _nuts_posterior(
+    rng_key: Array, model: ForecastModel, data: Array, fast_mcmc: dict[str, int]
+) -> dict[str, Array]:
+    mcmc = MCMC(
+        NUTS(model),
+        num_warmup=fast_mcmc["num_warmup"],
+        num_samples=fast_mcmc["num_samples"],
+        num_chains=fast_mcmc["num_chains"],
+        progress_bar=False,
+    )
+    mcmc.run(rng_key, jnp.zeros((data.shape[0], 0)), data)
+    return mcmc.get_samples()
+
+
+@pytest.mark.parametrize("stochastic_volatility", [True, False])
+@pytest.mark.parametrize("student_t", [False, True])
+def test_trend_inflation_prior_predictive_shapes(
+    rng_key: Array, stochastic_volatility: bool, student_t: bool
+) -> None:
+    model = make_trend_inflation_model(
+        4, stochastic_volatility=stochastic_volatility, student_t=student_t
+    )
+    prior = Predictive(model, num_samples=5)(rng_key, jnp.zeros((30, 0)))
+    assert prior["obs"].shape == (5, 30, 4)
+    assert prior["trend"].shape == (5, 30, 1)
+    assert prior["gap_vol"].shape == (5, 30, 4)
+
+
+def test_trend_inflation_reference_offset_is_zero(rng_key: Array) -> None:
+    prior = Predictive(make_trend_inflation_model(4), num_samples=5)(rng_key, jnp.zeros((30, 0)))
+    assert bool(jnp.all(prior["offset"][:, -1] == 0.0))
+
+
+@pytest.mark.parametrize("stochastic_volatility", [True, False])
+def test_trend_inflation_forecast_has_time_varying_scale(
+    rng_key: Array, fast_mcmc: dict[str, int], stochastic_volatility: bool
+) -> None:
+    model = make_trend_inflation_model(4, stochastic_volatility=stochastic_volatility)
+    key_data, key_fit, key_forecast, key_scale = random.split(rng_key, 4)
+    data = Predictive(model, num_samples=1)(key_data, jnp.zeros((40, 0)))["obs"][0]
+    posterior = _nuts_posterior(key_fit, model, data, fast_mcmc)
+    covariates = jnp.zeros((48, 0))
+    pred = forecast(key_forecast, model, posterior, data, covariates)
+    assert pred.shape == (fast_mcmc["num_samples"], 8, 4)
+    future_scale = Predictive(model, posterior, return_sites=["gap_vol"])(
+        key_scale, covariates, data
+    )["gap_vol"][:, 40:]
+    varies = not bool(jnp.all(future_scale == future_scale[:, :1]))
+    assert varies == stochastic_volatility
+
+
+def test_trend_inflation_univariate_ladder_runs(rng_key: Array, fast_mcmc: dict[str, int]) -> None:
+    model = make_trend_inflation_model(1, stochastic_volatility=False)
+    key_data, key_fit, key_forecast = random.split(rng_key, 3)
+    data = Predictive(model, num_samples=1)(key_data, jnp.zeros((40, 0)))["obs"][0]
+    posterior = _nuts_posterior(key_fit, model, data, fast_mcmc)
+    pred = forecast(key_forecast, model, posterior, data, jnp.zeros((48, 0)))
+    assert pred.shape == (fast_mcmc["num_samples"], 8, 1)
+
+
+def test_trend_inflation_us_smoke(rng_key: Array, fast_mcmc: dict[str, int]) -> None:
+    rates = load_us_inflation().rates[-60:]
+    model = make_trend_inflation_model(rates.shape[1])
+    key_fit, key_forecast = random.split(rng_key)
+    posterior = _nuts_posterior(key_fit, model, rates, fast_mcmc)
+    pred = forecast(key_forecast, model, posterior, rates, jnp.zeros((68, 0)))
+    assert pred.shape == (fast_mcmc["num_samples"], 8, 4)
+    assert bool(jnp.all(jnp.isfinite(pred)))

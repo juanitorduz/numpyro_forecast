@@ -129,6 +129,95 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
     return hierarchical_model
 
 
+def make_trend_inflation_model(
+    num_measures: int,
+    *,
+    vol_of_vol: float = 0.1,
+    stochastic_volatility: bool = True,
+    student_t: bool = False,
+) -> ForecastModel:
+    r"""Build the multi-measure trend inflation model of ``trend_inflation.ipynb``.
+
+    Every measure is a common random-walk trend plus a measure offset (zero
+    for the last measure) plus a transitory gap. The log-variances of the trend
+    shock and of each gap are random walks with the fixed vol-of-vol
+    ``vol_of_vol``, and the random walks are built from standardized steps with
+    ``jnp.cumsum`` (non-centered form).
+
+    Parameters
+    ----------
+    num_measures
+        Number of price measures (the observation axis of ``data``).
+    vol_of_vol
+        Standard deviation of the log-variance random walk steps, $\gamma$.
+    stochastic_volatility
+        Whether the log-variances move over time; ``False`` keeps them at their
+        initial values (constant variances).
+    student_t
+        Whether the gaps are Student-t instead of Normal.
+
+    Returns
+    -------
+    ForecastModel
+        A callable ``(covariates, data=None) -> None`` that reads only the
+        shape of ``covariates`` (pass ``jnp.zeros((duration, 0))``).
+    """
+
+    def trend_inflation_model(covariates: Array, data: Array | None = None) -> None:
+        """Define the trend inflation model.
+
+        Parameters
+        ----------
+        covariates
+            Dummy covariates shaped ``(duration, 0)``; only the duration is read.
+        data
+            Observed rates ``(duration, num_measures)`` (``None`` for prior sampling).
+        """
+        h = Horizon.from_data(covariates, data)
+        measure_plate = numpyro.plate("measure", num_measures, dim=-1)
+
+        if num_measures > 1:
+            alpha = numpyro.sample(
+                "alpha", dist.Normal(0.0, 1.0).expand([num_measures - 1]).to_event(1)
+            )
+            offset = jnp.concatenate([jnp.asarray(alpha), jnp.zeros(1)])
+        else:
+            offset = jnp.zeros(1)
+        numpyro.deterministic("offset", offset)
+
+        tau0 = numpyro.sample("tau0", dist.Normal(3.0, 2.0))
+        h0 = numpyro.sample("h0", dist.Normal(-1.5, 1.0))
+        trend_z = innovations(h, "trend_z", dist.Normal(0.0, 1.0))
+        if stochastic_volatility:
+            trend_log_var_z = innovations(h, "trend_log_var_z", dist.Normal(0.0, 1.0))
+            log_var_trend = h0 + vol_of_vol * jnp.cumsum(trend_log_var_z, axis=-2)
+        else:
+            log_var_trend = h0 * jnp.ones_like(trend_z)
+        trend_vol = jnp.asarray(numpyro.deterministic("trend_vol", jnp.exp(log_var_trend / 2.0)))
+        trend = jnp.asarray(
+            numpyro.deterministic("trend", tau0 + jnp.cumsum(trend_vol * trend_z, axis=-2))
+        )
+
+        with measure_plate:
+            g0 = numpyro.sample("g0", dist.Normal(0.0, 1.0))
+        if stochastic_volatility:
+            with measure_plate:
+                gap_log_var_z = innovations(h, "gap_log_var_z", dist.Normal(0.0, 1.0))
+            log_var_gap = g0 + vol_of_vol * jnp.cumsum(gap_log_var_z, axis=-2)
+        else:
+            log_var_gap = jnp.broadcast_to(g0, (h.duration, num_measures))
+        gap_vol = numpyro.deterministic("gap_vol", jnp.exp(log_var_gap / 2.0))
+
+        prediction = trend + offset
+        if student_t:
+            nu = numpyro.sample("nu", dist.Gamma(10.0, 1.0))
+            predict(h, dist.StudentT(nu, 0.0, gap_vol), prediction)
+        else:
+            predict(h, dist.Normal(0.0, gap_vol), prediction)
+
+    return trend_inflation_model
+
+
 def _level_channel(h: Horizon, name: str, values: Array, gate: Array) -> tuple[SSOEResult, Array]:
     """Gated simple exponential smoothing level channel on `ssoe()`.
 

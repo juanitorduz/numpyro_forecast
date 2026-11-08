@@ -1,4 +1,6 @@
-"""Tests for the BART dataset loaders."""
+"""Tests for the dataset loaders."""
+
+import importlib.resources
 
 import jax.numpy as jnp
 import numpy as np
@@ -8,6 +10,7 @@ from numpyro_forecast import datasets
 from numpyro_forecast.datasets import (
     bart_available,
     load_bart_hierarchical,
+    load_us_inflation,
     load_victoria_electricity,
 )
 from numpyro_forecast.typing import Array
@@ -100,3 +103,38 @@ def test_load_victoria_electricity_shapes_and_values() -> None:
     assert temperature.shape == (1_344,)
     assert float(demand[0, 0]) == pytest.approx(3.794, abs=1e-3)
     assert float(temperature[0]) == pytest.approx(18.05, abs=1e-3)
+
+
+def test_load_us_inflation_shapes_and_names() -> None:
+    data = load_us_inflation()
+    assert data.rates.shape == (data.dates.shape[0], 4)
+    assert data.rates.dtype == jnp.float32
+    assert data.dates.dtype == np.dtype("datetime64[D]")
+    assert data.names == ("cpi", "core_cpi", "pce", "core_pce")
+
+
+def test_load_us_inflation_first_quarter() -> None:
+    data = load_us_inflation()
+    assert data.dates[0] == np.datetime64("1959-04-01")
+    first_rate = 400.0 * (np.log(15.598) - np.log(15.515))
+    assert float(data.rates[0, -1]) == pytest.approx(first_rate, abs=1e-5)
+
+
+def test_load_us_inflation_dates_are_consecutive_quarters() -> None:
+    dates = load_us_inflation().dates
+    months = dates.astype("datetime64[M]")
+    assert np.all((dates - months).astype(int) == 0)
+    assert set(months.astype(int) % 12 + 1) <= {1, 4, 7, 10}
+    assert np.all(np.diff(months) == np.timedelta64(3, "M"))
+
+
+def test_load_us_inflation_rates_are_finite() -> None:
+    assert bool(jnp.all(jnp.isfinite(load_us_inflation().rates)))
+
+
+def test_load_us_inflation_rates_match_levels() -> None:
+    source = importlib.resources.files("numpyro_forecast").joinpath("data", "us_inflation.csv")
+    with source.open("r", encoding="utf-8") as handle:
+        levels = np.loadtxt(handle, delimiter=",", skiprows=1, usecols=(1, 2, 3, 4))
+    expected = 400.0 * np.diff(np.log(levels), axis=0)
+    np.testing.assert_allclose(np.asarray(load_us_inflation().rates), expected, rtol=1e-6)
