@@ -520,8 +520,8 @@ OBS
     ``"obs"``, the observation site. `~~numpyro_forecast.models.predict()`
     and `~~numpyro_forecast.contrib.dynestyx.state_space()` register it;
     `~~numpyro_forecast.predictive.predict_in_sample()` and
-    `~~numpyro_forecast.convert.to_datatree()` read it, and the drivers drop
-    a posterior key with this name (issue #260).
+    `~~numpyro_forecast.convert.to_datatree()` read it and drop a posterior
+    key with this name (issue #260).
 FORECAST
     ``"forecast"``, the forecast deterministic site over the horizon.
     `predict()` and `state_space()` register it;
@@ -548,7 +548,7 @@ Dim()
 
 xarray dimension names of the trees `~~numpyro_forecast.convert.to_datatree()` writes.
 
-``TIME`` has the value of `Plate.TIME` by convention; it is the tree's
+``TIME`` has the value of ``Plate.TIME`` by convention; it is the tree's
 dimension, not NumPyro's plate, and only this one is compared against the
 stored dimension names.
 
@@ -556,9 +556,9 @@ Attributes
 ----------
 TIME
     ``"time"``, the time axis (axis ``-2`` of every stored variable).
-OBS
+OBS_DIM
     ``"obs_dim"``, the default name of the observation axis of ``obs``.
-COVARIATE
+COVARIATE_DIM
     ``"covariate_dim"``, the default name of the covariate axis of
     ``covariates``.
 CHAIN
@@ -577,7 +577,7 @@ Attributes
 ----------
 OBS
     ``"obs"``, the observed, predicted and forecast values; it has the value
-    of `Site.OBS` because the tree names the variable after the site.
+    of ``Site.OBS`` because the tree names the variable after the site.
 COVARIATES
     ``"covariates"``, the in-sample and forecast covariates of the
     constant-data groups.
@@ -2872,8 +2872,8 @@ series
     one-dimensional collection is accepted (a list, a NumPy
     array, a pandas index) and stored as ``np.asarray(series)``.
 group
-    Predictive group to store the draws under (e.g. ``"prior_predictive"``,
-    ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
+    Predictive group to store the draws under, ``"posterior_predictive"`` by
+    default (also ``"prior_predictive"`` or ``"predictions"``). ``"observed_data"`` and
     ``"constant_data"`` are reserved: the function always writes those two
     groups.
 observed

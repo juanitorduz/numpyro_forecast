@@ -20,10 +20,10 @@ names.Dim()
 `TIME: Final`  
 `"time"`, the time axis (axis `-2` of every stored variable).
 
-`OBS: Final`  
+`OBS_DIM: Final`  
 `"obs_dim"`, the default name of the observation axis of `obs`.
 
-`COVARIATE: Final`  
+`COVARIATE_DIM: Final`  
 `"covariate_dim"`, the default name of the covariate axis of `covariates`.
 
 `CHAIN: Final`  

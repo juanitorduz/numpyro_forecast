@@ -31,7 +31,7 @@ Independent-variable values, shape `(time,)`. Must be numeric: `plot_lm` cannot 
 One label per series, defining the `series` coordinate. Any one-dimensional collection is accepted (a list, a NumPy array, a pandas index) and stored as `np.asarray(series)`.
 
 `group: str = Group.POSTERIOR_PREDICTIVE`  
-Predictive group to store the draws under (e.g. `"prior_predictive"`, `"posterior_predictive"`, `"predictions"`). `"observed_data"` and `"constant_data"` are reserved: the function always writes those two groups.
+Predictive group to store the draws under, `"posterior_predictive"` by default (also `"prior_predictive"` or `"predictions"`). `"observed_data"` and `"constant_data"` are reserved: the function always writes those two groups.
 
 `observed: Real[ArrayLike, ``" time series"] | None`` = None`  
 Optional observations, shape `(time, series)`, stored in `observed_data`; when `None` a zeros placeholder is stored instead. Integer or floating, stored with its own dtype, so the integer observations of a count model need no cast.
