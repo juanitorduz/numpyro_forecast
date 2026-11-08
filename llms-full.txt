@@ -444,7 +444,10 @@ distribution must support time-axis surgery
 (`~~numpyro_forecast.surgery.slice_time()` /
 `~~numpyro_forecast.surgery.prefix_condition()`), i.e. an elementwise
 family or a registered one. This also holds for a distribution wrapped in
-``Independent`` (e.g. by ``.to_event(1)``).
+``Independent`` (e.g. by ``.to_event(1)``). A ``MultivariateNormal`` across
+the series of a panel (noise or a link with its event over the observation
+axis, independent over time) has no time-axis surgery: it trains, but
+forecasting it raises `~~numpyro_forecast.exceptions.MVNLayoutError`.
 
 Parameters
 ----------
@@ -489,6 +492,17 @@ ValueError
     a model whose discrete latents are enumerated (for example ``NUTS`` with
     funsor installed), because the enumeration axes look like repeated
     observations.
+MVNLayoutError
+    If forecasting and the observation distribution, inside any
+    ``Independent`` wrappers, is a ``MultivariateNormal`` whose event is
+    the observation axis: correlated across the series and independent
+    over time, for example ``lambda mu: dist.MultivariateNormal(mu, cov)``
+    or the noise ``dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)``
+    with a ``(duration, n)`` predictor. The time-axis surgery reads the
+    event as time. Replace the ``predict()`` call with ``"obs"``,
+    ``"obs_future"`` and ``"forecast"`` sites in the model. Also raised by
+    `~~numpyro_forecast.surgery.shift_loc()` for MVN noise with an
+    unsupported layout.
 
 PlateName(*values)
 
@@ -878,6 +892,16 @@ callable for `~~numpyro_forecast.models.predict()` gets the
 ``(time, 1)`` event with
 ``lambda mu: shift_loc(dist.MultivariateNormal(jnp.zeros(h.duration), cov), mu)``.
 
+A ``MultivariateNormal`` across the series of a panel, with the
+observation axis as its event (independent over time), is read as the
+``(*batch, time)`` layout above with the series as time, for example the
+noise ``dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)`` with a
+``(duration, n)`` predictor. `slice_time()` and `prefix_condition()` then
+slice the series: forecasting fails with a broadcasting error, or with a
+forecast of the wrong shape when the panel has as many series as time
+steps. `~~numpyro_forecast.models.predict()` scores it in training but
+raises `~~numpyro_forecast.exceptions.MVNLayoutError` when it forecasts.
+
 Parameters
 ----------
 noise_dist
@@ -914,7 +938,9 @@ The default implementation handles registered elementwise families (empty
 families register a dedicated dispatch instead: a ``MultivariateNormal``
 over time slices its time axis and keeps its layout, so the event
 ``(time, 1)`` returned by `shift_loc()` stays ``(steps, 1)`` and a bare
-``(time,)`` event stays ``(steps,)``.
+``(time,)`` event stays ``(steps,)``. Every ``MultivariateNormal`` event is
+read as time, so one across the series of a panel gets its series sliced
+(see `shift_loc()`).
 
 Parameters
 ----------
@@ -954,7 +980,8 @@ step to the diagonal. The jitter is relative, so the result does not depend
 on the scale of the covariance, overall or per time step, but it still
 inflates a forecast variance that is far below the marginal variance: for a
 smooth kernel, the jitter rather than the kernel can set the one-step
-forecast variance.
+forecast variance. Every ``MultivariateNormal`` event is read as time, so
+one across the series of a panel is not supported (see `shift_loc()`).
 
 Parameters
 ----------
@@ -3689,8 +3716,16 @@ period
     is the period ``0.10000000149011612``, not ``0.1``, and the two spellings
     are two memo entries.
 num_terms
-    Number of harmonics, a non-negative Python or NumPy integer; the output
-    has ``2 * num_terms`` columns (sine then cosine), none for ``0``.
+    Number of harmonics, a non-negative Python or NumPy integer of at most
+    ``floor(period / 2)``; the output has ``2 * num_terms`` columns (sine
+    then cosine), none for ``0``. The matrix samples ``t = 0, 1, ...``, so
+    harmonic ``k > period / 2`` is above the Nyquist frequency of that grid
+    and aliases onto the lower frequency ``(period - k) / period``: same
+    cosine samples, negated sine samples (harmonic ``period - k`` when
+    ``period`` is an integer). For an even integer ``period``,
+    ``num_terms == period / 2`` is valid but its last sine column is zero up
+    to rounding; the matching cosine column alternates between ``1`` and
+    ``-1``.
 
 Returns
 -------
@@ -3700,9 +3735,10 @@ Float[Array, "duration two_num_terms"]
 Raises
 ------
 ValueError
-    If ``duration`` or ``num_terms`` is negative, or ``period`` is not
+    If ``duration`` or ``num_terms`` is negative, ``period`` is not
     positive and finite (``0`` or ``nan`` would cache an all-``nan``
-    matrix without an error, and ``inf`` a constant one).
+    matrix without an error, and ``inf`` a constant one), or ``num_terms``
+    is larger than ``period / 2`` (aliased harmonics).
 
 periodic_repeat(x: jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex, duration: int | numpy.integer, *, axis: int = -1) -> jax.Array
 
@@ -4040,9 +4076,12 @@ Raised by `~~numpyro_forecast.surgery.shift_loc()`,
 `~~numpyro_forecast.surgery.slice_time()`, and
 `~~numpyro_forecast.surgery.prefix_condition()` on MVN noise whose
 ``loc``/``covariance_matrix`` shapes do not match the supported
-time-leading layout, and by `~~numpyro_forecast.surgery.shift_loc()` on a
+time-leading layout, by `~~numpyro_forecast.surgery.shift_loc()` on a
 predictor that is neither ``(*batch, time, 1)`` (time may be ``1``) nor
-``(*batch, time)`` with no more axes than the noise location.
+``(*batch, time)`` with no more axes than the noise location, and by
+`~~numpyro_forecast.models.predict()` when it forecasts a
+``MultivariateNormal`` across the series (its event is the observation
+axis).
 
 DeviceMemoryError(message: str | None = None) -> None
 

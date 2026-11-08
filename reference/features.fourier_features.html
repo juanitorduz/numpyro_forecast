@@ -893,7 +893,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/features.py#L50-L101" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/features.py#L50-L117" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">features</span><span class="op">.</span><span class="sig-name">fourier_features</span>(
@@ -919,7 +919,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">num_terms</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">IntScalar</span></code></dt>
 <dd>
-Number of harmonics, a non-negative Python or NumPy integer; the output has <code>2 * num_terms</code> columns (sine then cosine), none for <code>0</code>.
+Number of harmonics, a non-negative Python or NumPy integer of at most <code>floor(period / 2)</code>; the output has <code>2 * num_terms</code> columns (sine then cosine), none for <code>0</code>. The matrix samples <code>t = 0, 1, ...</code>, so harmonic <code>k &gt; period / 2</code> is above the Nyquist frequency of that grid and aliases onto the lower frequency <code>(period - k) / period</code>: same cosine samples, negated sine samples (harmonic <code>period - k</code> when <code>period</code> is an integer). For an even integer <code>period</code>, <code>num_terms == period / 2</code> is valid but its last sine column is zero up to rounding; the matching cosine column alternates between <code>1</code> and <code>-1</code>.
 </dd>
 </dl>
 </div>
@@ -941,7 +941,7 @@ The design matrix of shape <code>(duration, 2 * num_terms)</code>.
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>duration</code> or <code>num_terms</code> is negative, or <code>period</code> is not positive and finite (<code>0</code> or <code>nan</code> would cache an all-<code>nan</code> matrix without an error, and <code>inf</code> a constant one).
+If <code>duration</code> or <code>num_terms</code> is negative, <code>period</code> is not positive and finite (<code>0</code> or <code>nan</code> would cache an all-<code>nan</code> matrix without an error, and <code>inf</code> a constant one), or <code>num_terms</code> is larger than <code>period / 2</code> (aliased harmonics).
 </dd>
 </dl>
 </div>
