@@ -172,8 +172,10 @@ plates
     ``(2, 3, obs)`` per step and returns a ``(2, 3, duration, obs)``
     latent. The plate dims count from the right of the batch shape, so a
     transition with an ``obs`` event (a ``MultivariateNormal``) needs a
-    trailing size-1 batch axis. NumPyro autoguides do not support
-    ``plates`` yet (issue #294): fit such a model with MCMC.
+    trailing size-1 batch axis, which the latent keeps:
+    ``(2, 3, 1, duration, obs)``; drop it with ``z[..., 0, :, :]`` before
+    `predict()`. NumPyro autoguides do not support ``plates`` yet (issue
+    #294): fit such a model with MCMC or a hand-written guide.
 reparam_config
     Site-name -> `numpyro.infer.reparam.Reparam` mapping applied
     **inside** the scan body.
@@ -182,7 +184,8 @@ Returns
 -------
 Array
     The latent over the full horizon in package layout
-    ``(*plate_batch, duration, obs)``.
+    ``(*plate_batch, duration, obs)`` (with the size-1 axis of a
+    transition with an ``obs`` event before ``duration``).
 
 Raises
 ------
@@ -192,9 +195,10 @@ ValueError
     data), if an ``xs`` leaf lacks the time or observation axis or does
     not span ``h.duration`` rows, if the per-step shape lacks the
     observation dimension, if an enclosing plate is detected, if two
-    ``plates`` pairs share a name, or if ``advance`` is omitted and
-    ``init_carry`` is not a single array with the shape and dtype of a
-    draw.
+    ``plates`` pairs share a name, if the transition's batch shape has a
+    size other than ``1`` or the plate size at a plate's dim, or if
+    ``advance`` is omitted and ``init_carry`` is not a single array with
+    the shape and dtype of a draw.
 
 ssoe(h: numpyro_forecast.models.Horizon, name: str, y: jax.Array | None, init_carry: Carry, mean: SSOEMean[Carry], update: SSOEUpdate[Carry], noise_dist: numpyro.distributions.distribution.Distribution, xs: jaxtyping.PyTree[jax.Array] | None = None) -> numpyro_forecast.models.SSOEResult
 

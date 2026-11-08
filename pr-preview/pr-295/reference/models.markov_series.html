@@ -934,7 +934,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L357-L486" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L380-L513" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">markov_series</span>(</span>
@@ -982,7 +982,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">plates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[tuple[str, int]]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">()</span></code></dt>
 <dd>
-<p><code>(name, size)</code> pairs opened <strong>inside</strong> the scan body around the sample statement (the only placement NumPyro supports for scan + plate), outermost first and with distinct names. The last pair goes at <code>dim=-2</code> and each earlier pair one dim to its left, so for an elementwise transition <code>[("store", 2), ("item", 3)]</code> draws <code>(2, 3, obs)</code> per step and returns a <code>(2, 3, duration, obs)</code> latent. The plate dims count from the right of the batch shape, so a transition with an <code>obs</code> event (a <code>MultivariateNormal</code>) needs a trailing size-1 batch axis. NumPyro autoguides do not support <code>plates</code> yet (issue #294): fit such a model with MCMC.</p>
+<p><code>(name, size)</code> pairs opened <strong>inside</strong> the scan body around the sample statement (the only placement NumPyro supports for scan + plate), outermost first and with distinct names. The last pair goes at <code>dim=-2</code> and each earlier pair one dim to its left, so for an elementwise transition <code>[("store", 2), ("item", 3)]</code> draws <code>(2, 3, obs)</code> per step and returns a <code>(2, 3, duration, obs)</code> latent. The plate dims count from the right of the batch shape, so a transition with an <code>obs</code> event (a <code>MultivariateNormal</code>) needs a trailing size-1 batch axis, which the latent keeps: <code>(2, 3, 1, duration, obs)</code>; drop it with <code>z[..., 0, :, :]</code> before <a href="models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a>. NumPyro autoguides do not support <code>plates</code> yet (issue #294): fit such a model with MCMC or a hand-written guide.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">reparam_config</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Reparam] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -997,7 +997,7 @@ Site-name -&gt; <code>numpyro.infer.reparam.Reparam</code> mapping applied <stro
 <dl>
 <dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-The latent over the full horizon in package layout <code>(*plate_batch, duration, obs)</code>.
+The latent over the full horizon in package layout <code>(*plate_batch, duration, obs)</code> (with the size-1 axis of a transition with an <code>obs</code> event before <code>duration</code>).
 </dd>
 </dl>
 </div>
@@ -1008,7 +1008,7 @@ The latent over the full horizon in package layout <code>(*plate_batch, duration
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If forecasting without observed data (only reachable with a hand-built <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>: <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data()</a> never sets <code>future &gt; 0</code> without data), if an <code>xs</code> leaf lacks the time or observation axis or does not span <code>h.duration</code> rows, if the per-step shape lacks the observation dimension, if an enclosing plate is detected, if two <code>plates</code> pairs share a name, or if <code>advance</code> is omitted and <code>init_carry</code> is not a single array with the shape and dtype of a draw.
+If forecasting without observed data (only reachable with a hand-built <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>: <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data()</a> never sets <code>future &gt; 0</code> without data), if an <code>xs</code> leaf lacks the time or observation axis or does not span <code>h.duration</code> rows, if the per-step shape lacks the observation dimension, if an enclosing plate is detected, if two <code>plates</code> pairs share a name, if the transition’s batch shape has a size other than <code>1</code> or the plate size at a plate’s dim, or if <code>advance</code> is omitted and <code>init_carry</code> is not a single array with the shape and dtype of a draw.
 </dd>
 </dl>
 </div>
