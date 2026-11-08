@@ -7,12 +7,15 @@ into a cache directory and reads them into dense arrays. All return arrays in
 the package convention (time at axis ``-2``).
 """
 
+import contextlib
 import hashlib
 import importlib.resources
 import json
+import os
 import shutil
 import urllib.request
 import zipfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -254,47 +257,84 @@ def _download_m5(archive: Path, url: str, digest: str) -> None:
         partial.unlink(missing_ok=True)
 
 
+def _write_m5_marker(directory: Path, content: dict[str, object]) -> None:
+    """Write ``content`` as JSON to the M5 marker and flush it to the disk."""
+    with (directory / M5_MARKER).open("w") as file:
+        json.dump(content, file)
+        file.flush()
+        os.fsync(file.fileno())
+
+
+def _m5_archive_sizes(archive: Path) -> dict[str, int]:
+    """Return the uncompressed size of every M5 file recorded in the archive."""
+    with zipfile.ZipFile(archive) as archive_file:
+        return {name: archive_file.getinfo(name).file_size for name in M5_FILES}
+
+
+def _m5_sizes_match(directory: Path, sizes: Mapping[str, object]) -> bool:
+    """Return whether every M5 file in ``directory`` exists and has the size in ``sizes``."""
+    try:
+        return all((directory / name).stat().st_size == sizes.get(name) for name in M5_FILES)
+    except OSError:
+        return False
+
+
 def _m5_cache_is_complete(directory: Path, digest: str) -> bool:
     """Return whether the marker holds ``digest`` and every M5 file has its recorded size.
 
-    A missing or unreadable marker, a missing file and a size mismatch all count as an
-    incomplete cache.
+    A missing or unreadable marker, a marker without sizes, a missing file and a size
+    mismatch all count as an incomplete cache.
     """
     try:
         marker = json.loads((directory / M5_MARKER).read_text())
-        sizes = marker["sizes"]
-        return marker["digest"] == digest and all(
-            (directory / name).stat().st_size == sizes[name] for name in M5_FILES
-        )
-    except (OSError, ValueError, KeyError, TypeError):
+    except (OSError, ValueError):
         return False
+    if not isinstance(marker, dict) or not isinstance(sizes := marker.get("sizes"), dict):
+        return False
+    return marker.get("digest") == digest and _m5_sizes_match(directory, sizes)
 
 
 def _ensure_m5_files(cache_dir: str | Path | None, url: str, digest: str) -> Path:
     """Return the directory with the M5 files, downloading and unpacking the archive once.
 
-    The cache is complete only when the marker file ``M5_MARKER`` holds ``digest`` and
-    every file has the size that the archive records for it: the file names alone cannot
-    tell a partial extraction from a complete one. Otherwise an ``m5.zip`` already in the
-    directory is checked against ``digest`` (and downloaded again on a mismatch), the
-    marker is removed, the members are extracted in place and the marker is written last.
-    An interrupted extraction therefore leaves no marker and is redone on the next call,
-    and a new pinned digest or a deleted or truncated file also triggers a fresh
-    extraction. Two extractions into one cache folder at the same time are not supported.
+    The cache is complete when the marker file ``M5_MARKER`` holds ``digest`` and every
+    file has the size that the archive records for it: the file names alone cannot tell
+    a partial extraction from a complete one. Otherwise an ``m5.zip`` already in the
+    directory is checked against ``digest`` and downloaded again on a mismatch.
+
+    A directory that has never had a marker (a cache written before the marker existed)
+    is adopted without a new extraction when its ``m5.zip`` matches ``digest`` and every
+    file has the size the archive records: the marker is written if the directory is
+    writable, and a read-only directory is checked in the same way on every call.
+
+    Any other cache miss writes a marker that records an extraction in progress, flushes
+    it to the disk, extracts the members in place, flushes every file to the disk and
+    writes the complete marker last. An interrupted extraction, also one cut by a crash
+    before the data reached the disk, therefore leaves an incomplete marker and is redone
+    on the next call. Two extractions into one cache folder at the same time are not
+    supported.
     """
     directory = _default_cache_dir() / "m5" if cache_dir is None else Path(cache_dir)
     directory.mkdir(parents=True, exist_ok=True)
     if _m5_cache_is_complete(directory, digest):
         return directory
     archive = directory / "m5.zip"
-    if not archive.is_file() or _sha256(archive) != digest:
+    if archive.is_file() and _sha256(archive) == digest:
+        sizes = _m5_archive_sizes(archive)
+        if not (directory / M5_MARKER).exists() and _m5_sizes_match(directory, sizes):
+            with contextlib.suppress(OSError):
+                _write_m5_marker(directory, {"digest": digest, "sizes": sizes})
+            return directory
+    else:
         _download_m5(archive, url, digest)
-    marker = directory / M5_MARKER
-    marker.unlink(missing_ok=True)
+        sizes = _m5_archive_sizes(archive)
+    _write_m5_marker(directory, {"digest": digest, "extracting": True})
     with zipfile.ZipFile(archive) as archive_file:
         archive_file.extractall(directory, members=M5_FILES)
-        sizes = {name: archive_file.getinfo(name).file_size for name in M5_FILES}
-    marker.write_text(json.dumps({"digest": digest, "sizes": sizes}))
+    for name in M5_FILES:
+        with (directory / name).open("r+b") as file:
+            os.fsync(file.fileno())
+    _write_m5_marker(directory, {"digest": digest, "sizes": sizes})
     return directory
 
 
@@ -310,10 +350,11 @@ def load_m5(cache_dir: str | Path | None = None) -> M5Data:
     when an ``m5.zip`` is already in ``cache_dir``. The files are read from the cache only
     after a full extraction of the verified archive, so an interrupted download or
     extraction is redone on the next call, as is a file that was deleted or truncated later.
-    A cache folder written before this check existed has no completion marker: the first
-    call extracts the files again from its ``m5.zip`` when that archive matches the digest,
-    and downloads the archive again when it is missing or does not match, which fails
-    without a network connection.
+    A cache folder written before this check existed has no completion marker. It is used
+    as is (also when it is read-only) when its ``m5.zip`` matches the digest and every file
+    has the size that the archive records. Without a matching ``m5.zip`` the files cannot
+    be verified: the archive is downloaded again, which fails without a network connection.
+    To use files copied from elsewhere, put the matching ``m5.zip`` next to them.
 
     Reading needs polars (``pip install numpyro_forecast[dataframes]``).
 

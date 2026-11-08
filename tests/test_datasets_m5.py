@@ -143,7 +143,7 @@ def test_load_m5_redoes_an_interrupted_extraction(
     monkeypatch.setattr(zipfile.ZipFile, "extractall", failing_extractall)
     with pytest.raises(OSError, match="No space left"):
         load_m5(cache_dir=tmp_path)
-    assert not (tmp_path / M5_MARKER).exists()
+    assert "sizes" not in json.loads((tmp_path / M5_MARKER).read_text())
 
     monkeypatch.setattr(zipfile.ZipFile, "extractall", original)
     m5 = load_m5(cache_dir=tmp_path)
@@ -155,7 +155,7 @@ def test_load_m5_redoes_an_interrupted_extraction(
 def test_load_m5_reextracts_files_without_a_matching_marker(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Files with no marker, or with a marker of another digest, are extracted again."""
+    """Truncated files, a marker of another digest and an unreadable marker are extracted again."""
     payload = _synthetic_archive()
     calls = _serve(monkeypatch, payload)
     (tmp_path / "m5.zip").write_bytes(payload)
@@ -165,12 +165,73 @@ def test_load_m5_reextracts_files_without_a_matching_marker(
 
     marker = json.loads((tmp_path / M5_MARKER).read_text())
     (tmp_path / M5_MARKER).write_text(json.dumps({**marker, "digest": "0" * 64}))
-    (tmp_path / "sales_train_evaluation.csv").write_text("truncated\n")
-    assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
+    load_m5(cache_dir=tmp_path)
+    assert json.loads((tmp_path / M5_MARKER).read_text()) == marker
 
     (tmp_path / M5_MARKER).write_text("not json")
-    assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
+    load_m5(cache_dir=tmp_path)
+    assert json.loads((tmp_path / M5_MARKER).read_text()) == marker
     assert calls == []
+
+
+def _write_unmarked_cache(directory: Path, payload: bytes) -> None:
+    """Write a cache as an earlier version left it: the archive and the files, no marker."""
+    (directory / "m5.zip").write_bytes(payload)
+    for name, text in _synthetic_files().items():
+        (directory / name).write_text(text)
+
+
+def _forbid_extraction(monkeypatch: pytest.MonkeyPatch) -> None:
+    def extractall(self: zipfile.ZipFile, *args: object, **kwargs: object) -> None:
+        raise AssertionError("unexpected extraction")
+
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", extractall)
+
+
+def test_load_m5_adopts_a_cache_without_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A complete cache with a matching archive and no marker is used without a new extraction."""
+    payload = _synthetic_archive()
+    calls = _serve(monkeypatch, payload)
+    _write_unmarked_cache(tmp_path, payload)
+    _forbid_extraction(monkeypatch)
+    assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
+    assert json.loads((tmp_path / M5_MARKER).read_text())["digest"] == datasets.M5_SHA256
+    assert calls == []
+
+
+def test_load_m5_reads_a_read_only_cache_without_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read-only cache with a matching archive and no marker is read without writing to it."""
+    payload = _synthetic_archive()
+    calls = _serve(monkeypatch, payload)
+    _write_unmarked_cache(tmp_path, payload)
+    _forbid_extraction(monkeypatch)
+    tmp_path.chmod(0o555)
+    try:
+        assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
+        assert load_m5(cache_dir=tmp_path).weights.height == 1
+    finally:
+        tmp_path.chmod(0o755)
+    assert not (tmp_path / M5_MARKER).exists()
+    assert calls == []
+
+
+def test_load_m5_cache_hit_needs_no_archive_or_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A complete cache loads after the archive is removed and with no network."""
+    _serve(monkeypatch, _synthetic_archive())
+    load_m5(cache_dir=tmp_path)
+    (tmp_path / "m5.zip").unlink()
+
+    def offline(url: str, timeout: float) -> io.BytesIO:
+        raise OSError("network unreachable")
+
+    monkeypatch.setattr(datasets.urllib.request, "urlopen", offline)
+    assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
 
 
 def test_load_m5_replaces_an_archive_with_another_digest(
@@ -256,3 +317,19 @@ def test_load_m5_archive_follows_the_umask(
     load_m5(cache_dir=tmp_path)
     archive_mode = stat.S_IMODE((tmp_path / "m5.zip").stat().st_mode)
     assert archive_mode == stat.S_IMODE((tmp_path / M5_FILES[0]).stat().st_mode)
+
+
+def test_load_m5_redoes_an_extraction_cut_before_the_data_reached_the_disk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zero-filled files of the right size next to an in-progress marker are extracted again."""
+    payload = _synthetic_archive()
+    calls = _serve(monkeypatch, payload)
+    _write_unmarked_cache(tmp_path, payload)
+    weights = tmp_path / "weights_evaluation.csv"
+    weights.write_bytes(b"\0" * weights.stat().st_size)
+    (tmp_path / M5_MARKER).write_text(
+        json.dumps({"digest": datasets.M5_SHA256, "extracting": True})
+    )
+    assert load_m5(cache_dir=tmp_path).weights.height == 1
+    assert calls == []
