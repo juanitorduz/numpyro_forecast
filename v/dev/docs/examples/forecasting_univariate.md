@@ -18,6 +18,7 @@ from functools import partial
 from time import perf_counter
 
 import arviz as az
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -260,22 +261,35 @@ ax.set(title="Prior predictive check", ylabel="log(# rides)");
 
 We fit the model with stochastic variational inference: an `AutoNormal` guide optimized with `Adam` via an explicit `SVI.run` call, which returns the learned `params` and the ELBO `losses`. The loss curve should decrease and flatten out, a quick sanity check that the optimization converged.
 
+We also time the fit, so that the next section can compare it with a reparameterized fit. JAX dispatches work asynchronously: `svi.run` returns as soon as the optimization loop is queued, before it has finished. The timer therefore waits for the losses with `jax.block_until_ready` before it is read, and the wall time (compilation included) goes in the title of the loss plot.
+
 
 ``` python
+num_steps = 50_000
 rng_key, key_fit = random.split(rng_key)
 guide = AutoNormal(univariate_model)
 svi = SVI(univariate_model, guide, Adam(step_size=0.005), Trace_ELBO())
-svi_result = svi.run(key_fit, 50_000, covariates_train, y_train, progress_bar=False)
+start_seconds = perf_counter()
+svi_result = svi.run(key_fit, num_steps, covariates_train, y_train, progress_bar=False)
+jax.block_until_ready(svi_result.losses)
+fit_seconds = perf_counter() - start_seconds
 
 fig, ax = plt.subplots()
 ax.plot(svi_result.losses)
-ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
+ax.set(
+    title=f"ELBO loss: {num_steps:,} steps in {fit_seconds:.1f} s",
+    xlabel="SVI step",
+    ylabel="loss",
+);
 ```
 
 
 <figure class="figure">
 <p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-9-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
+
+
+The loss falls steeply over the first `1,000` or so steps, declines slowly until about step `16,000`, drops again between steps `16,000` and `20,000`, and stays flat from there to step `50,000`, so the step budget is enough for this guide. The title gives the wall time of the fit: `5.9` s for the `50,000` steps on CPU, compilation included.
 
 
 ## Time-axis reparameterization
@@ -292,40 +306,38 @@ rng_key, key_fit_dct = random.split(rng_key)
 guide_dct = AutoNormal(univariate_model_dct)
 svi_dct = SVI(univariate_model_dct, guide_dct, Adam(step_size=0.005), Trace_ELBO())
 start_seconds = perf_counter()
-svi_result_dct = svi_dct.run(key_fit_dct, 50_000, covariates_train, y_train, progress_bar=False)
+svi_result_dct = svi_dct.run(key_fit_dct, num_steps, covariates_train, y_train, progress_bar=False)
+jax.block_until_ready(svi_result_dct.losses)
 dct_fit_seconds = perf_counter() - start_seconds
 
+fits = {
+    "AutoNormal": (svi_result.losses, fit_seconds, "C0"),
+    "AutoNormal + DCT time_reparam": (svi_result_dct.losses, dct_fit_seconds, "C1"),
+}
 fig, axes = plt.subplots(ncols=2, figsize=(12, 5), layout="constrained")
-for ax, start in zip(axes, [0, 30_000], strict=True):
-    steps = np.arange(start, len(svi_result.losses))
-    ax.plot(steps, svi_result.losses[start:], color="C0", label="AutoNormal")
-    ax.plot(
-        steps, svi_result_dct.losses[start:], color="C1", label="AutoNormal + DCT time_reparam"
-    )
-    ax.set(xlabel="SVI step", ylabel="loss")
-axes[0].legend()
-axes[0].set(title="ELBO loss")
-axes[1].set(title="ELBO loss (last 20,000 steps)")
 
-print(f"AutoNormal            mean of last 200 losses: {np.mean(svi_result.losses[-200:]):.2f}")
-print(
-    f"AutoNormal + DCT      mean of last 200 losses: {np.mean(svi_result_dct.losses[-200:]):.2f}"
-)
-print(f"DCT fit wall time: {dct_fit_seconds:.1f} s")
+for ax, start in zip(axes, [0, num_steps - 20_000], strict=True):
+    steps = np.arange(start, len(svi_result.losses))
+
+    for name, (losses, seconds, color) in fits.items():
+        label = f"{name}: {seconds:.1f} s, mean of last 200 losses {np.mean(losses[-200:]):.2f}"
+        ax.plot(steps, losses[start:], color=color, label=label)
+
+    ax.set(xlabel="SVI step", ylabel="loss")
+
+axes[0].set(title="all steps")
+axes[1].set(title="last 20,000 steps")
+fig.legend(*axes[0].get_legend_handles_labels(), loc="outside lower center", ncols=1)
+fig.suptitle(f"ELBO loss of the two {num_steps:,}-step fits", fontsize=16, fontweight="bold");
 ```
 
 
-    AutoNormal            mean of last 200 losses: -422.42
-    AutoNormal + DCT      mean of last 200 losses: -460.38
-    DCT fit wall time: 1.3 s
-
-
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-10-output-2.png" class="figure-img" width="1211" height="511" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-10-output-1.png" class="figure-img" width="1211" height="506" /></p>
 </figure>
 
 
-The reparameterized fit ends lower: the mean of the last `200` losses is about `-460` against `-422` for the plain guide, and it takes roughly the same wall time (a couple of seconds on a laptop CPU). [time_reparam](../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) is a change of coordinates with unit Jacobian, so this is the same model and the same posterior; only the geometry the mean-field guide sees changes, from correlated increments to nearly independent cosine coefficients, with the guide now sampling the auxiliary site `drift_decentered_dct` while `drift` is a deterministic site. The DCT run drops much faster in the first few thousand steps, then spends the middle of the run above the baseline before overtaking it near the end, so the gain here is a better optimum rather than a uniformly faster path.
+The reparameterized fit ends lower: the mean of the last `200` losses is about `-460` against `-422` for the plain guide. The two fits take a similar wall time, `5.9` s for the plain guide and `4.9` s with the DCT, each including the compilation of its own model. [time_reparam](../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) is a change of coordinates with unit Jacobian, so this is the same model and the same posterior; only the geometry the mean-field guide sees changes, from correlated increments to nearly independent cosine coefficients, with the guide now sampling the auxiliary site `drift_decentered_dct` while `drift` is a deterministic site. The DCT run drops much faster in the first few thousand steps, then spends the middle of the run above the baseline before overtaking it near the end, so the gain here is a lower loss at the end of the step budget rather than a uniformly faster path.
 
 
 # Posterior predictive check
@@ -622,23 +634,50 @@ The fit looks well calibrated, and the coverage plot further below makes that cl
 
 ## CRPS per fold
 
-The per-fold CRPS shows the model generalizing better as it sees more history. The out-of-sample score is highest for the first, data-starved fold (trained on just the initial two years) and falls steeply as the expanding window grows, then flattens out near the in-sample level: more training data buys a sharper, better-calibrated one-year-ahead forecast, exactly as we would hope. The in-sample CRPS stays low and roughly flat across folds, because with `num_steps=50_000` each fold converges regardless of window length, so the fit quality does not drift.
-
-The train-versus-test gap is therefore widest early, when data is scarce, and closes as history accumulates (the two curves even cross near the middle of the series). That closing gap is the healthy signature of a model whose generalization improves with more data, rather than an under-fit whose error would instead grow with window length. If you shrink `num_steps` you will see that healthy pattern break: both curves climb with the window as the larger folds stop converging.
+The per-fold CRPS shows how the generalization of the model changes as the expanding window grows. The figure plots, for every fold, the in-sample CRPS of the fit on its training window next to the out-of-sample CRPS of its one-year forecast. Each point carries its value, and the legend gives the mean over the folds.
 
 
 ``` python
-fig, ax = plt.subplots()
-ax.plot(split_weeks, insample_crps, "o-", color="C0", label="in-sample CRPS")
-ax.plot(split_weeks, oos_crps, "o-", color="C1", label="out-of-sample CRPS")
-ax.legend()
+fig, ax = plt.subplots(figsize=(12, 6), layout="constrained")
+curves = {"in-sample CRPS": (insample_crps, "C0"), "out-of-sample CRPS": (oos_crps, "C1")}
+
+for (name, (values, color)), other in zip(curves.items(), [oos_crps, insample_crps], strict=True):
+    ax.plot(split_weeks, values, "o-", color=color, label=f"{name} (mean {np.mean(values):.4f})")
+
+    for week, value, other_value in zip(split_weeks, values, other, strict=True):
+        # Label above the point when this curve is the higher one, below otherwise.
+        ax.annotate(
+            f"{value:.4f}",
+            (week, value),
+            xytext=(0, 8 if value >= other_value else -14),
+            textcoords="offset points",
+            ha="center",
+            color=color,
+            bbox={"boxstyle": "round,pad=0.1", "facecolor": "white", "edgecolor": "none"},
+        )
+
+ax.set_xticks(split_weeks)
+ax.margins(y=0.1)
+ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(xlabel="train/test split week", ylabel="CRPS", title="CRPS per backtest fold");
 ```
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-16-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-16-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
+
+
+The out-of-sample CRPS is U-shaped:
+
+- It falls steeply from `0.0725` at the first split (week `104`, two years of training data) to its minimum of `0.0282` at week `260`.
+- It then rises on every later fold, to `0.0351` at week `416`.
+
+The in-sample CRPS moves much less. It rises from `0.0247` at week `104` to a peak of `0.0345` at week `156`, falls through week `260` and then stays between `0.0277` and `0.0289`. It does not keep growing with the window, so the `num_steps=50_000` budget does not leave the larger windows under-fit.
+
+The gap between the two curves is widest at the first fold and smallest in the middle folds, where the out-of-sample score even dips below the in-sample one (`0.0305` against `0.0315` at week `208`, `0.0282` against `0.0289` at week `260`). After week `260` the gap opens again, to `0.0351` against `0.0282` at week `416`.
+
+The comparison with a rolling window below shows that the rise after week `260` does not come from the growing window either; this notebook does not look further into why the later years are harder to forecast.
 
 
 ## Forecast calibration
@@ -711,14 +750,32 @@ for wk, exp_c, roll_c in zip(split_weeks, oos_crps, rolling_oos_crps, strict=Tru
       split week 416: expanding 0.0351  rolling 0.0460
 
 
-Both strategies train each fold on the same fixed `104`-week window at the first split, then diverge: the expanding window keeps every additional year while the rolling window always discards all but the most recent two.
+Both strategies train each fold on the same fixed `104`-week window at the first split, then diverge: the expanding window keeps every additional year while the rolling window always discards all but the most recent two. The figure labels each fold with its out-of-sample CRPS and gives the mean over the folds in the legend.
 
 
 ``` python
-fig, ax = plt.subplots()
-ax.plot(split_weeks, oos_crps, "o-", color="C0", label="expanding window")
-ax.plot(split_weeks, rolling_oos_crps, "s--", color="C1", label="rolling window (104 weeks)")
-ax.legend()
+fig, ax = plt.subplots(figsize=(12, 6), layout="constrained")
+
+for values, color, marker, name, offset in [
+    (oos_crps, "C0", "o-", "expanding window", -14),
+    (rolling_oos_crps, "C1", "s--", "rolling window, 104 weeks", 8),
+]:
+    ax.plot(split_weeks, values, marker, color=color, label=f"{name} (mean {np.mean(values):.4f})")
+
+    for week, value in zip(split_weeks, values, strict=True):
+        ax.annotate(
+            f"{value:.4f}",
+            (week, value),
+            xytext=(0, offset),
+            textcoords="offset points",
+            ha="center",
+            color=color,
+            bbox={"boxstyle": "round,pad=0.1", "facecolor": "white", "edgecolor": "none"},
+        )
+
+ax.set_xticks(split_weeks)
+ax.margins(y=0.1)
+ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(
     xlabel="train/test split week",
     ylabel="out-of-sample CRPS",
@@ -728,13 +785,13 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-19-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-19-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
-The mechanism behind the two curves is the random-walk level. Each forecast is anchored at the last observed level and fans out at a rate set by the inferred drift volatility `drift_scale`, which every fold estimates from its own training window. The expanding window estimates that volatility from all history and keeps sharpening it as data accumulates, so its out-of-sample CRPS falls steeply after the data-starved first fold and then settles near the in-sample floor. The rolling window only ever sees the most recent two years, so after its own early improvement it plateaus at a higher, noisier level: it keeps discarding the extra history that the expanding window compounds.
+The rolling window traces the same U shape as the expanding run above. Its out-of-sample CRPS falls to its minimum at week `260` (`0.0294`, against `0.0282` for the expanding window) and rises on every fold after it, faster than the expanding window: `0.0460` at week `416` against `0.0351`. The rolling window always trains on the most recent `104` weeks, so its rise after week `260` cannot come from a growing training window.
 
-Here the expanding window is the clear winner: it scores a lower out-of-sample CRPS on every fold (mean `0.0392` versus `0.0432`), and the two are closest only at the first split, where they happen to train on the same two years, before the gap opens up. That is what we should expect on this BART series, where the trend and seasonality are stable and old observations stay informative, so throwing them away can only hurt. The rolling window earns its keep on a different kind of series, one with structural breaks or slow regime drift, where distant history is misleading rather than helpful and a fixed recency focus keeps the forecast adapting, at a bounded, constant fitting cost per fold. `window_type` lets you encode whichever assumption matches your data without touching anything else in the backtest.
+Here the expanding window is the clear winner: it scores a lower out-of-sample CRPS on every fold (mean `0.0392` versus `0.0432`). At the first split both train on the same two years, so their gap there (`0.0725` against `0.0735`) is only the noise between two fits of the same data with different random keys. The gap at week `260` (`0.0282` against `0.0294`) is no larger. The extra history pays off at weeks `156` and `208` and from week `312` on, where the gap grows on every fold to `0.0351` against `0.0460` at week `416`: the later the fold, the more history the rolling window has dropped. The rolling window earns its keep on a different kind of series, one with structural breaks or slow regime drift, where distant history is misleading rather than helpful and a fixed recency focus keeps the forecast adapting, at a bounded, constant fitting cost per fold. `window_type` lets you encode whichever assumption matches your data without touching anything else in the backtest.
 
 
 ## Vectorized rolling backtest
@@ -781,7 +838,7 @@ print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
 
 
     folds: 7 in one vmapped SVI fit
-    wall-clock: vectorized 8.2s (incl. compile)  |  loop 17.2s
+    wall-clock: vectorized 7.6s (incl. compile)  |  loop 16.8s
     vectorized mean out-of-sample CRPS: 0.0466
     loop       mean out-of-sample CRPS: 0.0432
     vectorized mean 50% coverage: 0.47  (nominal 0.50)
