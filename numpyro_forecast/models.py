@@ -18,7 +18,6 @@ sample site.
 import math
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
-from enum import StrEnum
 from typing import NamedTuple, cast, no_type_check
 
 import equinox as eqx
@@ -33,22 +32,10 @@ from numpyro.primitives import _PYRO_STACK
 
 from numpyro_forecast.arrays import concat_future
 from numpyro_forecast.exceptions import MVNLayoutError
+from numpyro_forecast.names import Plate, Site, future_site
 from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
 from numpyro_forecast.typing import Array
 from numpyro_forecast.validation import require_time_axis
-
-
-class PlateName(StrEnum):
-    """Names of the plates the building blocks open, as ``str`` members.
-
-    ``TIME`` is the in-sample plate of `innovations()`; ``TIME_FUTURE`` is the
-    forecast-horizon plate of `innovations()` and `ssoe()`.
-    `~~numpyro_forecast.reparam.time_reparam()` targets the sites under ``TIME`` by
-    name, so both modules read this enum rather than spelling the literal.
-    """
-
-    TIME = "time"
-    TIME_FUTURE = "time_future"
 
 
 class Horizon(eqx.Module):
@@ -210,7 +197,7 @@ def _require_block_steps(
         raise ValueError(msg)
     if shape[axis] == size:
         return
-    if plate_name == PlateName.TIME:
+    if plate_name == Plate.TIME:
         cause = (
             f"a posterior drawn for a different training length: fit it on data with {size} "
             "rows, or pass the data and covariates of the window it was fit on"
@@ -275,10 +262,10 @@ def innovations(
         ``h.t_obs`` or ``h.future`` steps on its time plate: the usual cause is
         a posterior drawn for a different training length.
     """
-    prefix = _sample_time_block(name, h.t_obs, PlateName.TIME, prior, reparam)
+    prefix = _sample_time_block(name, h.t_obs, Plate.TIME, prior, reparam)
     if h.future <= 0:
         return prefix
-    suffix = _sample_time_block(f"{name}_future", h.future, PlateName.TIME_FUTURE, prior, reparam)
+    suffix = _sample_time_block(future_site(name), h.future, Plate.TIME_FUTURE, prior, reparam)
     return concat_future(prefix, suffix, axis=-2)
 
 
@@ -519,7 +506,7 @@ def markov_series[Carry](
     if h.future == 0:
         return jnp.moveaxis(zs, 0, -2)
     _, zf = scan(
-        _body(f"{name}_future"),
+        _body(future_site(name)),
         final_carry,
         None if xs_scan is None else jax.tree.map(lambda leaf: leaf[h.t_obs :], xs_scan),
         length=h.future if xs_scan is None else None,
@@ -917,8 +904,8 @@ def ssoe[Carry](
         empty = jnp.zeros((*mu.shape[:-2], 0, mu.shape[-1]), mu.dtype)
         return SSOEResult(mu=mu, mu_future=empty, y_future=empty)
 
-    with numpyro.plate(PlateName.TIME_FUTURE, h.future, dim=_future_plate_dim(noise_dist)):
-        eps = jnp.asarray(numpyro.sample(f"{name}_future", noise_dist))
+    with numpyro.plate(Plate.TIME_FUTURE, h.future, dim=_future_plate_dim(noise_dist)):
+        eps = jnp.asarray(numpyro.sample(future_site(name), noise_dist))
     _validate_future_errors(eps, mu, h.future)
     eps_scan = jnp.moveaxis(eps, -2, 0)
 
@@ -1063,10 +1050,14 @@ def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
             f"sites: they must have {h.t_obs} rows."
         )
     elif len(shape) < 2:
+        example = (
+            f"jnp.broadcast_to(prediction, ({h.duration}, obs))"
+            if width is None
+            else f"jnp.broadcast_to(prediction, ({h.duration}, {width}))"
+        )
         hint = (
             "Give the predictor or a parameter of obs_dist the time axis at -2 over the full "
-            f"horizon (h.duration = {h.duration}), for example "
-            f"jnp.broadcast_to(prediction, ({h.duration}, {'obs' if width is None else width})) "
+            f"horizon (h.duration = {h.duration}), for example {example} "
             "for a constant or per-series predictor."
         )
     else:
@@ -1242,7 +1233,7 @@ def predict(
             )
             raise ValueError(msg)
     if h.future == 0:
-        numpyro.sample("obs", full_dist, obs=h.data)
+        numpyro.sample(Site.OBS, full_dist, obs=h.data)
         return
     data = h.data
     if data is None:
@@ -1250,6 +1241,6 @@ def predict(
         raise RuntimeError(msg)
     _require_mvn_over_time(full_dist)
     prefix = slice_time(full_dist, slice(None, h.t_obs))
-    numpyro.sample("obs", prefix, obs=data)
-    forecast = numpyro.sample("obs_future", prefix_condition(full_dist, data))
-    numpyro.deterministic("forecast", forecast)
+    numpyro.sample(Site.OBS, prefix, obs=data)
+    forecast = numpyro.sample(future_site(Site.OBS), prefix_condition(full_dist, data))
+    numpyro.deterministic(Site.FORECAST, forecast)

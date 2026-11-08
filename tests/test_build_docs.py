@@ -250,3 +250,53 @@ class TestFixAliasRedirects:
     def test_missing_stubs_are_tolerated(self, build_docs: ModuleType, tmp_path: Path) -> None:
         build_docs.fix_alias_redirects(tmp_path, "https://example.org/proj/")
         assert not (tmp_path / "v").exists()
+
+
+class TestWriteReferenceRedirects:
+    def test_same_version_target_else_dev(self, build_docs: ModuleType, tmp_path: Path) -> None:
+        """A version that renders the new page redirects inside it; a pruned release goes to dev.
+
+        The stable root lacks the new page (its reference is pruned to the
+        release snapshot), so its stub points at ``v/dev/``; ``v/dev/`` points
+        at its own page; a version that still renders the old page and the
+        alias stubs without a reference are left alone.
+        """
+        for version in (tmp_path, tmp_path / "v" / "0.4.0", tmp_path / "v" / "dev"):
+            (version / "reference").mkdir(parents=True)
+        (tmp_path / "v" / "stable").mkdir()
+        (tmp_path / "v" / "dev" / "reference" / "names.Plate.html").write_text("new")
+        (tmp_path / "v" / "0.4.0" / "reference" / "models.PlateName.html").write_text("old")
+
+        written = build_docs.write_reference_redirects(
+            tmp_path, {"models.PlateName": "names.Plate"}
+        )
+
+        root_stub = tmp_path / "reference" / "models.PlateName.html"
+        dev_stub = tmp_path / "v" / "dev" / "reference" / "models.PlateName.html"
+        assert written == [root_stub, dev_stub]
+        assert 'url=../v/dev/reference/names.Plate.html"' in root_stub.read_text(encoding="utf-8")
+        assert 'url=names.Plate.html"' in dev_stub.read_text(encoding="utf-8")
+        assert (
+            tmp_path / "v" / "0.4.0" / "reference" / "models.PlateName.html"
+        ).read_text() == "old"
+        assert not (tmp_path / "v" / "stable" / "reference").exists()
+
+    def test_nothing_when_the_new_page_renders_nowhere(
+        self, build_docs: ModuleType, tmp_path: Path
+    ) -> None:
+        (tmp_path / "reference").mkdir()
+        assert build_docs.write_reference_redirects(tmp_path, {"a.B": "c.D"}) == []
+        assert not (tmp_path / "reference" / "a.B.html").exists()
+
+
+def test_moved_reference_pages_agree_with_the_reference(build_docs: ModuleType) -> None:
+    """Every redirect target is a current ``reference:`` entry and no redirect source still is."""
+    config = yaml.safe_load(build_docs.CONFIG_PATH.read_text(encoding="utf-8"))
+    entries = {
+        item if isinstance(item, str) else item["name"]
+        for section in config["reference"]
+        for item in section["contents"]
+    }
+    for old, new in build_docs.MOVED_REFERENCE_PAGES.items():
+        assert new in entries, f"{old!r} redirects to {new!r}, which is not in reference:"
+        assert old not in entries, f"{old!r} is in reference: again, drop its redirect"

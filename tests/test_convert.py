@@ -1662,6 +1662,75 @@ def test_add_forecast_groups_keeps_the_posterior_draw_labels(
     np.testing.assert_allclose(residual.values, 1.0, atol=1e-4)
 
 
+def _without(tree: xarray.DataTree, *groups: str) -> xarray.DataTree:
+    return xarray.DataTree.from_dict(
+        {name: node.dataset for name, node in tree.children.items() if name not in groups}
+    )
+
+
+@pytest.mark.parametrize(
+    ("dropped", "sizes"),
+    [
+        pytest.param(("posterior",), {"chain": 2, "draw": 10}, id="posterior-predictive-layout"),
+        pytest.param(
+            ("posterior", "posterior_predictive"), {"chain": 1, "draw": 20}, id="one-pseudo-chain"
+        ),
+    ],
+)
+def test_add_forecast_groups_sample_layout_without_a_posterior(
+    dropped: tuple[str, ...], sizes: dict[str, int]
+) -> None:
+    """Without ``posterior`` the draws take the ``posterior_predictive`` layout; without both, one chain."""
+    covariates = jnp.ones((2, 6, 2))
+    tree = _level_tree(
+        {"level": jnp.arange(20, dtype=jnp.float32)}, covariates[:, :4], num_chains=2
+    )
+    fc = forecast(
+        random.PRNGKey(1),
+        _level_model,
+        {"level": jnp.arange(20, dtype=jnp.float32)},
+        jnp.ones((4, 2)),
+        covariates,
+    )
+    out = add_forecast_groups(_without(tree, *dropped), fc, covariates[:, 4:])
+    assert dict(out["predictions"].dataset["obs"].sizes) == {**sizes, "time": 2, "obs_dim": 2}
+
+
+def test_add_forecast_groups_without_stored_obs_and_covariates_takes_the_given_layout() -> None:
+    """The stored ``obs`` and ``covariates`` set the forecast layout only when the tree has them.
+
+    With both, ``covariate_dims`` that disagree with the stored names raise
+    and the forecast ``obs`` inherits the stored series labels. Without them,
+    the same names are taken as given and the series get default labels.
+    """
+    from numpyro_forecast.exceptions import CovariateDimsError
+
+    covariates = jnp.ones((2, 6, 2))
+    tree = _level_tree(
+        {"level": jnp.arange(8, dtype=jnp.float32)}, covariates[:, :4], num_chains=2
+    )
+    fc = forecast(
+        random.PRNGKey(1),
+        _level_model,
+        {"level": jnp.arange(8, dtype=jnp.float32)},
+        jnp.ones((4, 2)),
+        covariates,
+    )
+    names = ["feature", "time", "obs_dim"]
+    with pytest.raises(CovariateDimsError):
+        add_forecast_groups(tree, fc, covariates[:, 4:], covariate_dims=names)
+    assert add_forecast_groups(tree, fc, covariates[:, 4:])["predictions"].coords[
+        "obs_dim"
+    ].values.tolist() == ["s1", "s2"]
+
+    bare = _without(tree, "constant_data")
+    bare["observed_data"] = bare["observed_data"].dataset.drop_vars("obs")
+    out = add_forecast_groups(bare, fc, covariates[:, 4:], covariate_dims=names)
+    assert out["predictions_constant_data"]["covariates"].dims == tuple(names)
+    assert out["predictions"]["obs"].dims == ("chain", "draw", "time", "obs_dim")
+    assert out["predictions"].coords["obs_dim"].values.tolist() == [0, 1]
+
+
 @pytest.mark.parametrize(
     ("forecast_shape", "future_steps", "match"),
     [

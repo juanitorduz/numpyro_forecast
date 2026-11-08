@@ -27,6 +27,7 @@ from numpyro.optim import Adam
 
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
+from numpyro_forecast.names import Site
 from numpyro_forecast.offload import chunk_indices, float_view, leaf_view, oom_advice
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import (
@@ -1605,8 +1606,8 @@ def backtest_vectorized(
 
     @no_type_check
     def forecast_one(key: Array, post_w: dict[str, Array], d: Array, hc: Array) -> Array:
-        pred = Predictive(model, posterior_samples=post_w, return_sites=["forecast"])
-        return pred(key, hc, d)["forecast"]
+        pred = Predictive(model, posterior_samples=post_w, return_sites=[Site.FORECAST])
+        return pred(key, hc, d)[Site.FORECAST]
 
     predictions = jax.jit(jax.vmap(forecast_one))(fc_keys, posterior, train_d, hor_c)
 

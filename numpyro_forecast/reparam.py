@@ -56,7 +56,7 @@ from numpyro.distributions.transforms import (
 from numpyro.infer.reparam import Reparam, UnitJacobianReparam
 from numpyro.primitives import _PYRO_STACK, Message, Messenger
 
-from numpyro_forecast.models import PlateName
+from numpyro_forecast.names import Plate
 from numpyro_forecast.typing import Array, ForecastModel
 
 TimeTransform = Literal["haar", "dct"]
@@ -156,7 +156,7 @@ class _TimeReparamConfig:
         if getattr(fn.support, "is_discrete", False):
             return None
         plates = [handler for handler in _PYRO_STACK if isinstance(handler, numpyro.plate)]
-        time_plate = next((plate for plate in plates if plate.name == PlateName.TIME), None)
+        time_plate = next((plate for plate in plates if plate.name == Plate.TIME), None)
         if time_plate is None:
             return None
         subsampled = [plate for plate in plates if plate.subsample_size < plate.size]
