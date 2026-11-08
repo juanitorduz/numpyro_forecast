@@ -181,7 +181,7 @@ On the scale of the data, where a typical quarter of core inflation sits between
 - h_0 = -1.5 is a trend shock with standard deviation \exp(-0.75) \approx 0.47 percentage points per quarter, and the prior standard deviation of 1 on h_0 lets that scale range from about 0.3 to 0.8 within one standard deviation.
 - g\_{0, m} = 0 is a gap with a standard deviation of 1 percentage point, the right order for the core measures; the headline measures move up from there through g\_{t, m}.
 - \alpha_m \sim \text{Normal}(0, 1) allows offsets of about \pm 2 percentage points, which is wide for the CPI to PCE wedge of a few tenths.
-- \gamma is fixed, as in Stock and Watson (2007). After t quarters the log-variance has prior standard deviation \gamma \sqrt{t}, about 1.6 for \gamma = 0.1 and t = 270, so a volatility can drift by a factor of \exp(0.8) \approx 2.2 in either direction over the sample within one standard deviation. This is the quantity worth plotting, because it is what \gamma means. We fix \gamma instead of learning it because the data say little about it: the *Sensitivity to the vol-of-vol* section fits the model with a prior on \gamma and shows what the posterior does.
+- \gamma is fixed, as in Stock and Watson (2007). After t quarters the log-variance has prior standard deviation \gamma \sqrt{t}, about 1.6 for \gamma = 0.1 and t = 270, so a volatility can drift by a factor of \exp(0.8) \approx 2.2 in either direction over the sample within one standard deviation. The fourth panel of the prior figure plots this band, because it is what \gamma means. We fix \gamma instead of learning it because the data say little about it: the *Sensitivity to the vol-of-vol* section fits the model with a prior on \gamma and shows what the posterior does.
 
 
 ``` python
@@ -1057,7 +1057,7 @@ Group: /
 │           trend_vol              (chain, draw, time, trend_vol_dim_0) float32 4MB 0...
 │           trend_z                (chain, draw, trend_z_dim_0, trend_z_dim_1) float32 4MB ...
 │       Attributes:
-│           created_at:                 2026-11-08T20:17:10.931192+00:00
+│           created_at:                 2026-11-08T21:19:02.758515+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1072,7 +1072,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, measure) float32 17MB 1.256 2.835 ... 2.392
 │       Attributes:
-│           created_at:                 2026-11-08T20:17:11.173999+00:00
+│           created_at:                 2026-11-08T21:19:03.001713+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1085,7 +1085,7 @@ Group: /
 │       Data variables:
 │           obs      (time, measure) float32 4kB 0.6892 2.221 1.622 ... 2.067 2.438
 │       Attributes:
-│           created_at:                 2026-11-08T20:17:11.174347+00:00
+│           created_at:                 2026-11-08T21:19:03.002050+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1098,7 +1098,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 0B 
 │       Attributes:
-│           created_at:                 2026-11-08T20:17:11.174602+00:00
+│           created_at:                 2026-11-08T21:19:03.002305+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1113,7 +1113,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, measure) float32 512kB 4.736 4.267 ... 1.104
 │       Attributes:
-│           created_at:                 2026-11-08T20:17:11.616378+00:00
+│           created_at:                 2026-11-08T21:19:03.430510+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1126,7 +1126,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 0B 
         Attributes:
-            created_at:                 2026-11-08T20:17:11.616693+00:00
+            created_at:                 2026-11-08T21:19:03.430804+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1647,7 +1647,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T20:17:10.931192+00:00
+2026-11-08T21:19:02.758515+00:00
 
 creation_library :  
 ArviZ
@@ -1783,7 +1783,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T20:17:11.173999+00:00
+2026-11-08T21:19:03.001713+00:00
 
 creation_library :  
 ArviZ
@@ -1877,7 +1877,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T20:17:11.174347+00:00
+2026-11-08T21:19:03.002050+00:00
 
 creation_library :  
 ArviZ
@@ -1965,7 +1965,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T20:17:11.174602+00:00
+2026-11-08T21:19:03.002305+00:00
 
 creation_library :  
 ArviZ
@@ -2101,7 +2101,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T20:17:11.616378+00:00
+2026-11-08T21:19:03.430510+00:00
 
 creation_library :  
 ArviZ
@@ -2189,7 +2189,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T20:17:11.616693+00:00
+2026-11-08T21:19:03.430804+00:00
 
 creation_library :  
 ArviZ
@@ -2474,7 +2474,7 @@ Takeaway, to be read from the figure after execution.
 
 # Backtest
 
-A single forecast from the last observation says nothing about how good the model is. We run a rolling-origin evaluation with [`backtest`](../../reference/evaluate.backtest.md): the first forecast origin is 1985Q1, every fourth quarter after it is another origin, the training window expands from the start of the sample to the origin (so each fit uses all the revised data up to that date), and the horizon is eight quarters. That is 40 windows, the last one with origin 2024Q1, and the forecasts cover 1985 to 2025: the end of the Great Moderation, the 2008 recession, the long undershoot of the 2010s and the 2021 surge.
+The forecast from the last observation cannot be scored before 2028. To score the model now we run a rolling-origin evaluation with [`backtest`](../../reference/evaluate.backtest.md): the first forecast origin is 1985Q1, every fourth quarter after it is another origin, the training window expands from the start of the sample to the origin (so each fit uses all the revised data up to that date), and the horizon is eight quarters. That is 40 windows, the last one with origin 2024Q1, and the forecasts cover 1985 to 2025: the end of the Great Moderation, the 2008 recession, the long undershoot of the 2010s and the 2021 surge.
 
 The ladder has four models, each adding one component to the previous one, and the benchmark:
 
@@ -2484,7 +2484,7 @@ The ladder has four models, each adding one component to the previous one, and t
 - **M2**: all four measures, stochastic volatility: the model of this notebook.
 - **M2-t**: M2 with Student-t gaps.
 
-Every window fits the model with four NUTS chains of 1{,}000 warmup and 250 draws, so that a window takes a fraction of the full fit while the metrics still see 1{,}000 forecast draws. `forecast_fn` records the divergences of every window, because a model is only as good as the fits behind its scores. The metrics are the ones of *Evaluation metrics and the benchmark*, all on the core PCE column; `on_core_pce` and `four_quarter_average` turn a package metric into one on that column and on the 4-quarter average, and `atkeson_ohanian` is a per-window metric that reads the last four quarters of the training window through the `per_window_metrics` hook of [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest).
+Every window fits the model with four NUTS chains of 1{,}000 warmup and 250 draws, so that a window takes a fraction of the full fit while the metrics still see 1{,}000 forecast draws. `forecast_fn` records the divergences of every window, so that the scores can be checked against the fits that produced them. The metrics are the ones of *Evaluation metrics and the benchmark*, all on the core PCE column; `on_core_pce` and `four_quarter_average` turn a package metric into one on that column and on the 4-quarter average, and `atkeson_ohanian` is a per-window metric that reads the last four quarters of the training window through the `per_window_metrics` hook of [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest).
 
 
 ``` python
@@ -2638,13 +2638,15 @@ def plot_rung_bars(ax: plt.Axes, metric: str, title: str, benchmark: str | None 
     """Bar chart of the window mean of ``metric`` per rung, with the benchmark as a line."""
     labels = list(backtest_results)
     means = [metric_values(backtest_results[label], metric).mean() for label in labels]
-    ax.bar(labels, means, color=[RUNG_COLORS[label] for label in labels])
+    bars = ax.bar(labels, means, color=[RUNG_COLORS[label] for label in labels])
+    ax.bar_label(bars, fmt="%.3f")
     if benchmark is not None:
+        benchmark_mean = metric_values(backtest_results["M0"], benchmark).mean()
         ax.axhline(
-            metric_values(backtest_results["M0"], benchmark).mean(),
+            benchmark_mean,
             color=RUNG_COLORS["AO"],
             lw=2,
-            label="AO benchmark",
+            label=f"AO benchmark: {benchmark_mean:.3f}",
         )
         ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0))
     ax.set(title=title, ylabel="percentage points")
@@ -2704,13 +2706,14 @@ for position, (with_component, without) in enumerate(PAIRS):
     difference = metric_values(backtest_results[with_component], "crps") - metric_values(
         backtest_results[without], "crps"
     )
-    ax.errorbar(
-        position,
-        difference.mean(),
-        yerr=2 * difference.std(ddof=1) / np.sqrt(len(difference)),
-        fmt="o",
-        color=RUNG_COLORS[with_component],
-        capsize=6,
+    mean, two_se = difference.mean(), 2 * difference.std(ddof=1) / np.sqrt(len(difference))
+    ax.errorbar(position, mean, yerr=two_se, fmt="o", color=RUNG_COLORS[with_component], capsize=6)
+    ax.annotate(
+        rf"${mean:+.3f} \pm {two_se:.3f}$",
+        (position, mean),
+        xytext=(12, 0),
+        textcoords="offset points",
+        va="center",
     )
 
 ax.axhline(0.0, color="black", lw=0.5)
@@ -2764,7 +2767,7 @@ for label, scores in horizon_scores.items():
 for ax, prob in zip(axes[1:], (0.5, 0.94), strict=True):
     binomial_sd = np.sqrt(prob * (1 - prob) / len(origins))
     ax.axhline(prob, color="black", lw=1)
-    ax.axhspan(prob - 2 * binomial_sd, prob + 2 * binomial_sd, color="C5", alpha=0.2)
+    ax.axhspan(prob - 2 * binomial_sd, min(1.0, prob + 2 * binomial_sd), color="C5", alpha=0.2)
     ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
     ax.set(title=rf"coverage of the central ${prob:.0%}$ interval".replace("%", r"\%"))
 
@@ -2858,6 +2861,35 @@ ax.set(
 
 Takeaway, to be read from the figure after execution.
 
+The M2-t rung has one parameter the others do not have, the degrees of freedom \nu of its gaps, and the backtest fits do not keep it. We fit M2-t once on the full sample to read it.
+
+
+``` python
+rng_key, key_fit, key_tree = random.split(rng_key, 3)
+model_t = make_trend_inflation_model(num_measures, student_t=True)
+mcmc_t, seconds_t = fit_nuts(
+    key_fit, model_t, rates, num_warmup=FULL_WARMUP, num_samples=FULL_SAMPLES
+)
+tree_t = export(key_tree, model_t, mcmc_t)
+
+pc = az.plot_trace_dist(tree_t, var_names=["nu"], figure_kwargs={"figsize": (12, 4)})
+pc.viz["figure"].item().suptitle(
+    fit_title("M2-t", mcmc_t, seconds_t)
+    + rf", $\nu$ mean {float(tree_t['posterior']['nu'].mean()):.1f}",
+    fontsize=14,
+    fontweight="bold",
+    y=1.05,
+);
+```
+
+
+<figure class="figure">
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-26-output-1.png" class="figure-img" width="1211" height="435" /></p>
+</figure>
+
+
+Takeaway, to be read from the figure after execution.
+
 
 # Sensitivity to the vol-of-vol
 
@@ -2905,7 +2937,7 @@ fig.suptitle("Trend volatility under three vol-of-vol values", fontsize=16, font
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-26-output-1.png" class="figure-img" width="1211" height="1006" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-27-output-1.png" class="figure-img" width="1211" height="1006" /></p>
 </figure>
 
 
@@ -2939,7 +2971,7 @@ fig.suptitle("Backtest CRPS of M2 against the vol-of-vol", fontsize=16, fontweig
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-27-output-1.png" class="figure-img" width="1211" height="411" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-28-output-1.png" class="figure-img" width="1211" height="411" /></p>
 </figure>
 
 
@@ -2961,7 +2993,8 @@ tree_learned = export(key_tree, learned_vol_of_vol_model, mcmc_learned)
 
 pc = az.plot_trace_dist(tree_learned, var_names=["vol_of_vol"], figure_kwargs={"figsize": (12, 4)})
 pc.viz["figure"].item().suptitle(
-    fit_title(r"M2 with a learned $\gamma$", mcmc_learned, seconds_learned),
+    fit_title(r"M2 with a learned $\gamma$", mcmc_learned, seconds_learned)
+    + rf", $\gamma$ mean {float(tree_learned['posterior']['vol_of_vol'].mean()):.2f}",
     fontsize=14,
     fontweight="bold",
     y=1.05,
@@ -2970,7 +3003,7 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-28-output-1.png" class="figure-img" width="1211" height="435" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-29-output-1.png" class="figure-img" width="1211" height="435" /></p>
 </figure>
 
 
@@ -3008,11 +3041,12 @@ backtest_seconds = {
     label: sum(result.walltime for result in results)
     for label, results in backtest_results.items()
 }
-axes[1].bar(
+bars = axes[1].bar(
     list(backtest_seconds),
     [seconds / 60 for seconds in backtest_seconds.values()],
     color=[RUNG_COLORS[label] for label in backtest_seconds],
 )
+axes[1].bar_label(bars, fmt="%.1f")
 axes[1].set(
     title=r"backtest, 40 windows $\times$ 4 chains $\times$ (1,000 + 250)", ylabel="minutes"
 )
@@ -3021,7 +3055,7 @@ fig.suptitle("Wall time", fontsize=16, fontweight="bold");
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-29-output-1.png" class="figure-img" width="1411" height="511" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-30-output-1.png" class="figure-img" width="1411" height="511" /></p>
 </figure>
 
 
