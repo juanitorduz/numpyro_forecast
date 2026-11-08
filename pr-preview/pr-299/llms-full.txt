@@ -4111,10 +4111,11 @@ evaluation weights. The 50 MB archive is downloaded once into ``cache_dir`` (def
 when an ``m5.zip`` is already in ``cache_dir``. The files are read from the cache only
 after a full extraction of the verified archive, so an interrupted download or
 extraction is redone on the next call, as is a file that was deleted or truncated later.
-A cache folder written before this check existed has no completion marker: the first
-call extracts the files again from its ``m5.zip`` when that archive matches the digest,
-and downloads the archive again when it is missing or does not match, which fails
-without a network connection.
+A cache folder written before this check existed has no completion marker. It is used
+as is (also when it is read-only) when its ``m5.zip`` matches the digest and every file
+has the size that the archive records. Without a matching ``m5.zip`` the files cannot
+be verified: the archive is downloaded again, which fails without a network connection.
+To use files copied from elsewhere, put the matching ``m5.zip`` next to them.
 
 Reading needs polars (``pip install numpyro_forecast[dataframes]``).
 
