@@ -26,6 +26,16 @@ from jax.typing import ArrayLike
 from jaxtyping import Num, Real
 
 from numpyro_forecast.exceptions import CovariateDimsError
+from numpyro_forecast.names import (
+    DEFAULT_COVARIATE_DIMS,
+    DEFAULT_OBS_DIMS,
+    RESERVED_PREDICTION_GROUPS,
+    SAMPLE_DIMS,
+    Dim,
+    Group,
+    Site,
+    Var,
+)
 from numpyro_forecast.offload import resolve_device
 from numpyro_forecast.predictive import forecast, predict_in_sample
 from numpyro_forecast.reparam import TimeTransform
@@ -37,18 +47,6 @@ from numpyro_forecast.validation import (
     require_no_horizon_sites,
     require_sample_axis,
 )
-
-_SAMPLE_DIMS = ["chain", "draw"]
-"""The ArviZ sample dimensions shared by the posterior groups."""
-
-_DEFAULT_COVARIATE_DIMS = ("time", "covariate_dim")
-"""Default dimension names for the stored covariates (the 2-D layout)."""
-
-_DEFAULT_OBS_DIMS = ("time", "obs_dim")
-"""Default names of the trailing ``(time, obs)`` axes of every stored ``obs`` variable."""
-
-_RESERVED_PREDICTION_GROUPS = frozenset({"observed_data", "constant_data"})
-"""The groups `predictions_to_datatree()` always writes, so ``group`` cannot name them."""
 
 _TIME_REPARAM_SUFFIXES = tuple(f"_{transform}" for transform in get_args(TimeTransform))
 """The suffixes of the auxiliary sites of `~~numpyro_forecast.reparam.time_reparam()`."""
@@ -101,7 +99,7 @@ def _resolve_covariate_dims(covariates: Array, covariate_dims: Sequence[str] | N
     CovariateDimsError
         If the number of names does not match ``covariates.ndim``.
     """
-    dims = _DEFAULT_COVARIATE_DIMS if covariate_dims is None else covariate_dims
+    dims = DEFAULT_COVARIATE_DIMS if covariate_dims is None else covariate_dims
     ndim = np.asarray(covariates).ndim
     if len(dims) != ndim:
         msg = (
@@ -137,7 +135,7 @@ def _resolve_obs_dims(ndim: int, obs_dims: Sequence[str] | None) -> list[str]:
         dimension (``"chain"`` or ``"draw"``).
     """
     if obs_dims is None:
-        return [*(f"obs_batch_{i}" for i in range(ndim - 2)), *_DEFAULT_OBS_DIMS]
+        return [*(f"obs_batch_{i}" for i in range(ndim - 2)), *DEFAULT_OBS_DIMS]
     dims = list(obs_dims)
     if len(dims) != ndim:
         msg = (
@@ -145,7 +143,7 @@ def _resolve_obs_dims(ndim: int, obs_dims: Sequence[str] | None) -> list[str]:
             "pass one name per axis, with 'time' at axis -2"
         )
         raise ValueError(msg)
-    if dims[-2] != "time":
+    if dims[-2] != Dim.TIME:
         msg = (
             "obs_dims must name the time axis (axis -2) 'time', which carries the "
             f"tree-wide time coordinate, got {dims[-2]!r}"
@@ -154,11 +152,11 @@ def _resolve_obs_dims(ndim: int, obs_dims: Sequence[str] | None) -> list[str]:
     if len(set(dims)) != len(dims):
         msg = f"obs_dims repeats a name: {dims}; pass one distinct name per axis"
         raise ValueError(msg)
-    reserved = [dim for dim in dims if dim in _SAMPLE_DIMS]
+    reserved = [dim for dim in dims if dim in SAMPLE_DIMS]
     if reserved:
         msg = (
             f"obs_dims uses the sample dimension names {reserved}, which ArviZ reserves "
-            f"for {_SAMPLE_DIMS}; rename those axes"
+            f"for {list(SAMPLE_DIMS)}; rename those axes"
         )
         raise ValueError(msg)
     return dims
@@ -301,7 +299,7 @@ def _require_posterior_names_match_sites(
     missing = sorted(
         name
         for name, (site_type, observed) in sites.items()
-        if site_type == "sample" and not observed and name != "obs" and name not in posterior
+        if site_type == "sample" and not observed and name != Site.OBS and name not in posterior
     )
     pairs = []
     for key in posterior:
@@ -402,10 +400,10 @@ def _reconcile_tree_covariate_layout(
         If inherited names do not cover every ``covariates_future`` axis, or if
         explicit names disagree with the stored ones.
     """
-    constant_node = tree.children.get("constant_data")
-    if constant_node is None or "covariates" not in constant_node.dataset:
+    constant_node = tree.children.get(Group.CONSTANT_DATA)
+    if constant_node is None or Var.COVARIATES not in constant_node.dataset:
         return covariate_dims, {}
-    stored = constant_node.dataset["covariates"]
+    stored = constant_node.dataset[Var.COVARIATES]
     stored_dims = [str(dim) for dim in stored.dims]
     if covariate_dims is None:
         ndim = np.asarray(covariates_future).ndim
@@ -441,7 +439,7 @@ def _non_time_labels(variable: "xarray.DataArray") -> dict[str, Any]:
     return {
         str(dim): variable.coords[dim].values
         for axis, dim in enumerate(variable.dims)
-        if axis != time_axis and dim != "time" and dim in variable.coords
+        if axis != time_axis and dim != Dim.TIME and dim in variable.coords
     }
 
 
@@ -507,11 +505,11 @@ def _tree_obs_layout(tree: "xarray.DataTree", ndim: int) -> tuple[list[str], dic
         The dimension names, and the coordinate labels of every non-time axis
         to share with the forecast ``obs``.
     """
-    observed = tree["observed_data"].dataset
-    if "obs" in observed:
-        stored = observed["obs"]
+    observed = tree[Group.OBSERVED_DATA].dataset
+    if Var.OBS in observed:
+        stored = observed[Var.OBS]
         dims = [str(dim) for dim in stored.dims]
-        if len(dims) >= 2 and dims[-2] == "time":
+        if len(dims) >= 2 and dims[-2] == Dim.TIME:
             return dims, _non_time_labels(stored)
     return _resolve_obs_dims(ndim, None), {}
 
@@ -683,7 +681,7 @@ def _normalize_coords(coords: Mapping[str, Collection[Any]] | None) -> dict[str,
 
 def _merge_coords(time: "np.ndarray", coords: Mapping[str, "np.ndarray"]) -> dict[str, Any]:
     """Merge coordinates with precedence user ``coords`` > generated ``time``."""
-    return {"time": time, **coords}
+    return {Dim.TIME: time, **coords}
 
 
 def _forecast_group_datasets(
@@ -715,18 +713,18 @@ def _forecast_group_datasets(
     ``covariates_future`` (default ``("time", "covariate_dim")``).
     """
     dims = _resolve_covariate_dims(covariates_future, covariate_dims)
-    obs_future: dict[Any, Any] = {**(obs_coords or {}), "time": future_time}
-    covariates_future_coords: dict[Any, Any] = {**(covariate_coords or {}), "time": future_time}
+    obs_future: dict[Any, Any] = {**(obs_coords or {}), Dim.TIME: future_time}
+    covariates_future_coords: dict[Any, Any] = {**(covariate_coords or {}), Dim.TIME: future_time}
     predictions_ds = arviz_base.dict_to_dataset(
-        {"obs": forecast_draws},
-        sample_dims=_SAMPLE_DIMS,
-        dims={"obs": list(obs_dims)},
+        {Var.OBS: forecast_draws},
+        sample_dims=list(SAMPLE_DIMS),
+        dims={Var.OBS: list(obs_dims)},
         coords=obs_future,
     )
     predictions_constant_ds = arviz_base.dict_to_dataset(
-        {"covariates": np.asarray(covariates_future)},
+        {Var.COVARIATES: np.asarray(covariates_future)},
         sample_dims=[],
-        dims={"covariates": dims},
+        dims={Var.COVARIATES: dims},
         coords=covariates_future_coords,
     )
     return predictions_ds, predictions_constant_ds
@@ -764,12 +762,12 @@ def _tree_sample_layout(
         If ``num_samples`` is not the number of chains times the number of
         draws of the reference group.
     """
-    for group in ("posterior", "posterior_predictive"):
+    for group in (Group.POSTERIOR, Group.POSTERIOR_PREDICTIVE):
         node = tree.children.get(group)
-        if node is None or "draw" not in node.dataset.sizes:
+        if node is None or Dim.DRAW not in node.dataset.sizes:
             continue
-        num_chains = node.dataset.sizes.get("chain", 1)
-        num_draws = node.dataset.sizes["draw"]
+        num_chains = node.dataset.sizes.get(Dim.CHAIN, 1)
+        num_draws = node.dataset.sizes[Dim.DRAW]
         if num_samples != num_chains * num_draws:
             msg = (
                 f"forecast_samples has {num_samples} draws but the tree's {group} group has "
@@ -780,7 +778,7 @@ def _tree_sample_layout(
             )
             raise ValueError(msg)
         coords = node.dataset.coords
-        labels = {dim: np.atleast_1d(coords[dim].values) for dim in _SAMPLE_DIMS if dim in coords}
+        labels = {dim: np.atleast_1d(coords[dim].values) for dim in SAMPLE_DIMS if dim in coords}
         return num_chains, labels
     return 1, {}
 
@@ -1113,7 +1111,7 @@ def to_datatree(
     }
     posterior_ds = arviz_base.dict_to_dataset(
         posterior_reshaped,
-        sample_dims=_SAMPLE_DIMS,
+        sample_dims=list(SAMPLE_DIMS),
         dims=cast("dict[Any, Any] | None", posterior_dim_names),
         coords=merged_arg,
     )
@@ -1131,30 +1129,30 @@ def to_datatree(
     )
     _require_in_sample_draws_like_data(predictive, data)
     pp_ds = arviz_base.dict_to_dataset(
-        {"obs": _reshape_chains(predictive, num_chains)},
-        sample_dims=_SAMPLE_DIMS,
-        dims={"obs": resolved_obs_dims},
+        {Var.OBS: _reshape_chains(predictive, num_chains)},
+        sample_dims=list(SAMPLE_DIMS),
+        dims={Var.OBS: resolved_obs_dims},
         coords=merged_arg,
     )
 
     observed_ds = arviz_base.dict_to_dataset(
-        {"obs": np.asarray(data)},
+        {Var.OBS: np.asarray(data)},
         sample_dims=[],
-        dims={"obs": resolved_obs_dims},
+        dims={Var.OBS: resolved_obs_dims},
         coords=merged_arg,
     )
     constant_ds = arviz_base.dict_to_dataset(
-        {"covariates": np.asarray(covariates_insample)},
+        {Var.COVARIATES: np.asarray(covariates_insample)},
         sample_dims=[],
-        dims={"covariates": cov_dims},
+        dims={Var.COVARIATES: cov_dims},
         coords=merged_arg,
     )
 
     groups: dict[str, Any] = {
-        "posterior": posterior_ds,
-        "posterior_predictive": pp_ds,
-        "observed_data": observed_ds,
-        "constant_data": constant_ds,
+        Group.POSTERIOR: posterior_ds,
+        Group.POSTERIOR_PREDICTIVE: pp_ds,
+        Group.OBSERVED_DATA: observed_ds,
+        Group.CONSTANT_DATA: constant_ds,
     }
     if key_forecast is not None:
         forecast_samples = forecast(
@@ -1176,15 +1174,15 @@ def to_datatree(
             covariate_coords=user_coords,
             covariate_dims=cov_dims,
         )
-        groups["predictions"] = predictions_ds
-        groups["predictions_constant_data"] = predictions_constant_ds
+        groups[Group.PREDICTIONS] = predictions_ds
+        groups[Group.PREDICTIONS_CONSTANT_DATA] = predictions_constant_ds
 
     tree = xarray.DataTree.from_dict(groups)
     tree.attrs.update(
         {
             "inference_library": "numpyro",
             "creation_library": "numpyro_forecast",
-            "sample_dims": _SAMPLE_DIMS,
+            "sample_dims": list(SAMPLE_DIMS),
         }
     )
     return tree
@@ -1306,7 +1304,7 @@ def add_forecast_groups(
         tree, covariates_future, explicit_dims
     )
     resolved_covariate_dims = _resolve_covariate_dims(covariates_future, reconciled_dims)
-    in_time = np.asarray(tree["observed_data"].coords["time"].values)
+    in_time = np.asarray(tree[Group.OBSERVED_DATA].coords[Dim.TIME].values)
     forecast_samples_arr = np.asarray(forecast_samples)
     covariates_future_arr = np.asarray(covariates_future)
     obs_dims, obs_coords = _tree_obs_layout(tree, forecast_samples_arr.ndim - 1)
@@ -1371,8 +1369,8 @@ def add_forecast_groups(
     )
 
     groups: dict[str, Any] = {name: node.dataset for name, node in tree.children.items()}
-    groups["predictions"] = predictions_ds
-    groups["predictions_constant_data"] = predictions_constant_ds
+    groups[Group.PREDICTIONS] = predictions_ds
+    groups[Group.PREDICTIONS_CONSTANT_DATA] = predictions_constant_ds
     new_tree = xarray.DataTree.from_dict(groups)
     new_tree.attrs.update(dict(tree.attrs))
     return new_tree
@@ -1383,7 +1381,7 @@ def predictions_to_datatree(
     x: Num[ArrayLike, " time"],
     series: Collection[Any],
     *,
-    group: str = "posterior_predictive",
+    group: str = Group.POSTERIOR_PREDICTIVE,
     observed: Real[ArrayLike, " time series"] | None = None,
 ) -> "xarray.DataTree":
     """Pack prediction draws into a DataTree laid out for per-series ``plot_lm`` faceting.
@@ -1419,8 +1417,8 @@ def predictions_to_datatree(
         one-dimensional collection is accepted (a list, a NumPy
         array, a pandas index) and stored as ``np.asarray(series)``.
     group
-        Predictive group to store the draws under (e.g. ``"prior_predictive"``,
-        ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
+        Predictive group to store the draws under, ``"posterior_predictive"`` by
+        default (also ``"prior_predictive"`` or ``"predictions"``). ``"observed_data"`` and
         ``"constant_data"`` are reserved: the function always writes those two
         groups.
     observed
@@ -1445,7 +1443,7 @@ def predictions_to_datatree(
         ``pd.MultiIndex``, or if ``series`` does not have one label per
         series in ``predictions``.
     """
-    if group in _RESERVED_PREDICTION_GROUPS:
+    if group in RESERVED_PREDICTION_GROUPS:
         msg = (
             f"group={group!r} is reserved: predictions_to_datatree() always writes the "
             "'observed_data' and 'constant_data' groups. Store the draws under another "
@@ -1462,28 +1460,28 @@ def predictions_to_datatree(
         raise ValueError(msg)
     x_values = np.asarray(x)
     x_grid = np.broadcast_to(x_values[:, None], preds.shape[2:])
-    coords = cast("dict[Any, Any]", {"time": x_values, "series": series_values})
+    coords = cast("dict[Any, Any]", {Dim.TIME: x_values, "series": series_values})
     predictive_ds = arviz_base.dict_to_dataset(
-        {"obs": preds},
-        sample_dims=_SAMPLE_DIMS,
-        dims={"obs": ["time", "series"]},
+        {Var.OBS: preds},
+        sample_dims=list(SAMPLE_DIMS),
+        dims={Var.OBS: [Dim.TIME, "series"]},
         coords=coords,
     )
     observed_values = np.zeros(preds.shape[2:]) if observed is None else np.asarray(observed)
     observed_ds = arviz_base.dict_to_dataset(
-        {"obs": observed_values},
+        {Var.OBS: observed_values},
         sample_dims=[],
-        dims={"obs": ["time", "series"]},
+        dims={Var.OBS: [Dim.TIME, "series"]},
         coords=coords,
     )
     constant_ds = arviz_base.dict_to_dataset(
         {"t": x_grid},
         sample_dims=[],
-        dims={"t": ["time", "series"]},
+        dims={"t": [Dim.TIME, "series"]},
         coords=coords,
     )
     tree = xarray.DataTree.from_dict(
-        {group: predictive_ds, "observed_data": observed_ds, "constant_data": constant_ds}
+        {group: predictive_ds, Group.OBSERVED_DATA: observed_ds, Group.CONSTANT_DATA: constant_ds}
     )
-    tree.attrs.update({"creation_library": "numpyro_forecast", "sample_dims": _SAMPLE_DIMS})
+    tree.attrs.update({"creation_library": "numpyro_forecast", "sample_dims": list(SAMPLE_DIMS)})
     return tree

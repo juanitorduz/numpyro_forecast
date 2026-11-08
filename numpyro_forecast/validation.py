@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.typing import ArrayLike
 
+from numpyro_forecast.names import FUTURE_SUFFIX, Site
 from numpyro_forecast.typing import Array
 
 
@@ -92,7 +93,7 @@ def _is_horizon_site(name: str) -> bool:
     ``obs_future`` and the ``forecast`` deterministic. An in-sample name that
     only contains the letters (``beta_futures``) does not match.
     """
-    return name == "forecast" or name.endswith("_future") or "_future_" in name
+    return name == Site.FORECAST or name.endswith(FUTURE_SUFFIX) or f"{FUTURE_SUFFIX}_" in name
 
 
 def require_no_horizon_sites(posterior: Mapping[str, ArrayLike]) -> None:
@@ -194,8 +195,8 @@ def drop_obs_site(posterior: Mapping[str, ArrayLike]) -> dict[str, ArrayLike]:
     ValueError
         If ``"obs"`` is the only key, so no latent site is left to draw from.
     """
-    kept = {name: leaf for name, leaf in posterior.items() if name != "obs"}
-    if not kept and "obs" in posterior:
+    kept = {name: leaf for name, leaf in posterior.items() if name != Site.OBS}
+    if not kept and Site.OBS in posterior:
         msg = (
             "posterior holds only the 'obs' site, which the drivers drop because it would pin "
             "every in-sample draw to its values. Pass the posterior of the training run: "

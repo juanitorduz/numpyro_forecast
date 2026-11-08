@@ -40,6 +40,7 @@ from jaxtyping import Num, PyTree
 from numpyro.infer import Predictive
 from numpyro.infer.autoguide import AutoDelta, AutoGuide
 
+from numpyro_forecast.names import Site
 from numpyro_forecast.offload import (
     ResolvedDevice,
     chunk_indices,
@@ -637,15 +638,15 @@ def forecast(
     require_covariates_extend_data(data, covariates)
     posterior = drop_empty_horizon_sites(posterior)
     steps = covariates.shape[-2] - data.shape[-2]
-    predictive = _compiled_predictive(model, "forecast", parallel=parallel)
+    predictive = _compiled_predictive(model, Site.FORECAST, parallel=parallel)
 
     @no_type_check
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         shape = jax.eval_shape(predictive, key, post, covariates, data).shape
         _require_time_steps(
             shape,
-            driver="forecast",
-            site="forecast",
+            driver=forecast.__name__,
+            site=Site.FORECAST,
             steps=steps,
             rule="covariates.shape[-2] - data.shape[-2]",
             train_rows=data.shape[-2],
@@ -779,14 +780,14 @@ def predict_in_sample(
     posterior = drop_obs_site(drop_empty_horizon_sites(posterior))
     steps = covariates.shape[-2]
     # No data argument: the model must see ``data=None`` to sample ``obs``.
-    predictive = _compiled_predictive(model, "obs", parallel=parallel)
+    predictive = _compiled_predictive(model, Site.OBS, parallel=parallel)
 
     @no_type_check
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         _require_time_steps(
             jax.eval_shape(predictive, key, post, covariates).shape,
-            driver="predict_in_sample",
-            site="obs",
+            driver=predict_in_sample.__name__,
+            site=Site.OBS,
             steps=steps,
             rule="one per row of the in-sample covariates",
             train_rows=steps,

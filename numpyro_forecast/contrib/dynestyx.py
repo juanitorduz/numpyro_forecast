@@ -84,6 +84,7 @@ from jax import random
 from jaxtyping import Float
 
 from numpyro_forecast.models import Horizon
+from numpyro_forecast.names import Site
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array
 
@@ -467,11 +468,11 @@ def state_space(
                 f"got n_simulations={predicted.shape[0]}"
             )
             raise ValueError(msg)
-        numpyro.deterministic("forecast", predicted[0, 1:])  # drop the anchor row
+        numpyro.deterministic(Site.FORECAST, predicted[0, 1:])  # drop the anchor row
         x_future = jnp.asarray(trace[f"{name}{_PREDICTED_STATES}"]["value"])[0, 1:]
     if h.data is None:
         key_states, key_obs = random.split(_rng_key())
         x_in_sample = _in_sample_states(key_states, result, kind, h.t_obs)
         u = None if controls is None else controls[: h.t_obs]
-        numpyro.deterministic("obs", _observe(key_obs, dynamics, x_in_sample, u, obs_times))
+        numpyro.deterministic(Site.OBS, _observe(key_obs, dynamics, x_in_sample, u, obs_times))
     return StateSpaceResult(x_in_sample=x_in_sample, x_future=x_future)

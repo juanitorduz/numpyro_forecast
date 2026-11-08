@@ -27,7 +27,8 @@ from numpyro.infer.util import log_density, potential_energy
 from numpyro.optim import Adam
 
 from numpyro_forecast import draw_posterior, forecast, predict_in_sample, time_reparam
-from numpyro_forecast.models import Horizon, PlateName, innovations, markov_series, predict
+from numpyro_forecast.models import Horizon, innovations, markov_series, predict
+from numpyro_forecast.names import Plate
 from numpyro_forecast.reparam import TimeTransform
 from numpyro_forecast.typing import Array, ForecastModel
 from tests.conftest import as_model, empty_covariates, get_trace, plate_frames, rw_model
@@ -246,9 +247,9 @@ def test_scope_applied_outside_prefixes_the_auxiliary_once() -> None:
 
 
 def test_targets_the_plate_innovations_opens() -> None:
-    """The shared ``PlateName.TIME`` name is the one `innovations` opens; a rename cannot silently no-op."""
+    """The shared ``Plate.TIME`` name is the one `innovations` opens; a rename cannot silently no-op."""
     tr = get_trace(rw_model, empty_covariates(T_OBS), jnp.zeros((T_OBS, 1)))
-    assert plate_frames(tr["drift"]) == [(PlateName.TIME, -2, T_OBS)]
+    assert plate_frames(tr["drift"]) == [(Plate.TIME, -2, T_OBS)]
 
     def body(h: Horizon, covariates: Array) -> None:
         with numpyro.plate("steps", h.t_obs, dim=-2):
