@@ -109,7 +109,8 @@ def fourier_features(
     if 2 * n_terms > cycle:
         msg = (
             f"num_terms must be at most {math.floor(cycle / 2)} for period {cycle}, "
-            f"got {n_terms}: harmonics above period / 2 alias onto lower ones"
+            f"got {n_terms}: harmonics above period / 2 exceed the Nyquist frequency of the "
+            "unit time step and alias onto lower frequencies"
         )
         raise ValueError(msg)
     design = _fourier_features(n_steps, cycle, n_terms)
