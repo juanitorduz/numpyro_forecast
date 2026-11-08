@@ -2,6 +2,8 @@
 
 import hashlib
 import io
+import json
+import stat
 import zipfile
 from pathlib import Path
 
@@ -53,12 +55,6 @@ def _synthetic_files() -> dict[str, str]:
     }
 
 
-def _write_files(directory: Path) -> None:
-    for name, text in _synthetic_files().items():
-        (directory / name).write_text(text)
-    (directory / M5_MARKER).write_text(datasets.M5_SHA256)
-
-
 def _synthetic_archive() -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
@@ -80,9 +76,9 @@ def _serve(monkeypatch: pytest.MonkeyPatch, payload: bytes) -> list[str]:
     return calls
 
 
-def test_load_m5_reads_extracted_files(tmp_path: Path) -> None:
+def test_load_m5_reads_extracted_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Sales, prices, keys, calendar and weights line up on the synthetic files."""
-    _write_files(tmp_path)
+    _serve(monkeypatch, _synthetic_archive())
     m5 = load_m5(cache_dir=tmp_path)
     assert m5.sales.shape == (M5_DAYS, 2)
     assert m5.sales.dtype == np.float32
@@ -152,14 +148,14 @@ def test_load_m5_redoes_an_interrupted_extraction(
     monkeypatch.setattr(zipfile.ZipFile, "extractall", original)
     m5 = load_m5(cache_dir=tmp_path)
     assert m5.weights.height == 1
-    assert (tmp_path / M5_MARKER).read_text() == datasets.M5_SHA256
+    assert json.loads((tmp_path / M5_MARKER).read_text())["digest"] == datasets.M5_SHA256
     assert len(calls) == 1
 
 
 def test_load_m5_reextracts_files_without_a_matching_marker(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Truncated files with no marker, or a marker of another digest, are replaced from the archive."""
+    """Files with no marker, or with a marker of another digest, are extracted again."""
     payload = _synthetic_archive()
     calls = _serve(monkeypatch, payload)
     (tmp_path / "m5.zip").write_bytes(payload)
@@ -167,8 +163,12 @@ def test_load_m5_reextracts_files_without_a_matching_marker(
         (tmp_path / name).write_text("".join(text.splitlines(keepends=True)[:2]))
     assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
 
+    marker = json.loads((tmp_path / M5_MARKER).read_text())
+    (tmp_path / M5_MARKER).write_text(json.dumps({**marker, "digest": "0" * 64}))
     (tmp_path / "sales_train_evaluation.csv").write_text("truncated\n")
-    (tmp_path / M5_MARKER).write_text("0" * 64)
+    assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
+
+    (tmp_path / M5_MARKER).write_text("not json")
     assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
     assert calls == []
 
@@ -236,11 +236,23 @@ def test_load_m5_keeps_the_archive_when_the_replacement_download_fails(
     assert list(tmp_path.glob("*.part")) == []
 
 
-def test_load_m5_leaves_another_download_in_progress_alone(
+def test_load_m5_restores_a_truncated_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A download writes to its own ``.part`` file, not to one that another call is writing."""
-    _serve(monkeypatch, _synthetic_archive())
-    (tmp_path / "m5.zip.part").write_bytes(b"another download")
+    """A file truncated after a complete extraction is extracted again from the archive."""
+    calls = _serve(monkeypatch, _synthetic_archive())
     load_m5(cache_dir=tmp_path)
-    assert (tmp_path / "m5.zip.part").read_bytes() == b"another download"
+    header = _synthetic_files()["weights_evaluation.csv"].splitlines(keepends=True)[0]
+    (tmp_path / "weights_evaluation.csv").write_text(header)
+    assert load_m5(cache_dir=tmp_path).weights.height == 1
+    assert len(calls) == 1
+
+
+def test_load_m5_archive_follows_the_umask(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The downloaded archive gets the same permission bits as the extracted files."""
+    _serve(monkeypatch, _synthetic_archive())
+    load_m5(cache_dir=tmp_path)
+    archive_mode = stat.S_IMODE((tmp_path / "m5.zip").stat().st_mode)
+    assert archive_mode == stat.S_IMODE((tmp_path / M5_FILES[0]).stat().st_mode)

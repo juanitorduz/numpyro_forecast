@@ -9,8 +9,8 @@ the package convention (time at axis ``-2``).
 
 import hashlib
 import importlib.resources
+import json
 import shutil
-import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -177,8 +177,8 @@ M5_FILES = (
 M5_KEYS = ("item_id", "dept_id", "cat_id", "store_id", "state_id")
 M5_DAYS = 1_969
 """Training days 1 to 1,941 followed by the 28 evaluation days."""
-M5_MARKER = ".complete"
-"""Name of the file that marks a complete M5 extraction; it holds the archive digest."""
+M5_MARKER = ".m5-complete"
+"""Name of the file that marks a complete M5 extraction: the archive digest and file sizes."""
 DOWNLOAD_TIMEOUT = 60.0
 """Seconds a single socket read may block before a dataset download is abandoned."""
 
@@ -228,22 +228,21 @@ def _sha256(path: Path) -> str:
 def _download_m5(archive: Path, url: str, digest: str) -> None:
     """Download the M5 archive to ``archive`` once its SHA-256 digest matches ``digest``.
 
-    The archive streams into a ``.part`` file with a name unique to this call, so two
-    downloads into one cache folder do not write to the same file. That file is removed
-    on any error and replaces ``archive`` only when its digest matches, so an existing
-    ``archive`` stays in place until the new one is verified. The timeout bounds each
-    socket read, not the whole transfer.
+    The archive streams into a ``.part`` file, which is removed on any error and replaces
+    ``archive`` only when its digest matches, so an existing ``archive`` stays in place
+    until the new one is verified. Two downloads into one cache folder at the same time
+    are not supported. The timeout bounds each socket read, not the whole transfer.
     """
     if not url.startswith("https://"):
         msg = f"the M5 archive URL must use https, got {url!r}"
         raise ValueError(msg)
-    with tempfile.NamedTemporaryFile(
-        dir=archive.parent, prefix=f"{archive.name}.", suffix=".part", delete_on_close=False
-    ) as target:
-        with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response:  # noqa: S310
+    partial = archive.with_name(archive.name + ".part")
+    try:
+        with (
+            urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response,  # noqa: S310
+            partial.open("wb") as target,
+        ):
             shutil.copyfileobj(response, target)
-        target.close()
-        partial = Path(target.name)
         actual = _sha256(partial)
         if actual != digest:
             msg = (
@@ -251,35 +250,51 @@ def _download_m5(archive: Path, url: str, digest: str) -> None:
             )
             raise ValueError(msg)
         partial.replace(archive)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def _m5_cache_is_complete(directory: Path, digest: str) -> bool:
+    """Return whether the marker holds ``digest`` and every M5 file has its recorded size.
+
+    A missing or unreadable marker, a missing file and a size mismatch all count as an
+    incomplete cache.
+    """
+    try:
+        marker = json.loads((directory / M5_MARKER).read_text())
+        sizes = marker["sizes"]
+        return marker["digest"] == digest and all(
+            (directory / name).stat().st_size == sizes[name] for name in M5_FILES
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
 
 
 def _ensure_m5_files(cache_dir: str | Path | None, url: str, digest: str) -> Path:
     """Return the directory with the M5 files, downloading and unpacking the archive once.
 
     The cache is complete only when the marker file ``M5_MARKER`` holds ``digest`` and
-    the five files exist: the file names alone cannot tell a partial extraction from a
-    complete one. Otherwise an ``m5.zip`` already in the directory is checked against
-    ``digest`` (and downloaded again on a mismatch), the marker is removed, the members
-    are extracted in place and the marker is written last. An interrupted extraction
-    therefore leaves no marker and is redone on the next call, and a new pinned digest
-    or a deleted file also triggers a fresh extraction.
+    every file has the size that the archive records for it: the file names alone cannot
+    tell a partial extraction from a complete one. Otherwise an ``m5.zip`` already in the
+    directory is checked against ``digest`` (and downloaded again on a mismatch), the
+    marker is removed, the members are extracted in place and the marker is written last.
+    An interrupted extraction therefore leaves no marker and is redone on the next call,
+    and a new pinned digest or a deleted or truncated file also triggers a fresh
+    extraction. Two extractions into one cache folder at the same time are not supported.
     """
     directory = _default_cache_dir() / "m5" if cache_dir is None else Path(cache_dir)
     directory.mkdir(parents=True, exist_ok=True)
-    marker = directory / M5_MARKER
-    if (
-        marker.is_file()
-        and marker.read_text().strip() == digest
-        and all((directory / name).is_file() for name in M5_FILES)
-    ):
+    if _m5_cache_is_complete(directory, digest):
         return directory
     archive = directory / "m5.zip"
     if not archive.is_file() or _sha256(archive) != digest:
         _download_m5(archive, url, digest)
+    marker = directory / M5_MARKER
     marker.unlink(missing_ok=True)
     with zipfile.ZipFile(archive) as archive_file:
         archive_file.extractall(directory, members=M5_FILES)
-    marker.write_text(digest)
+        sizes = {name: archive_file.getinfo(name).file_size for name in M5_FILES}
+    marker.write_text(json.dumps({"digest": digest, "sizes": sizes}))
     return directory
 
 
@@ -294,9 +309,11 @@ def load_m5(cache_dir: str | Path | None = None) -> M5Data:
     ``~/.cache/numpyro_forecast/m5``) and checked against a pinned SHA-256 digest, also
     when an ``m5.zip`` is already in ``cache_dir``. The files are read from the cache only
     after a full extraction of the verified archive, so an interrupted download or
-    extraction is redone on the next call. A cache folder written before this check
-    existed has no completion marker: the first call extracts the files again from its
-    ``m5.zip``, or downloads the archive again when ``m5.zip`` was removed.
+    extraction is redone on the next call, as is a file that was deleted or truncated later.
+    A cache folder written before this check existed has no completion marker: the first
+    call extracts the files again from its ``m5.zip`` when that archive matches the digest,
+    and downloads the archive again when it is missing or does not match, which fails
+    without a network connection.
 
     Reading needs polars (``pip install numpyro_forecast[dataframes]``).
 
