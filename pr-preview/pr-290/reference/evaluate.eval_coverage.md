@@ -36,7 +36,7 @@ Optional number of flattened data cells evaluated on the accelerator per pass (s
 
 
 `Array`  
-The fraction of ground truth inside the central `alpha` interval, as a scalar array.
+The fraction of ground truth inside the central `alpha` interval, as a scalar array. NaN when a `truth` value or a forecast draw is NaN (see [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS)), instead of counting that cell as a miss.
 
 
 ## Raises
