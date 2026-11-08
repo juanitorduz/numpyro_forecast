@@ -2121,7 +2121,8 @@ Returns
 -------
 Array
     The fraction of ground truth inside the central ``alpha`` interval, as
-    a scalar array.
+    a scalar array. NaN when a ``truth`` value or a forecast draw is NaN (see
+    `DEFAULT_METRICS`), instead of counting that cell as a miss.
 
 Raises
 ------
@@ -2237,7 +2238,8 @@ alpha
 Returns
 -------
 Array
-    The mean interval score as a scalar array.
+    The mean interval score as a scalar array. NaN when a ``truth`` value
+    or a forecast draw is NaN (see `~~numpyro_forecast.evaluate.DEFAULT_METRICS`).
 
 Raises
 ------

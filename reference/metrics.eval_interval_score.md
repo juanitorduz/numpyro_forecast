@@ -36,7 +36,7 @@ Nominal interval level in `(0, 1)`.
 
 
 `Array`  
-The mean interval score as a scalar array.
+The mean interval score as a scalar array. NaN when a `truth` value or a forecast draw is NaN (see [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS)).
 
 
 ## Raises

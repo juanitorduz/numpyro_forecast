@@ -978,7 +978,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L175-L219" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L178-L223" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">metrics</span><span class="op">.</span><span class="sig-name">eval_interval_score</span>(
@@ -1016,7 +1016,7 @@ Nominal interval level in <code>(0, 1)</code>.
 <dl>
 <dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-The mean interval score as a scalar array.
+The mean interval score as a scalar array. NaN when a <code>truth</code> value or a forecast draw is NaN (see <a href="evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="gdls-link gdls-code">DEFAULT_METRICS</a>).
 </dd>
 </dl>
 </div>
