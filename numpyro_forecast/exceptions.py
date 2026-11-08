@@ -90,9 +90,12 @@ class MVNLayoutError(NumpyroForecastError, NotImplementedError):
     `~~numpyro_forecast.surgery.slice_time()`, and
     `~~numpyro_forecast.surgery.prefix_condition()` on MVN noise whose
     ``loc``/``covariance_matrix`` shapes do not match the supported
-    time-leading layout, and by `~~numpyro_forecast.surgery.shift_loc()` on a
+    time-leading layout, by `~~numpyro_forecast.surgery.shift_loc()` on a
     predictor that is neither ``(*batch, time, 1)`` (time may be ``1``) nor
-    ``(*batch, time)`` with no more axes than the noise location.
+    ``(*batch, time)`` with no more axes than the noise location, and by
+    `~~numpyro_forecast.models.predict()` when it forecasts a
+    ``MultivariateNormal`` across the series (its event is the observation
+    axis).
     """
 
     default_message = (

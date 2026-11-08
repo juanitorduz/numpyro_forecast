@@ -32,6 +32,7 @@ from numpyro.infer.reparam import Reparam
 from numpyro.primitives import _PYRO_STACK
 
 from numpyro_forecast.arrays import concat_future
+from numpyro_forecast.exceptions import MVNLayoutError
 from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
 from numpyro_forecast.typing import Array
 from numpyro_forecast.validation import require_time_axis
@@ -940,16 +941,18 @@ def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
     ``(time, time)`` grid, a second ``[..., None]`` a ``(time, time, 1)`` one,
     and a predictor with more rows than a single observed step repeats it
     (issue #166). A size-1 axis that the data does not have repeats nothing, so
-    it passes. A bare ``MultivariateNormal`` has the time axis as its
+    it passes. A bare ``MultivariateNormal`` over time has the time axis as its
     ``(time,)`` event and no observation axis, so it fails: `shift_loc()` gives
     MVN noise the ``(time, 1)`` event for a ``(duration, 1)`` predictor (issue
-    #160). When only the number of rows is wrong, the message also names a
-    posterior drawn for another training length: this check fires before the
-    driver check of issue #168 when such a posterior is shorter than the
-    observed data. Shapes alone cannot tell a ``(duration,)`` term from a
-    per-series one when the data has ``h.duration`` series, and the axes of
-    enumerated discrete latents, left of the data axes, count as repeated
-    observations.
+    #160). A bare ``MultivariateNormal`` across the series has its event on
+    the observation axis, so it passes here, and `_require_mvn_over_time()`
+    rejects it when forecasting. When only the number of rows is wrong, the
+    message also names a posterior drawn for another training length: this
+    check fires before the driver check of issue #168 when such a posterior is
+    shorter than the observed data. Shapes alone cannot tell a ``(duration,)``
+    term from a per-series one when the data has ``h.duration`` series, and
+    the axes of enumerated discrete latents, left of the data axes, count as
+    repeated observations.
     """
     shape = (*full_dist.batch_shape, *full_dist.event_shape)
     data = h.data
@@ -1020,6 +1023,48 @@ def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
     raise ValueError(msg)
 
 
+def _require_mvn_over_time(full_dist: dist.Distribution) -> None:
+    """Reject a ``MultivariateNormal`` whose event is the observation axis before forecasting.
+
+    After `_require_obs_layout()` passes with data, the last axis of the
+    observation distribution is the observation axis, so a bare
+    ``MultivariateNormal`` (inside any ``Independent`` layers) has its event
+    there: it is correlated across the series and independent over time. The
+    time-axis surgery of ``MultivariateNormal`` reads the event as time, so it
+    would slice the series (issue #262). The supported MVN over time reaches
+    this check as the ``(time, 1)`` event wrapper of
+    `~~numpyro_forecast.surgery.shift_loc()`, which is not a
+    ``MultivariateNormal``, so the check does not compare shapes and also
+    catches a panel with ``h.duration`` series. A subclass with its own
+    `~~numpyro_forecast.surgery.slice_time()` and
+    `~~numpyro_forecast.surgery.prefix_condition()` registrations passes.
+    """
+    base = full_dist
+    while isinstance(base, dist.Independent):
+        base = base.base_dist
+    if not isinstance(base, dist.MultivariateNormal):
+        return
+    family, mvn = type(base), dist.MultivariateNormal
+    own_slice = slice_time.dispatch(family) is not slice_time.dispatch(mvn)
+    own_condition = prefix_condition.dispatch(family) is not prefix_condition.dispatch(mvn)
+    if own_slice and own_condition:
+        return
+    msg = (
+        "predict cannot forecast a MultivariateNormal across the series (its event is the "
+        f"observation axis of size {base.event_shape[-1]}, independent over time): "
+        "slice_time() and prefix_condition() read a MultivariateNormal event as time. "
+        "The model still trains and predict_in_sample() still draws from it. To forecast "
+        'it, replace the predict call with these sites: sample "obs" from '
+        "dist.MultivariateNormal(mu[..., : h.t_obs, :], cov) with obs=h.data and, when "
+        'h.future > 0, sample "obs_future" from '
+        "dist.MultivariateNormal(mu[..., h.t_obs :, :], cov) and record it with "
+        'numpyro.deterministic("forecast", ...). Slice a time-varying cov along its time '
+        'axis too: cov[..., : h.t_obs, :, :] in "obs" and cov[..., h.t_obs :, :, :] in '
+        '"obs_future".'
+    )
+    raise MVNLayoutError(msg)
+
+
 def predict(
     h: Horizon,
     obs_dist: dist.Distribution | Callable[[Array], dist.Distribution],
@@ -1052,7 +1097,10 @@ def predict(
     (`~~numpyro_forecast.surgery.slice_time()` /
     `~~numpyro_forecast.surgery.prefix_condition()`), i.e. an elementwise
     family or a registered one. This also holds for a distribution wrapped in
-    ``Independent`` (e.g. by ``.to_event(1)``).
+    ``Independent`` (e.g. by ``.to_event(1)``). A ``MultivariateNormal`` across
+    the series of a panel (noise or a link with its event over the observation
+    axis, independent over time) has no time-axis surgery: it trains, but
+    forecasting it raises `~~numpyro_forecast.exceptions.MVNLayoutError`.
 
     Parameters
     ----------
@@ -1097,6 +1145,17 @@ def predict(
         a model whose discrete latents are enumerated (for example ``NUTS`` with
         funsor installed), because the enumeration axes look like repeated
         observations.
+    MVNLayoutError
+        If forecasting and the observation distribution, inside any
+        ``Independent`` wrappers, is a ``MultivariateNormal`` whose event is
+        the observation axis: correlated across the series and independent
+        over time, for example ``lambda mu: dist.MultivariateNormal(mu, cov)``
+        or the noise ``dist.MultivariateNormal(jnp.zeros((h.duration, n)), cov)``
+        with a ``(duration, n)`` predictor. The time-axis surgery reads the
+        event as time. Replace the ``predict()`` call with ``"obs"``,
+        ``"obs_future"`` and ``"forecast"`` sites in the model. Also raised by
+        `~~numpyro_forecast.surgery.shift_loc()` for MVN noise with an
+        unsupported layout.
     """
     _require_predictor_axes(h, prediction)
     full_dist = (
@@ -1128,6 +1187,7 @@ def predict(
     if data is None:
         msg = "forecasting requires observed data"
         raise RuntimeError(msg)
+    _require_mvn_over_time(full_dist)
     prefix = slice_time(full_dist, slice(None, h.t_obs))
     numpyro.sample("obs", prefix, obs=data)
     forecast = numpyro.sample("obs_future", prefix_condition(full_dist, data))
