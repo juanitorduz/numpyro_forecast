@@ -108,21 +108,14 @@ def test_load_m5_downloads_verifies_and_unpacks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The archive is fetched once, checked against its digest and unpacked; a bad digest is discarded."""
-    payload = _synthetic_archive()
-    calls = []
-
-    def fake_urlopen(url: str, timeout: float) -> io.BytesIO:
-        calls.append((url, timeout))
-        return io.BytesIO(payload)
-
-    monkeypatch.setattr(datasets.urllib.request, "urlopen", fake_urlopen)
+    calls = _serve(monkeypatch, _synthetic_archive())
+    digest = datasets.M5_SHA256
     monkeypatch.setattr(datasets, "M5_SHA256", "0" * 64)
     with pytest.raises(ValueError, match="unexpected digest"):
         load_m5(cache_dir=tmp_path / "bad")
-    assert not (tmp_path / "bad" / "m5.zip").exists()
-    assert not (tmp_path / "bad" / "m5.zip.part").exists()
+    assert list((tmp_path / "bad").iterdir()) == []
 
-    monkeypatch.setattr(datasets, "M5_SHA256", hashlib.sha256(payload).hexdigest())
+    monkeypatch.setattr(datasets, "M5_SHA256", digest)
     m5 = load_m5(cache_dir=tmp_path / "good")
     assert m5.sales.shape == (M5_DAYS, 2)
     assert all((tmp_path / "good" / name).exists() for name in M5_FILES)
@@ -154,7 +147,7 @@ def test_load_m5_redoes_an_interrupted_extraction(
     monkeypatch.setattr(zipfile.ZipFile, "extractall", failing_extractall)
     with pytest.raises(OSError, match="No space left"):
         load_m5(cache_dir=tmp_path)
-    assert [path.name for path in tmp_path.iterdir()] == ["m5.zip"]
+    assert not (tmp_path / M5_MARKER).exists()
 
     monkeypatch.setattr(zipfile.ZipFile, "extractall", original)
     m5 = load_m5(cache_dir=tmp_path)
@@ -213,3 +206,41 @@ def test_load_m5_removes_the_partial_download_on_error(
     with pytest.raises(TimeoutError):
         load_m5(cache_dir=tmp_path)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_load_m5_restores_a_deleted_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A file removed from a complete cache is extracted again from the archive."""
+    calls = _serve(monkeypatch, _synthetic_archive())
+    load_m5(cache_dir=tmp_path)
+    (tmp_path / "sell_prices.csv").unlink()
+    assert load_m5(cache_dir=tmp_path).price.shape == (M5_DAYS, 2)
+    assert len(calls) == 1
+
+
+def test_load_m5_keeps_the_archive_when_the_replacement_download_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ``m5.zip`` with another digest stays in place until a new archive is verified."""
+    _serve(monkeypatch, _synthetic_archive())
+    load_m5(cache_dir=tmp_path)
+    previous = (tmp_path / "m5.zip").read_bytes()
+    monkeypatch.setattr(datasets, "M5_SHA256", "f" * 64)
+
+    def offline(url: str, timeout: float) -> io.BytesIO:
+        raise OSError("network unreachable")
+
+    monkeypatch.setattr(datasets.urllib.request, "urlopen", offline)
+    with pytest.raises(OSError, match="network unreachable"):
+        load_m5(cache_dir=tmp_path)
+    assert (tmp_path / "m5.zip").read_bytes() == previous
+    assert list(tmp_path.glob("*.part")) == []
+
+
+def test_load_m5_leaves_another_download_in_progress_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A download writes to its own ``.part`` file, not to one that another call is writing."""
+    _serve(monkeypatch, _synthetic_archive())
+    (tmp_path / "m5.zip.part").write_bytes(b"another download")
+    load_m5(cache_dir=tmp_path)
+    assert (tmp_path / "m5.zip.part").read_bytes() == b"another download"
