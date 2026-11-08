@@ -110,7 +110,7 @@ def test_nested_plates_open_outermost_first() -> None:
     tr = trace(seed(body, random.PRNGKey(0))).get_trace()
     assert tr["z"]["value"].shape == (6, 2, 3, 1)
     assert tr["z_future"]["value"].shape == (4, 2, 3, 1)
-    assert plate_frames(tr["z"]) == [("item", -2, 3), ("store", -3, 2)]
+    assert sorted(plate_frames(tr["z"])) == [("item", -2, 3), ("store", -3, 2)]
     assert tr["latent"]["value"].shape == (2, 3, 10, 1)
 
 
@@ -140,9 +140,87 @@ def test_nested_plates_forecast_tracks_each_cell() -> None:
 def test_duplicate_plate_names_rejected() -> None:
     """Two pairs with one name would give the latent two plate frames with that name."""
     h = Horizon.from_data(empty_covariates(5), jnp.zeros((2, 3, 5, 1)))
-    plates = [("series", 2), ("series", 3)]
-    with pytest.raises(ValueError, match="distinct"):
+
+    def body() -> None:
+        plates = [("series", 2), ("series", 3)]
         markov_series(h, "z", jnp.zeros((2, 3, 1)), _ar1_transition, plates=plates)
+
+    with pytest.raises(ValueError, match="distinct"):
+        trace(seed(body, random.PRNGKey(0))).get_trace()
+
+
+@pytest.mark.parametrize(
+    ("plates", "init_shape", "multivariate", "match"),
+    [
+        ([("item", 3), ("store", 2)], (2, 3, 1), False, r"plate 'item' \(size 3\) at dim -3"),
+        ([("store", 2), ("item", 3)], (2, 3), False, r"plate 'item' \(size 3\) at dim -2"),
+        ([("store", 2), ("item", 3)], (2, 3, 2), True, r"plate 'item' \(size 3\) at dim -2"),
+    ],
+    ids=["innermost-first", "no-obs-axis", "mvn-without-size-1-axis"],
+)
+def test_step_that_does_not_fit_a_plate_names_the_plate(
+    plates: list[tuple[str, int]], init_shape: tuple[int, ...], multivariate: bool, match: str
+) -> None:
+    """A per-step batch shape that a plate cannot broadcast against names that plate."""
+    h = Horizon.from_data(empty_covariates(5), jnp.zeros((2, 3, 5, 1)))
+
+    def transition(carry: Array, _: Array | None) -> dist.Distribution:
+        if multivariate:
+            return dist.MultivariateNormal(PHI * carry, DRIFT * jnp.eye(init_shape[-1]))
+        return dist.Normal(PHI * carry, DRIFT)
+
+    def body() -> None:
+        markov_series(h, "z", jnp.zeros(init_shape), transition, plates=plates)
+
+    with pytest.raises(ValueError, match=match):
+        trace(seed(body, random.PRNGKey(0))).get_trace()
+
+
+def test_reparam_config_with_nested_plates() -> None:
+    """The decentered auxiliary site carries the per-step shape and both plate frames."""
+    h = Horizon.from_data(empty_covariates(10), jnp.zeros((2, 3, 6, 1)))
+
+    def body() -> None:
+        markov_series(
+            h,
+            "z",
+            jnp.zeros((2, 3, 1)),
+            _ar1_transition,
+            plates=[("store", 2), ("item", 3)],
+            reparam_config={"z": LocScaleReparam(0.0)},
+        )
+
+    tr = trace(seed(body, random.PRNGKey(0))).get_trace()
+    assert tr["z_decentered"]["value"].shape == (6, 2, 3, 1)
+    assert sorted(plate_frames(tr["z_decentered"])) == [("item", -2, 3), ("store", -3, 2)]
+    assert tr["z"]["type"] == "deterministic"
+    assert tr["z"]["value"].shape == (6, 2, 3, 1)
+
+
+def test_nested_plates_with_a_multivariate_step_keep_the_size_one_axis() -> None:
+    """A step with an ``obs`` event needs a trailing size-1 batch axis, which the latent keeps."""
+    t_obs, future, obs = 6, 3, 2
+    last = jnp.arange(1.0, 13.0).reshape(2, 3, 1, obs)
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        z = markov_series(
+            h,
+            "z",
+            jnp.zeros((2, 3, 1, obs)),
+            lambda carry, _: dist.MultivariateNormal(PHI * carry, 1e-6 * jnp.eye(obs)),
+            plates=[("store", 2), ("item", 3)],
+        )
+        numpyro.deterministic("latent", z)
+        predict(h, dist.Normal(0.0, 1e-3), z[..., 0, :, :])
+
+    covariates, data = empty_covariates(t_obs + future), jnp.zeros((2, 3, t_obs, obs))
+    tr = trace(seed(model, random.PRNGKey(0))).get_trace(covariates, data)
+    assert tr["latent"]["value"].shape == (2, 3, 1, t_obs + future, obs)
+    posterior = {"z": jnp.zeros((4, t_obs, 2, 3, 1, obs)).at[:, -1].set(last)}
+    preds = forecast(random.PRNGKey(1), model, posterior, data, covariates)
+    assert preds.shape == (4, 2, 3, future, obs)
+    assert jnp.allclose(preds[:, :, :, 0].mean(axis=0), PHI * last[:, :, 0], atol=0.02)
 
 
 def test_missing_obs_dim_raises_with_guidance() -> None:

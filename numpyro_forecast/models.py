@@ -295,16 +295,21 @@ type Advance[Carry] = Callable[[Carry, Array, PyTree[Array] | None], Carry]
 latent itself (the AR(1) case); a lag window keeps the last ``p`` samples."""
 
 
-@contextmanager
-def _plate_stack(plates: Sequence[tuple[str, int]]) -> Iterator[None]:
-    """Open nested ``numpyro.plate`` contexts, outermost first.
+def _plate_dims(plates: Sequence[tuple[str, int]]) -> list[int]:
+    """Return the dim of each ``plates`` pair, outermost first.
 
     The last pair goes at ``dim=-2``, next to the observation axis, and each
     earlier pair one dim further left, so every plate has its own dim.
     """
+    return [-2 - (len(plates) - 1 - k) for k in range(len(plates))]
+
+
+@contextmanager
+def _plate_stack(plates: Sequence[tuple[str, int]]) -> Iterator[None]:
+    """Open nested ``numpyro.plate`` contexts, outermost first, at `_plate_dims()`."""
     with ExitStack() as stack:
-        for k, (plate_name, size) in enumerate(plates):
-            stack.enter_context(numpyro.plate(plate_name, size, dim=-2 - (len(plates) - 1 - k)))
+        for (plate_name, size), dim in zip(plates, _plate_dims(plates), strict=True):
+            stack.enter_context(numpyro.plate(plate_name, size, dim=dim))
         yield
 
 
@@ -328,14 +333,32 @@ def _reject_enclosing_plates() -> None:
             raise ValueError(msg_text)
 
 
-def _validate_markov_step_dist(dist_t: dist.Distribution) -> None:
-    """Require a non-degenerate per-step shape with an observation axis."""
+def _validate_markov_step_dist(
+    dist_t: dist.Distribution, plates: Sequence[tuple[str, int]]
+) -> None:
+    """Require a per-step shape with an observation axis that fits every plate.
+
+    A plate of size ``size`` at ``dim`` needs a batch size of ``1`` or ``size``
+    there, the condition NumPyro's plate broadcasting checks; checking it first
+    names the plate instead of failing with a bare broadcasting error.
+    """
     if len(dist_t.event_shape) == 0 and len(dist_t.batch_shape) == 0:
         msg = (
             "markov_series requires the transition distribution to carry "
             "the trailing observation dimension; add it, e.g. loc=...[..., None]."
         )
         raise ValueError(msg)
+    batch_shape = tuple(dist_t.batch_shape)
+    for (plate_name, size), dim in zip(plates, _plate_dims(plates), strict=True):
+        if len(batch_shape) >= -dim and batch_shape[dim] not in (1, size):
+            msg = (
+                f"markov_series opens plate {plate_name!r} (size {size}) at dim {dim}, but the "
+                f"transition's batch shape {batch_shape} has size {batch_shape[dim]} there: "
+                "list plates outermost first, keep the trailing observation axis "
+                "(loc=...[..., None]), and give a transition with an obs event (a "
+                "MultivariateNormal) a trailing size-1 batch axis."
+            )
+            raise ValueError(msg)
 
 
 def _validate_markov_default_carry[Carry](carry: Carry, z: Array) -> Carry:
@@ -409,8 +432,10 @@ def markov_series[Carry](
         ``(2, 3, obs)`` per step and returns a ``(2, 3, duration, obs)``
         latent. The plate dims count from the right of the batch shape, so a
         transition with an ``obs`` event (a ``MultivariateNormal``) needs a
-        trailing size-1 batch axis. NumPyro autoguides do not support
-        ``plates`` yet (issue #294): fit such a model with MCMC.
+        trailing size-1 batch axis, which the latent keeps:
+        ``(2, 3, 1, duration, obs)``; drop it with ``z[..., 0, :, :]`` before
+        `predict()`. NumPyro autoguides do not support ``plates`` yet (issue
+        #294): fit such a model with MCMC or a hand-written guide.
     reparam_config
         Site-name -> `numpyro.infer.reparam.Reparam` mapping applied
         **inside** the scan body.
@@ -419,7 +444,8 @@ def markov_series[Carry](
     -------
     Array
         The latent over the full horizon in package layout
-        ``(*plate_batch, duration, obs)``.
+        ``(*plate_batch, duration, obs)`` (with the size-1 axis of a
+        transition with an ``obs`` event before ``duration``).
 
     Raises
     ------
@@ -429,9 +455,10 @@ def markov_series[Carry](
         data), if an ``xs`` leaf lacks the time or observation axis or does
         not span ``h.duration`` rows, if the per-step shape lacks the
         observation dimension, if an enclosing plate is detected, if two
-        ``plates`` pairs share a name, or if ``advance`` is omitted and
-        ``init_carry`` is not a single array with the shape and dtype of a
-        draw.
+        ``plates`` pairs share a name, if the transition's batch shape has a
+        size other than ``1`` or the plate size at a plate's dim, or if
+        ``advance`` is omitted and ``init_carry`` is not a single array with
+        the shape and dtype of a draw.
     """
     if h.future > 0 and h.data is None:
         msg = "markov_series requires observed data when forecasting"
@@ -454,7 +481,7 @@ def markov_series[Carry](
     def _body(site_name: str) -> Callable[[Carry, PyTree[Array] | None], tuple[Carry, Array]]:
         def body(carry: Carry, x_t: PyTree[Array] | None) -> tuple[Carry, Array]:
             dist_t = transition(carry, x_t)
-            _validate_markov_step_dist(dist_t)
+            _validate_markov_step_dist(dist_t, plates)
             ctx = (
                 numpyro.handlers.reparam(config=dict(reparam_config))
                 if reparam_config
