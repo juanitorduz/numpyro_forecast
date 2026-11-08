@@ -37,8 +37,45 @@ The means and sampled future values produced by `ssoe()`.
 [models.predict()](models.predict.md#numpyro_forecast.models.predict)  
 Register the observation and forecast sites for the model.
 
-[models.PlateName](models.PlateName.md#numpyro_forecast.models.PlateName)  
-Names of the plates the building blocks open, as `str` members.
+
+## Names
+
+
+The site, plate, dimension, variable and group names the package creates in one module and reads in another, as plain `str` constants.
+
+
+[names.Site](names.Site.md#numpyro_forecast.names.Site)  
+NumPyro site names the building blocks register and the drivers read.
+
+[names.Plate](names.Plate.md#numpyro_forecast.names.Plate)  
+Names of the plates the building blocks open.
+
+[names.Dim](names.Dim.md#numpyro_forecast.names.Dim)  
+xarray dimension names of the trees `~~numpyro_forecast.convert.to_datatree()` writes.
+
+[names.Var](names.Var.md#numpyro_forecast.names.Var)  
+Variables of the trees `~~numpyro_forecast.convert.to_datatree()` writes.
+
+[names.Group](names.Group.md#numpyro_forecast.names.Group)  
+DataTree groups that `~~numpyro_forecast.convert.to_datatree()` writes.
+
+[names.future_site()](names.future_site.md#numpyro_forecast.names.future_site)  
+Return the name of the forecast-horizon site of the in-sample site `name`.
+
+[names.FUTURE_SUFFIX](names.FUTURE_SUFFIX.md#numpyro_forecast.names.FUTURE_SUFFIX)  
+Suffix of a forecast-horizon site, see `future_site()`.
+
+[names.SAMPLE_DIMS](names.SAMPLE_DIMS.md#numpyro_forecast.names.SAMPLE_DIMS)  
+The ArviZ sample dimensions shared by the posterior groups (stored in `tree.attrs`).
+
+[names.DEFAULT_OBS_DIMS](names.DEFAULT_OBS_DIMS.md#numpyro_forecast.names.DEFAULT_OBS_DIMS)  
+Default names of the trailing `(time, obs)` axes of every stored `obs` variable.
+
+[names.DEFAULT_COVARIATE_DIMS](names.DEFAULT_COVARIATE_DIMS.md#numpyro_forecast.names.DEFAULT_COVARIATE_DIMS)  
+Default dimension names for the stored covariates (the 2-D layout).
+
+[names.RESERVED_PREDICTION_GROUPS](names.RESERVED_PREDICTION_GROUPS.md#numpyro_forecast.names.RESERVED_PREDICTION_GROUPS)  
+The groups `predictions_to_datatree()` always writes, so its `group` cannot name them.
 
 
 ## Vector autoregression

@@ -338,10 +338,6 @@
       "dev",
       "0.4.0"
     ],
-    "reference/models.PlateName.html": [
-      "dev",
-      "0.4.0"
-    ],
     "reference/models.SSOEMean.html": [
       "dev",
       "0.4.0"
@@ -371,6 +367,50 @@
       "0.4.0"
     ],
     "reference/models.ssoe.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.DEFAULT_COVARIATE_DIMS.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.DEFAULT_OBS_DIMS.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.Dim.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.FUTURE_SUFFIX.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.Group.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.Plate.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.RESERVED_PREDICTION_GROUPS.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.SAMPLE_DIMS.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.Site.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.Var.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/names.future_site.html": [
       "dev",
       "0.4.0"
     ],

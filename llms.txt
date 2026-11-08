@@ -19,7 +19,21 @@
 - [models.SSOEUpdate](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEUpdate.html)
 - [models.SSOEResult](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEResult.html)
 - [models.predict](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html)
-- [models.PlateName](https://juanitorduz.github.io/numpyro_forecast/reference/models.PlateName.html)
+
+#### Names
+> The site, plate, dimension, variable and group names the package creates in one module and reads in another, as plain `str` constants.
+
+- [names.Site](https://juanitorduz.github.io/numpyro_forecast/reference/names.Site.html)
+- [names.Plate](https://juanitorduz.github.io/numpyro_forecast/reference/names.Plate.html)
+- [names.Dim](https://juanitorduz.github.io/numpyro_forecast/reference/names.Dim.html)
+- [names.Var](https://juanitorduz.github.io/numpyro_forecast/reference/names.Var.html)
+- [names.Group](https://juanitorduz.github.io/numpyro_forecast/reference/names.Group.html)
+- [names.future_site](https://juanitorduz.github.io/numpyro_forecast/reference/names.future_site.html)
+- [names.FUTURE_SUFFIX](https://juanitorduz.github.io/numpyro_forecast/reference/names.FUTURE_SUFFIX.html)
+- [names.SAMPLE_DIMS](https://juanitorduz.github.io/numpyro_forecast/reference/names.SAMPLE_DIMS.html)
+- [names.DEFAULT_OBS_DIMS](https://juanitorduz.github.io/numpyro_forecast/reference/names.DEFAULT_OBS_DIMS.html)
+- [names.DEFAULT_COVARIATE_DIMS](https://juanitorduz.github.io/numpyro_forecast/reference/names.DEFAULT_COVARIATE_DIMS.html)
+- [names.RESERVED_PREDICTION_GROUPS](https://juanitorduz.github.io/numpyro_forecast/reference/names.RESERVED_PREDICTION_GROUPS.html)
 
 #### Vector autoregression
 > VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses.
