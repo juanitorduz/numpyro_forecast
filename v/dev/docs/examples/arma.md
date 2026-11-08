@@ -884,7 +884,7 @@ Group: /
 │           sigma    (chain, draw) float32 16kB 0.4142 0.4574 0.4017 ... 0.4904 0.4828
 │           theta    (chain, draw) float32 16kB 0.48 0.4315 0.3439 ... 0.5847 0.5859
 │       Attributes:
-│           created_at:                 2026-09-29T20:17:47.491006+00:00
+│           created_at:                 2026-11-07T19:34:00.076753+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -899,7 +899,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB -1.003 0.3323 ... -1.009
 │       Attributes:
-│           created_at:                 2026-09-29T20:17:47.770604+00:00
+│           created_at:                 2026-11-07T19:34:00.186302+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -912,7 +912,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 400B 0.6115 0.06982 ... -0.1484 -0.1441
 │       Attributes:
-│           created_at:                 2026-09-29T20:17:47.780642+00:00
+│           created_at:                 2026-11-07T19:34:00.186558+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -925,7 +925,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 400B 0.6115 0.06982 ... -0.1441
         Attributes:
-            created_at:                 2026-09-29T20:17:47.784479+00:00
+            created_at:                 2026-11-07T19:34:00.186742+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1137,7 +1137,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-29T20:17:47.491006+00:00
+2026-11-07T19:34:00.076753+00:00
 
 creation_library :  
 ArviZ
@@ -1266,14 +1266,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-1.0031041 ],[ 0.3322701 ],[-1.1028668 ],...,[-0.6507934 ],[ 0.4792844 ],[-0.9832906 ]],[[ 0.00506026],[ 0.28248143],[-0.09190209],...,[-1.138548  ],[ 0.03248955],[ 0.08032363]],[[-0.46075058],[ 0.71746314],[-0.992411  ],...,......,[-0.4696207 ],[ 0.7578929 ],[-0.55913556]],[[ 0.2329957 ],[ 0.82385576],[ 0.06221492],...,[ 0.8683266 ],[ 0.8374654 ],[-0.3545928 ]],[[-0.17210582],[ 0.9897729 ],[-0.15143986],...,[-0.5039979 ],[ 0.35494542],[-1.0086445 ]]]], shape=(4, 1000, 100, 1), dtype=float32)
+    array([[[[-1.0031041 ],[ 0.3322701 ],[-1.1028668 ],...,[-0.6507933 ],[ 0.4792844 ],[-0.9832906 ]],[[ 0.00506026],[ 0.28248146],[-0.0919021 ],...,[-1.1385479 ],[ 0.03248956],[ 0.08032361]],[[-0.46075058],[ 0.71746314],[-0.99241096],...,......,[-0.46962073],[ 0.7578929 ],[-0.55913556]],[[ 0.23299569],[ 0.82385576],[ 0.06221493],...,[ 0.8683266 ],[ 0.8374654 ],[-0.3545928 ]],[[-0.17210582],[ 0.98977286],[-0.15143986],...,[-0.5039979 ],[ 0.35494542],[-1.0086445 ]]]], shape=(4, 1000, 100, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-29T20:17:47.770604+00:00
+2026-11-07T19:34:00.186302+00:00
 
 creation_library :  
 ArviZ
@@ -1367,7 +1367,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-29T20:17:47.780642+00:00
+2026-11-07T19:34:00.186558+00:00
 
 creation_library :  
 ArviZ
@@ -1461,7 +1461,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-29T20:17:47.784479+00:00
+2026-11-07T19:34:00.186742+00:00
 
 creation_library :  
 ArviZ
@@ -1681,20 +1681,7 @@ train_crps = [r.train_metrics["crps"] for r in results]
 test_crps = [r.metrics["crps"] for r in results]
 test_cov_50 = [r.metrics["coverage_50"] for r in results]
 test_cov_94 = [r.metrics["coverage_94"] for r in results]
-
-print(f"folds: {len(results)} (split points: {split_points})")
-print(f"mean in-sample CRPS:     {np.mean(train_crps):.4f}")
-print(f"mean out-of-sample CRPS: {np.mean(test_crps):.4f}")
-print(f"mean out-of-sample 50% coverage: {np.mean(test_cov_50):.2f}  (nominal 0.50)")
-print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.94)")
 ```
-
-
-    folds: 5 (split points: [50, 60, 70, 80, 90])
-    mean in-sample CRPS:     0.2399
-    mean out-of-sample CRPS: 0.2915
-    mean out-of-sample 50% coverage: 0.58  (nominal 0.50)
-    mean out-of-sample 94% coverage: 1.00  (nominal 0.94)
 
 
 ## Forecasts per fold
@@ -1781,14 +1768,37 @@ The bands show textbook ARMA behavior. Within each fold the forecast mean decays
 
 ## CRPS per fold
 
-The per-fold CRPS quantifies the picture. The in-sample score is flat across folds, while the out-of-sample score wanders within a narrow band around it, the sampling noise you expect from just 10 observations per fold, with no widening gap between the two lines as the training window grows. That is the signature of a model that is neither over- nor under-fitting: with only four parameters and a correctly specified model class, even the first fold's 50 observations pin the predictive distribution down well.
+The figure below plots, for each split point, the in-sample CRPS of the one-step-ahead predictive and the out-of-sample CRPS of the 10-step forecast. The two scores do not measure the same thing, so we should not expect them to match. One step ahead, the predictive standard deviation is \sigma. Further out, the h-step forecast error accumulates the innovations through the ARMA weights \psi_0 = 1 and \psi_j = (\phi + \theta) \phi^{j - 1} (see Brockwell and Davis, 2016, Chapter 3):
+
+\operatorname{sd}\left(y\_{t+h} - \mathbb{E}\[y\_{t+h} \mid y\_{1:t}\]\right) = \sigma \sqrt{\textstyle\sum\_{j=0}^{h-1} \psi_j^2},
+
+which for the true \phi = 0.4 and \theta = 0.7 is 1.49 \sigma at h = 2 and settles at 1.56 \sigma from h = 4, about 1.5 \sigma on average over the 10 steps. With the posterior means \phi = 0.37 and \theta = 0.53 from the recovery table, the average is about 1.35 \sigma. For a calibrated Gaussian predictive with standard deviation s the expected CRPS is s / \sqrt{\pi} (Gneiting and Raftery, 2007), proportional to s, so we expect the out-of-sample CRPS to be about 1.35 to 1.5 times the in-sample CRPS.
 
 
 ``` python
 fig, ax = plt.subplots()
-ax.plot(split_points, train_crps, "o-", color="C0", label="in-sample CRPS")
-ax.plot(split_points, test_crps, "o-", color="C1", label="out-of-sample CRPS")
-ax.legend()
+
+# Plot each score per fold, label every marker with its value, and mark the mean.
+for values, color, label, offset in (
+    (train_crps, "C0", "in-sample CRPS", -14),  # labels below the in-sample line
+    (test_crps, "C1", "out-of-sample CRPS", 8),
+):
+    mean = np.mean(values)
+    ax.plot(split_points, values, "o-", color=color, label=label)
+    ax.axhline(mean, color=color, ls="--", lw=1, label=f"{label} mean: {mean:.3f}")
+
+    for split_point, value in zip(split_points, values, strict=True):
+        ax.annotate(
+            f"{value:.3f}",
+            (split_point, value),
+            xytext=(0, offset),
+            textcoords="offset points",
+            ha="center",
+            fontsize=10,
+            color=color,
+        )
+
+ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per cross-validation fold");
 ```
 
@@ -1798,25 +1808,44 @@ ax.set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per cross-val
 </figure>
 
 
+The out-of-sample CRPS lies above the in-sample CRPS on every fold, as the horizon argument predicts, but by less than it predicts. With a mean in-sample CRPS of 0.240, the ratios above give an expected out-of-sample CRPS of about 0.32 (posterior means) to 0.36 (true parameters), while the folds score between 0.268 and 0.334 (mean 0.289). The gap is about 0.03 for the first three folds and grows to 0.055 and 0.097 in the last two. The in-sample CRPS changes little (0.234 to 0.249), so the growth comes mostly from the out-of-sample scores. Each out-of-sample score averages only 10 correlated observations from one forecast origin, so a single test window moves it a lot, and the larger gap at the last fold is consistent with that noise. Scores below the expectation mean that the realized test values fell closer to the forecast means than a calibrated forecast expects; with 50 correlated test points this can be chance, and the coverage below points the same way.
+
+
 ## Forecast calibration
 
-Finally we check the coverage: the fraction of held-out observations that fall inside the central 50\\ and 94\\ prediction intervals of their fold's forecast. Well-calibrated forecasts should track the dashed nominal levels; points above mean the bands are too wide (under-confident), points below that they are too narrow (over-confident). With only 10 observations per fold the empirical coverage is grainy (each observation moves it by 0.1), so some wobble around the nominal levels is expected.
+Finally we check the coverage: the fraction of held-out observations that fall inside the central 50\\ and 94\\ prediction intervals of their fold's forecast. Well-calibrated forecasts should track the dashed nominal levels; points above mean the bands are too wide (under-confident), points below that they are too narrow (over-confident). With only 10 observations per fold the empirical coverage is grainy: each observation moves it by 0.1, and the 94\\ interval can only show 0.9 or 1.0 around its nominal level.
 
 A small caveat: [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the central quantile interval, while the plotted bands are ArviZ HDIs. For the near-symmetric Gaussian predictive here the two nearly coincide, so this is a faithful check of the bands shown above.
 
 
 ``` python
 fig, ax = plt.subplots()
-ax.plot(split_points, test_cov_50, "o-", color="C0", label=r"empirical $50\%$ coverage")
-ax.plot(split_points, test_cov_94, "o-", color="C1", label=r"empirical $94\%$ coverage")
-ax.axhline(0.5, color="C0", ls="--", lw=1, label=r"nominal $50\%$")
-ax.axhline(0.94, color="C1", ls="--", lw=1, label=r"nominal $94\%$")
+
+# Plot each coverage per fold against its nominal level, label every marker, and mark the mean.
+for values, nominal, color in ((test_cov_50, 0.5, "C0"), (test_cov_94, 0.94, "C1")):
+    percent = f"{nominal:.0%}".replace("%", r"\%")
+    mean = np.mean(values)
+    ax.plot(split_points, values, "o-", color=color, label=rf"empirical ${percent}$ coverage")
+    ax.axhline(nominal, color=color, ls="--", lw=1, label=rf"nominal ${percent}$")
+    ax.axhline(mean, color=color, ls=":", lw=1.5, label=rf"mean empirical ${percent}$: {mean:.2f}")
+
+    for split_point, value in zip(split_points, values, strict=True):
+        ax.annotate(
+            f"{value:.1f}",
+            (split_point, value),
+            xytext=(0, 8),
+            textcoords="offset points",
+            ha="center",
+            fontsize=10,
+            color=color,
+        )
+
 ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(
     xlabel="train/test split point",
     ylabel="coverage",
     title="Out-of-sample interval coverage per fold",
-    ylim=(0, 1.05),
+    ylim=(0, 1.12),
 );
 ```
 
@@ -1826,10 +1855,15 @@ ax.set(
 </figure>
 
 
+The 94\\ interval covers every test point in every fold, 50 of 50 in total, and the 50\\ interval covers 30 of 50 points (fold values from 0.4 to 0.8, mean 0.60). A single fold at 1.0 is the most likely result for a calibrated 94\\ interval (0.94^{10} \approx 0.54), so only the total carries information. If the 50 points were independent, a calibrated interval would cover all of them with probability 0.94^{50} \approx 0.045. The points are not independent: errors within a fold share the same forecast origin and are positively correlated, so the real probability is higher and 0.045 is a lower bound. The full coverage therefore points to intervals that are slightly too wide, or to chance on 50 correlated points, as the low out-of-sample CRPS above also suggests; five folds of 10 points cannot tell the two apart. The 50\\ coverage of 0.60 is about 1.4 binomial standard deviations above 0.5 for independent points (fewer once the within-fold correlation is counted) and is not evidence on its own.
+
+
 # References
 
 - Orduz, J. [*Notes on an ARMA(1,1) Model with NumPyro*](https://juanitorduz.github.io/arma_numpyro/). The blog post this notebook ports.
 - Hyndman, R. J., & Athanasopoulos, G. (2021). [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/), 3rd edition. Chapter 9: ARIMA models.
+- Brockwell, P. J., & Davis, R. A. (2016). [*Introduction to Time Series and Forecasting*](https://doi.org/10.1007/978-3-319-29854-2), 3rd edition. Springer. Chapter 3: ARMA models and their forecasts.
+- Gneiting, T., & Raftery, A. E. (2007). [*Strictly proper scoring rules, prediction, and estimation*](https://doi.org/10.1198/016214506000001437). Journal of the American Statistical Association, 102(477), 359-378. The CRPS and its closed form for the Gaussian.
 - NumPyro documentation: [Example: AR(2) process](https://num.pyro.ai/en/stable/examples/ar2.html).
 - The [exponential smoothing example](exponential_smoothing_state_space.md) in this documentation, which uses the same [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for an error-feedback model.
 - The [univariate forecasting example](forecasting_univariate.md) in this documentation, which introduces [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) and the per-fold evaluation workflow.
