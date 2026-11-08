@@ -393,6 +393,94 @@ def test_predict_mvn_panel_scores_each_series_jointly(wrap: bool) -> None:
     assert jnp.allclose(tr["obs_future"]["fn"].mean, expected_mean[..., None], atol=1e-4)
 
 
+@pytest.mark.parametrize(
+    ("form", "series"),
+    [
+        pytest.param("link", 3, id="link"),
+        pytest.param("to_event", 3, id="to_event"),
+        pytest.param("noise", 3, id="noise"),
+        pytest.param("link", 8, id="link_square_panel"),
+    ],
+)
+def test_forecast_rejects_a_multivariate_normal_across_series(form: str, series: int) -> None:
+    """A ``predict()`` MVN across the series raises ``MVNLayoutError`` in forecast.
+
+    Regression for #262: the MVN surgery reads the event as time, so the
+    forecast sliced the series axis and failed with a broadcasting error (or,
+    for ``series == duration``, with a wrong forecast shape). The MVN comes from
+    a bare link, a link wrapped with ``.to_event(1)``, or noise with a
+    ``(duration, series)`` zero location. The in-sample log density stays
+    correct and ``predict_in_sample`` still draws ``(sample, time, series)``.
+    """
+    t, future, num_samples = 6, 2, 2
+    cov = 0.5 * jnp.eye(series) + 0.5
+
+    def body(h: Horizon, covariates: Array) -> None:
+        level = numpyro.sample("level", dist.Normal(0.0, 1.0))
+        mu = jnp.full((h.duration, series), level)
+        if form == "noise":
+            predict(h, dist.MultivariateNormal(jnp.zeros((h.duration, series)), cov), mu)
+        elif form == "to_event":
+            predict(h, lambda m: dist.MultivariateNormal(m, cov).to_event(1), mu)
+        else:
+            predict(h, lambda m: dist.MultivariateNormal(m, cov), mu)
+
+    model = as_model(body)
+    data = 0.3 * random.normal(random.PRNGKey(0), (t, series))
+    post = {"level": jnp.zeros(num_samples)}
+    obs_log_density = log_likelihood(model, post, empty_covariates(t), data)["obs"]
+    expected = dist.MultivariateNormal(jnp.zeros(series), cov).log_prob(data).sum()
+    assert jnp.allclose(obs_log_density.reshape(num_samples, -1).sum(-1), expected, atol=1e-4)
+    in_sample = predict_in_sample(random.PRNGKey(2), model, post, empty_covariates(t))
+    assert in_sample.shape == (num_samples, t, series)
+    with pytest.raises(MVNLayoutError, match="across the series"):
+        forecast(random.PRNGKey(1), model, post, data, empty_covariates(t + future))
+
+
+class _CrossSeriesMVN(dist.MultivariateNormal):
+    """An MVN across the series with its own surgery, time at batch axis ``-1``.
+
+    It registers all three dispatchers, as `tests/test_consistency.py` requires
+    of every correlated family.
+    """
+
+
+@shift_loc.register
+def _(noise_dist: _CrossSeriesMVN, loc: Array) -> dist.Distribution:
+    return _CrossSeriesMVN(noise_dist.loc + loc, scale_tril=noise_dist.scale_tril)
+
+
+@slice_time.register
+def _(noise_dist: _CrossSeriesMVN, index: slice) -> dist.Distribution:
+    return _CrossSeriesMVN(noise_dist.loc[..., index, :], scale_tril=noise_dist.scale_tril)
+
+
+@prefix_condition.register
+def _(noise_dist: _CrossSeriesMVN, data: Array) -> dist.Distribution:
+    return slice_time(noise_dist, slice(data.shape[-2], None))
+
+
+def test_forecast_accepts_an_mvn_subclass_with_its_own_surgery() -> None:
+    """A ``MultivariateNormal`` subclass that registers its own surgery is not rejected."""
+    t, future, series = 6, 2, 3
+    cov = 0.5 * jnp.eye(series) + 0.5
+
+    def body(h: Horizon, covariates: Array) -> None:
+        level = numpyro.sample("level", dist.Normal(0.0, 1.0))
+        mu = jnp.full((h.duration, series), level)
+        predict(h, lambda m: _CrossSeriesMVN(m, cov), mu)
+
+    data = 0.3 * random.normal(random.PRNGKey(0), (t, series))
+    draws = forecast(
+        random.PRNGKey(1),
+        as_model(body),
+        {"level": jnp.zeros(2)},
+        data,
+        empty_covariates(t + future),
+    )
+    assert draws.shape == (2, future, series)
+
+
 @pytest.mark.parametrize("batch", [(), (3,), (2, 3)])
 def test_mvn_time_params_accepts_batched_layouts(batch: tuple[int, ...]) -> None:
     """A ``(*batch, time)`` loc resolves unchanged (regression: batched was rejected)."""

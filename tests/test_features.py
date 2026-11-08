@@ -94,6 +94,7 @@ def test_fourier_features_rejects_a_traced_duration() -> None:
         pytest.param((10, np.float32("nan"), 2), "period must be positive", id="numpy-nan-period"),
         pytest.param((10, 7.0, -1), "num_terms must be non-negative", id="negative-num-terms"),
         pytest.param((10, 7.0, np.int64(-1)), "num_terms must be non-negative", id="numpy-terms"),
+        pytest.param((10, 365.25, np.uint8(200)), "num_terms must be at most 182", id="uint8"),
     ],
 )
 def test_fourier_features_rejects_degenerate_values(
@@ -110,6 +111,21 @@ def test_fourier_features_accepts_an_empty_window_or_no_harmonics(
     duration: int, num_terms: int, shape: tuple[int, int]
 ) -> None:
     assert fourier_features(duration, 7.0, num_terms).shape == shape
+
+
+@pytest.mark.parametrize(
+    ("period", "largest"), [(7.0, 3), (4, 2), (365.25, 182), (1.5, 0)], ids=repr
+)
+def test_fourier_features_allows_harmonics_up_to_nyquist_only(period: float, largest: int) -> None:
+    assert fourier_features(10, period, largest).shape == (10, 2 * largest)
+    with pytest.raises(ValueError, match=rf"num_terms must be at most {largest} "):
+        fourier_features(10, period, largest + 1)
+
+
+def test_fourier_features_nyquist_harmonic_of_an_even_period() -> None:
+    design = np.asarray(fourier_features(10, 4, 2))
+    np.testing.assert_allclose(design[:, 1], 0.0, atol=1e-6)
+    np.testing.assert_allclose(design[:, 3], (-1.0) ** np.arange(10), atol=1e-6)
 
 
 def test_periodic_repeat_rejects_a_negative_duration() -> None:

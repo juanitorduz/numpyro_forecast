@@ -365,6 +365,37 @@ def test_metrics_are_vmappable() -> None:
         assert bool(jnp.all(jnp.isfinite(values)))
 
 
+@pytest.mark.parametrize(
+    "metric",
+    [
+        pytest.param(eval_mae, id="eval_mae"),
+        pytest.param(eval_rmse, id="eval_rmse"),
+        pytest.param(eval_crps, id="eval_crps"),
+        pytest.param(partial(eval_crps, batch_size=2), id="eval_crps batch_size=2"),
+        pytest.param(eval_coverage, id="eval_coverage"),
+        pytest.param(partial(eval_coverage, batch_size=2), id="eval_coverage batch_size=2"),
+        pytest.param(eval_pinball, id="eval_pinball"),
+        pytest.param(eval_interval_score, id="eval_interval_score"),
+        pytest.param(make_mase(jnp.arange(10.0)[:, None]), id="make_mase"),
+    ],
+)
+@pytest.mark.parametrize("nan_in", ["truth", "draw"])
+def test_metric_returns_nan_for_nan_input(metric: Metric, nan_in: str) -> None:
+    """One NaN truth cell or one NaN draw makes every metric NaN (NaN in, NaN out).
+
+    Coverage must not count the NaN cell as a miss, and the jitted interval
+    score must not drop a NaN truth.
+    """
+    pred = random.normal(random.PRNGKey(0), (200, 4, 1))
+    truth = jnp.zeros((4, 1))
+    if nan_in == "truth":
+        truth = truth.at[0, 0].set(jnp.nan)
+    else:
+        pred = pred.at[0, 0, 0].set(jnp.nan)
+    assert bool(jnp.isnan(metric(pred, truth)))
+    assert np.isnan(evaluate_forecast(pred, truth, metrics={"m": metric})["m"])
+
+
 def _bias(pred: Array, truth: Array) -> Array:
     """A custom metric for `evaluate_forecast()`: the mean error of the sample mean."""
     return (pred.mean(axis=0) - truth).mean()
