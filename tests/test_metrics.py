@@ -430,6 +430,13 @@ def test_require_pred_truth_shapes_rejects_truth_shape_mismatch_in_process() -> 
         require_pred_truth_shapes(jnp.zeros((20, 4, 1)), jnp.zeros((4,)))
 
 
+def test_make_mase_metric_rejects_truth_shape_mismatch_in_process() -> None:
+    """The returned closure is not type checked, so it raises ``ValueError`` under the hook."""
+    mase = make_mase(jnp.arange(10.0).reshape(10, 1), seasonality=1)
+    with pytest.raises(ValueError, match=r"pred.shape\[1:\] = \(4, 1\), got \(4,\)"):
+        mase(jnp.zeros((20, 4, 1)), jnp.arange(4.0))
+
+
 def test_require_pred_truth_shapes_rejects_scalar_pred() -> None:
     """A point forecast passed as a scalar ``pred`` has no sample axis to drop."""
     with pytest.raises(ValueError, match="sample axis first"):

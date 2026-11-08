@@ -167,18 +167,20 @@ def test_every_package_function_is_runtime_type_checked() -> None:
 
 
 def test_nested_functions_are_not_type_checked_per_call() -> None:
-    """No package function gives a nested function the import hook's decorator (issue #235).
+    """No package function gives a nested function or class the hook's decorator (issue #235).
 
-    The hook adds ``jaxtyping.jaxtyped(...)`` to every ``def``. On a nested ``def``
-    the decorator runs on every call of the enclosing function, and beartype enters
-    ``warnings.catch_warnings()`` while it decorates, which invalidates every warning
-    registry: a warning from a line that already warned shows again under the
-    ``"default"`` filter. A nested function therefore carries ``@no_type_check``
-    (see "Nested functions" in ``AGENTS.md``). The test compiles each module with the
-    hook's own loader, without reading or writing the bytecode cache, and flags every
-    function body (``CO_OPTIMIZED``, unlike a module or class body) that names the
-    hook's decorator, so it checks the effect and not the spelling of the decorator.
-    The ``hooked`` count makes sure the decorator name is still found at all.
+    The hook adds ``jaxtyping.jaxtyped(...)`` to every ``def`` and ``class``. On a
+    nested ``def`` the decorator runs on every call of the enclosing function, and
+    beartype enters ``warnings.catch_warnings()`` while it decorates, which
+    invalidates every warning registry: a warning from a line that already warned
+    shows again under the ``"default"`` filter. A nested dataclass has the same
+    effect through its ``__init__``. A nested function or class therefore carries
+    ``@no_type_check`` (see "Nested functions" in ``AGENTS.md``). The test compiles
+    each module with the hook's own loader, without reading or writing the bytecode
+    cache, and flags every function body (``CO_OPTIMIZED``, unlike a module or class
+    body) that names the hook's decorator, so it checks the effect and not the
+    spelling of the decorator. The ``hooked`` count makes sure the decorator name is
+    still found at all.
     """
     hooked, per_call = 0, []
     for info in pkgutil.walk_packages(numpyro_forecast.__path__, "numpyro_forecast."):
