@@ -13,7 +13,7 @@ from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.models import Horizon, markov_series, predict
 from numpyro_forecast.predictive import draw_posterior, forecast
-from tests.conftest import empty_covariates
+from tests.conftest import empty_covariates, plate_frames
 
 PHI = 0.85
 DRIFT = 0.08
@@ -96,6 +96,53 @@ def test_batched_plates_argument() -> None:
 
     tr = trace(seed(lambda: body(h), random.PRNGKey(0))).get_trace()
     assert tr["z"]["value"].shape == (6, 3, 1)
+
+
+def test_nested_plates_open_outermost_first() -> None:
+    """Issue #174: each pair gets its own dim, the last one at ``dim=-2``."""
+    h = Horizon.from_data(empty_covariates(10), jnp.zeros((2, 3, 6, 1)))
+
+    def body() -> None:
+        plates = [("store", 2), ("item", 3)]
+        z = markov_series(h, "z", jnp.zeros((2, 3, 1)), _ar1_transition, plates=plates)
+        numpyro.deterministic("latent", z)
+
+    tr = trace(seed(body, random.PRNGKey(0))).get_trace()
+    assert tr["z"]["value"].shape == (6, 2, 3, 1)
+    assert tr["z_future"]["value"].shape == (4, 2, 3, 1)
+    assert plate_frames(tr["z"]) == [("item", -2, 3), ("store", -3, 2)]
+    assert tr["latent"]["value"].shape == (2, 3, 10, 1)
+
+
+def test_nested_plates_forecast_tracks_each_cell() -> None:
+    """Issue #174: a store-by-item panel forecasts every cell from its own last state."""
+    t_obs, future = 6, 3
+    last = jnp.arange(1.0, 7.0).reshape(2, 3, 1)
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        z = markov_series(
+            h,
+            "z",
+            jnp.zeros((2, 3, 1)),
+            lambda carry, _: dist.Normal(PHI * carry, 1e-3),
+            plates=[("store", 2), ("item", 3)],
+        )
+        predict(h, dist.Normal(0.0, 1e-3), z)
+
+    posterior = {"z": jnp.zeros((4, t_obs, 2, 3, 1)).at[:, -1].set(last)}
+    data = jnp.zeros((2, 3, t_obs, 1))
+    preds = forecast(random.PRNGKey(0), model, posterior, data, empty_covariates(t_obs + future))
+    assert preds.shape == (4, 2, 3, future, 1)
+    assert jnp.allclose(preds[:, :, :, 0, 0].mean(axis=0), PHI * last[..., 0], atol=0.02)
+
+
+def test_duplicate_plate_names_rejected() -> None:
+    """Two pairs with one name would give the latent two plate frames with that name."""
+    h = Horizon.from_data(empty_covariates(5), jnp.zeros((2, 3, 5, 1)))
+    plates = [("series", 2), ("series", 3)]
+    with pytest.raises(ValueError, match="distinct"):
+        markov_series(h, "z", jnp.zeros((2, 3, 1)), _ar1_transition, plates=plates)
 
 
 def test_missing_obs_dim_raises_with_guidance() -> None:

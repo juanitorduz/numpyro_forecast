@@ -297,10 +297,14 @@ latent itself (the AR(1) case); a lag window keeps the last ``p`` samples."""
 
 @contextmanager
 def _plate_stack(plates: Sequence[tuple[str, int]]) -> Iterator[None]:
-    """Open nested ``numpyro.plate`` contexts (innermost last)."""
+    """Open nested ``numpyro.plate`` contexts, outermost first.
+
+    The last pair goes at ``dim=-2``, next to the observation axis, and each
+    earlier pair one dim further left, so every plate has its own dim.
+    """
     with ExitStack() as stack:
-        for plate_name, size in plates:
-            stack.enter_context(numpyro.plate(plate_name, size, dim=-2))
+        for k, (plate_name, size) in enumerate(plates):
+            stack.enter_context(numpyro.plate(plate_name, size, dim=-2 - (len(plates) - 1 - k)))
         yield
 
 
@@ -398,7 +402,15 @@ def markov_series[Carry](
         ``(p, obs)`` window here.
     plates
         ``(name, size)`` pairs opened **inside** the scan body around the sample
-        statement (the only placement NumPyro supports for scan + plate).
+        statement (the only placement NumPyro supports for scan + plate),
+        outermost first and with distinct names. The last pair goes at
+        ``dim=-2`` and each earlier pair one dim to its left, so for an
+        elementwise transition ``[("store", 2), ("item", 3)]`` draws
+        ``(2, 3, obs)`` per step and returns a ``(2, 3, duration, obs)``
+        latent. The plate dims count from the right of the batch shape, so a
+        transition with an ``obs`` event (a ``MultivariateNormal``) needs a
+        trailing size-1 batch axis. NumPyro autoguides do not support
+        ``plates`` yet (issue #294): fit such a model with MCMC.
     reparam_config
         Site-name -> `numpyro.infer.reparam.Reparam` mapping applied
         **inside** the scan body.
@@ -416,14 +428,19 @@ def markov_series[Carry](
         `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
         data), if an ``xs`` leaf lacks the time or observation axis or does
         not span ``h.duration`` rows, if the per-step shape lacks the
-        observation dimension, if an enclosing plate is detected, or if
-        ``advance`` is omitted and ``init_carry`` is not a single array with
-        the shape and dtype of a draw.
+        observation dimension, if an enclosing plate is detected, if two
+        ``plates`` pairs share a name, or if ``advance`` is omitted and
+        ``init_carry`` is not a single array with the shape and dtype of a
+        draw.
     """
     if h.future > 0 and h.data is None:
         msg = "markov_series requires observed data when forecasting"
         raise ValueError(msg)
     _reject_enclosing_plates()
+    plate_names = [plate_name for plate_name, _ in plates]
+    if len(set(plate_names)) < len(plate_names):
+        msg = f"markov_series plates need distinct names; got {plate_names}"
+        raise ValueError(msg)
     _validate_xs_leaves(
         h,
         xs,
