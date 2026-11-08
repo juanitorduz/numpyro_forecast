@@ -356,7 +356,12 @@ So with these metrics a window with a NaN gets NaN for every metric, and
 dropping the NaN rows of a backtest table drops that whole window. To score a
 test window with missing observations, drop the missing cells before scoring,
 for example ``pred[:, mask]`` and ``truth[mask]`` with
-``mask = ~jnp.isnan(truth)``. This covers scoring only: in a backtest the
+``mask = ~jnp.isnan(truth)``. In `backtest()`, pass
+``transform=lambda p, t: (p[:, ~jnp.isnan(t)], t[~jnp.isnan(t)])`` to score
+each window on its observed cells. `backtest_vectorized()` has no
+``transform``, and a metric that masks this way raises
+`~~numpyro_forecast.exceptions.VectorizedMetricError` because the mask gives a
+value-dependent shape under ``vmap``. This covers scoring only: in a backtest the
 model itself must handle a gap that falls in a later training window. The rule
 covers NaN only: an infinite truth value or draw gives a finite, infinite or
 NaN score depending on the metric.
