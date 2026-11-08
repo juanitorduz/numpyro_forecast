@@ -1059,7 +1059,8 @@ def _require_mvn_over_time(full_dist: dist.Distribution) -> None:
         'h.future > 0, sample "obs_future" from '
         "dist.MultivariateNormal(mu[..., h.t_obs :, :], cov) and record it with "
         'numpyro.deterministic("forecast", ...). Slice a time-varying cov along its time '
-        "axis too, cov[..., : h.t_obs, :, :]."
+        'axis too: cov[..., : h.t_obs, :, :] in "obs" and cov[..., h.t_obs :, :, :] in '
+        '"obs_future".'
     )
     raise MVNLayoutError(msg)
 
