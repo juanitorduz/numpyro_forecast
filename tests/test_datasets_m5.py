@@ -1,8 +1,10 @@
 """Tests for the M5 loader on a tiny synthetic copy of the competition files."""
 
+import errno
 import hashlib
 import io
 import json
+import os
 import stat
 import zipfile
 from pathlib import Path
@@ -129,7 +131,7 @@ def test_load_m5_rejects_non_https_url(tmp_path: Path, monkeypatch: pytest.Monke
 def test_load_m5_redoes_an_interrupted_extraction(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An extraction that fails in the last member writes no marker and is redone in full."""
+    """An extraction that fails in the last member leaves an in-progress marker and is redone."""
     calls = _serve(monkeypatch, _synthetic_archive())
     original = zipfile.ZipFile.extractall
 
@@ -211,6 +213,8 @@ def test_load_m5_reads_a_read_only_cache_without_marker(
     _forbid_extraction(monkeypatch)
     tmp_path.chmod(0o555)
     try:
+        if os.access(tmp_path, os.W_OK):
+            pytest.skip("the folder stays writable after chmod (running as root)")
         assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
         assert load_m5(cache_dir=tmp_path).weights.height == 1
     finally:
@@ -332,4 +336,28 @@ def test_load_m5_redoes_an_extraction_cut_before_the_data_reached_the_disk(
         json.dumps({"digest": datasets.M5_SHA256, "extracting": True})
     )
     assert load_m5(cache_dir=tmp_path).weights.height == 1
+    assert calls == []
+
+
+def test_load_m5_removes_a_marker_that_failed_to_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A marker write that fails while a cache is adopted leaves no marker behind."""
+    payload = _synthetic_archive()
+    calls = _serve(monkeypatch, payload)
+    _write_unmarked_cache(tmp_path, payload)
+    _forbid_extraction(monkeypatch)
+    original_dump = json.dump
+
+    def failing_dump(obj: object, file: io.TextIOBase) -> None:
+        file.write('{"digest"')
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(json, "dump", failing_dump)
+    assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
+    assert not (tmp_path / M5_MARKER).exists()
+
+    monkeypatch.setattr(json, "dump", original_dump)
+    assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
+    assert json.loads((tmp_path / M5_MARKER).read_text())["digest"] == datasets.M5_SHA256
     assert calls == []
