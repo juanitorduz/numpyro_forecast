@@ -145,6 +145,7 @@ def _chunked_cell_metric(
     pred: "Real[Array, ' sample *batch'] | Real[np.ndarray, ' sample *batch']",
     truth: "Real[Array, ' *batch'] | Real[np.ndarray, ' *batch']",
     batch_size: int,
+    mean_dtype: type[np.floating] | None = None,
 ) -> Array:
     """Average a per-cell metric kernel over fixed-size cell chunks.
 
@@ -174,6 +175,9 @@ def _chunked_cell_metric(
         Ground-truth values (matching ``pred`` without the sample axis).
     batch_size
         Number of flattened data cells per device pass.
+    mean_dtype
+        NumPy dtype of the host mean of the per-cell values; ``None`` (default)
+        uses the dtype of the values.
 
     Returns
     -------
@@ -193,7 +197,7 @@ def _chunked_cell_metric(
             for idx in indices
         ]
     values = np.concatenate(chunks, axis=0)[:n_cells]
-    return jnp.asarray(values.mean())
+    return jnp.asarray(values.mean(dtype=mean_dtype))
 
 
 def eval_crps(
@@ -254,11 +258,19 @@ def eval_crps(
 
 @partial(jax.jit, static_argnames=("alpha",))
 def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
-    """Per-cell indicator of the truth falling inside the central ``alpha`` interval."""
+    """Per-cell coverage indicator: 1.0 inside the central ``alpha`` interval, else 0.0.
+
+    The indicator is NaN where ``truth`` is NaN or a draw of the cell is NaN
+    (which makes its quantiles NaN). float32 holds 0, 1 and NaN exactly, and
+    its mean equals the mean of the boolean indicator, also with x64 on.
+    `eval_coverage()` averages the chunked path in float64 on the host, so the
+    count stays exact beyond the 2**24 cells a float32 sum can count.
+    """
     tail = (1.0 - alpha) / 2.0
     lo = jnp.quantile(pred, tail, axis=0)
     hi = jnp.quantile(pred, 1.0 - tail, axis=0)
-    return (truth >= lo) & (truth <= hi)
+    inside = ((truth >= lo) & (truth <= hi)).astype(jnp.float32)
+    return jnp.where(jnp.isnan(truth) | jnp.isnan(lo) | jnp.isnan(hi), jnp.nan, inside)
 
 
 def eval_coverage(
@@ -302,7 +314,8 @@ def eval_coverage(
     -------
     Array
         The fraction of ground truth inside the central ``alpha`` interval, as
-        a scalar array.
+        a scalar array. NaN when a ``truth`` value or a forecast draw is NaN (see
+        `DEFAULT_METRICS`), instead of counting that cell as a miss.
 
     Raises
     ------
@@ -318,7 +331,11 @@ def eval_coverage(
         return _coverage_indicator(float_view(pred), float_view(truth), alpha=alpha).mean()
     kernel = partial(_coverage_indicator, alpha=alpha)
     return _chunked_cell_metric(
-        kernel, cast("Array | np.ndarray", pred), cast("Array | np.ndarray", truth), batch_size
+        kernel,
+        cast("Array | np.ndarray", pred),
+        cast("Array | np.ndarray", truth),
+        batch_size,
+        mean_dtype=np.float64,
     )
 
 
@@ -328,7 +345,27 @@ DEFAULT_METRICS: dict[str, Metric] = {
     "crps": eval_crps,
     "coverage": eval_coverage,
 }
-"""Default metrics used by `backtest()` and `backtest_vectorized()`."""
+"""Default metrics used by `backtest()` and `backtest_vectorized()`.
+
+`eval_mae()`, `eval_rmse()`, `eval_crps()`, `eval_coverage()`,
+`~~numpyro_forecast.metrics.eval_pinball()`,
+`~~numpyro_forecast.metrics.eval_interval_score()` and the metric of
+`~~numpyro_forecast.metrics.make_mase()` return NaN when a ``truth`` value or
+a forecast draw is NaN, for example a missing observation in the test window.
+So with these metrics a window with a NaN gets NaN for every metric, and
+dropping the NaN rows of a backtest table drops that whole window. To score a
+test window with missing observations, drop the missing cells before scoring,
+for example ``pred[:, mask]`` and ``truth[mask]`` with
+``mask = ~jnp.isnan(truth)``. In `backtest()`, pass
+``transform=lambda p, t: (p[:, ~jnp.isnan(t)], t[~jnp.isnan(t)])`` to score
+each window on its observed cells. `backtest_vectorized()` has no
+``transform``, and a metric that masks this way raises
+`~~numpyro_forecast.exceptions.VectorizedMetricError` because the mask gives a
+value-dependent shape under ``vmap``. This covers scoring only: in a backtest the
+model itself must handle a gap that falls in a later training window. The rule
+covers NaN only: an infinite truth value or draw gives a finite, infinite or
+NaN score depending on the metric.
+"""
 
 
 def evaluate_forecast(

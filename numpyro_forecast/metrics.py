@@ -167,8 +167,11 @@ def _eval_interval_score(
     lo = jnp.quantile(pred, tail, axis=0)
     hi = jnp.quantile(pred, 1.0 - tail, axis=0)
     penalty = 2.0 / (1.0 - alpha)
-    below = penalty * (lo - truth) * (truth < lo)
-    above = penalty * (truth - hi) * (truth > hi)
+    # A comparison with NaN is False, so a NaN truth or quantile takes the
+    # penalty branch and the NaN reaches the mean. A multiply by the mask
+    # (truth < lo) compiles to a select that sets a NaN cell to zero.
+    below = jnp.where(truth >= lo, 0.0, penalty * (lo - truth))
+    above = jnp.where(truth <= hi, 0.0, penalty * (truth - hi))
     return (hi - lo + below + above).mean()
 
 
@@ -204,7 +207,8 @@ def eval_interval_score(
     Returns
     -------
     Array
-        The mean interval score as a scalar array.
+        The mean interval score as a scalar array. NaN when a ``truth`` value
+        or a forecast draw is NaN (see `~~numpyro_forecast.evaluate.DEFAULT_METRICS`).
 
     Raises
     ------
