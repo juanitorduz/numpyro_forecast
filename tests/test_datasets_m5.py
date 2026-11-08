@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from numpyro_forecast import datasets
-from numpyro_forecast.datasets import M5_DAYS, M5_FILES, load_m5
+from numpyro_forecast.datasets import M5_DAYS, M5_FILES, M5_MARKER, load_m5
 
 pytest.importorskip("polars")
 
@@ -56,6 +56,28 @@ def _synthetic_files() -> dict[str, str]:
 def _write_files(directory: Path) -> None:
     for name, text in _synthetic_files().items():
         (directory / name).write_text(text)
+    (directory / M5_MARKER).write_text(datasets.M5_SHA256)
+
+
+def _synthetic_archive() -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, text in _synthetic_files().items():
+            archive.writestr(name, text)
+    return buffer.getvalue()
+
+
+def _serve(monkeypatch: pytest.MonkeyPatch, payload: bytes) -> list[str]:
+    """Pin the digest of ``payload`` and serve it as the download; return the fetched URLs."""
+    calls = []
+
+    def fake_urlopen(url: str, timeout: float) -> io.BytesIO:
+        calls.append(url)
+        return io.BytesIO(payload)
+
+    monkeypatch.setattr(datasets.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(datasets, "M5_SHA256", hashlib.sha256(payload).hexdigest())
+    return calls
 
 
 def test_load_m5_reads_extracted_files(tmp_path: Path) -> None:
@@ -86,11 +108,7 @@ def test_load_m5_downloads_verifies_and_unpacks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The archive is fetched once, checked against its digest and unpacked; a bad digest is discarded."""
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w") as archive:
-        for name, text in _synthetic_files().items():
-            archive.writestr(name, text)
-    payload = buffer.getvalue()
+    payload = _synthetic_archive()
     calls = []
 
     def fake_urlopen(url: str, timeout: float) -> io.BytesIO:
@@ -117,3 +135,81 @@ def test_load_m5_rejects_non_https_url(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(datasets, "M5_URL", "file:///etc/passwd")
     with pytest.raises(ValueError, match="https"):
         load_m5(cache_dir=tmp_path)
+
+
+def test_load_m5_redoes_an_interrupted_extraction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An extraction that fails in the last member writes no marker and is redone in full."""
+    calls = _serve(monkeypatch, _synthetic_archive())
+    original = zipfile.ZipFile.extractall
+
+    def failing_extractall(
+        self: zipfile.ZipFile, path: str | Path, members: tuple[str, ...]
+    ) -> None:
+        original(self, path, members=members[:-1])
+        Path(path, members[-1]).write_text("Level_id,Agg_Level_1\n")
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", failing_extractall)
+    with pytest.raises(OSError, match="No space left"):
+        load_m5(cache_dir=tmp_path)
+    assert [path.name for path in tmp_path.iterdir()] == ["m5.zip"]
+
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", original)
+    m5 = load_m5(cache_dir=tmp_path)
+    assert m5.weights.height == 1
+    assert (tmp_path / M5_MARKER).read_text() == datasets.M5_SHA256
+    assert len(calls) == 1
+
+
+def test_load_m5_reextracts_files_without_a_matching_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Truncated files with no marker, or a marker of another digest, are replaced from the archive."""
+    payload = _synthetic_archive()
+    calls = _serve(monkeypatch, payload)
+    (tmp_path / "m5.zip").write_bytes(payload)
+    for name, text in _synthetic_files().items():
+        (tmp_path / name).write_text("".join(text.splitlines(keepends=True)[:2]))
+    assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
+
+    (tmp_path / "sales_train_evaluation.csv").write_text("truncated\n")
+    (tmp_path / M5_MARKER).write_text("0" * 64)
+    assert load_m5(cache_dir=tmp_path).sales.shape == (M5_DAYS, 2)
+    assert calls == []
+
+
+def test_load_m5_replaces_an_archive_with_another_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ``m5.zip`` already in the cache is verified and downloaded again on a mismatch."""
+    payload = _synthetic_archive()
+    calls = _serve(monkeypatch, payload)
+    with zipfile.ZipFile(tmp_path / "m5.zip", "w") as archive:
+        for name in M5_FILES:
+            archive.writestr(name, "col\nNOT THE PINNED ARCHIVE\n")
+    m5 = load_m5(cache_dir=tmp_path)
+    assert m5.sales.shape == (M5_DAYS, 2)
+    assert (tmp_path / "m5.zip").read_bytes() == payload
+    assert len(calls) == 1
+
+
+def test_load_m5_removes_the_partial_download_on_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A download that fails mid-read leaves neither the ``.part`` file nor the archive."""
+    payload = _synthetic_archive()
+
+    class FailingResponse(io.BytesIO):
+        def read(self, size: int | None = -1) -> bytes:
+            if self.tell() > len(payload) // 2:
+                raise TimeoutError("The read operation timed out")
+            return super().read(1_024)
+
+    monkeypatch.setattr(
+        datasets.urllib.request, "urlopen", lambda url, timeout: FailingResponse(payload)
+    )
+    with pytest.raises(TimeoutError):
+        load_m5(cache_dir=tmp_path)
+    assert list(tmp_path.iterdir()) == []

@@ -9,7 +9,9 @@ the package convention (time at axis ``-2``).
 
 import hashlib
 import importlib.resources
+import os
 import shutil
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -176,6 +178,8 @@ M5_FILES = (
 M5_KEYS = ("item_id", "dept_id", "cat_id", "store_id", "state_id")
 M5_DAYS = 1_969
 """Training days 1 to 1,941 followed by the 28 evaluation days."""
+M5_MARKER = ".complete"
+"""Name of the file that marks a complete M5 extraction; it holds the archive digest."""
 DOWNLOAD_TIMEOUT = 60.0
 """Seconds a single socket read may block before a dataset download is abandoned."""
 
@@ -217,27 +221,23 @@ def _default_cache_dir() -> Path:
 
 
 def _sha256(path: Path) -> str:
-    """Return the SHA-256 digest of a file as a hex string."""
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    """Return the SHA-256 digest of a file as a hex string, read in chunks."""
+    with path.open("rb") as file:
+        return hashlib.file_digest(file, "sha256").hexdigest()
 
 
-def _ensure_m5_files(cache_dir: str | Path | None, url: str, digest: str) -> Path:
-    """Return the directory with the M5 files, downloading and unpacking the archive once.
+def _download_m5(archive: Path, url: str, digest: str) -> None:
+    """Download the M5 archive to ``archive`` once its SHA-256 digest matches ``digest``.
 
-    The archive streams into a ``.part`` file and moves into place only when its SHA-256
-    digest matches, so an interrupted download never poisons the cache. The timeout
-    bounds each socket read, not the whole transfer.
+    The archive streams into a ``.part`` file, which is removed on any error, and moves
+    into place only when its digest matches. The timeout bounds each socket read, not
+    the whole transfer.
     """
-    directory = _default_cache_dir() / "m5" if cache_dir is None else Path(cache_dir)
-    directory.mkdir(parents=True, exist_ok=True)
-    if all((directory / name).exists() for name in M5_FILES):
-        return directory
-    archive = directory / "m5.zip"
-    if not archive.exists():
-        if not url.startswith("https://"):
-            msg = f"the M5 archive URL must use https, got {url!r}"
-            raise ValueError(msg)
-        partial = archive.with_name(archive.name + ".part")
+    if not url.startswith("https://"):
+        msg = f"the M5 archive URL must use https, got {url!r}"
+        raise ValueError(msg)
+    partial = archive.with_name(archive.name + ".part")
+    try:
         with (
             urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response,  # noqa: S310
             partial.open("wb") as target,
@@ -245,14 +245,43 @@ def _ensure_m5_files(cache_dir: str | Path | None, url: str, digest: str) -> Pat
             shutil.copyfileobj(response, target)
         actual = _sha256(partial)
         if actual != digest:
-            partial.unlink()
             msg = (
                 f"unexpected digest {actual} of the downloaded M5 archive; the file was discarded"
             )
             raise ValueError(msg)
         partial.replace(archive)
-    with zipfile.ZipFile(archive) as archive_file:
-        archive_file.extractall(directory, members=M5_FILES)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def _ensure_m5_files(cache_dir: str | Path | None, url: str, digest: str) -> Path:
+    """Return the directory with the M5 files, downloading and unpacking the archive once.
+
+    The cache is complete only when the marker file ``M5_MARKER`` holds ``digest``: the
+    file names alone cannot tell a partial extraction from a complete one. Otherwise an
+    ``m5.zip`` already in the directory is checked against ``digest`` (and downloaded
+    again on a mismatch), its members are extracted into a temporary folder in the same
+    directory and moved into place one by one, and the marker is written last. An
+    interrupted extraction therefore leaves no marker and is redone on the next call, and
+    a new pinned digest also triggers a fresh extraction.
+    """
+    directory = _default_cache_dir() / "m5" if cache_dir is None else Path(cache_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    marker = directory / M5_MARKER
+    if marker.is_file() and marker.read_text().strip() == digest:
+        return directory
+    archive = directory / "m5.zip"
+    if archive.exists() and _sha256(archive) != digest:
+        archive.unlink()
+    if not archive.exists():
+        _download_m5(archive, url, digest)
+    marker.unlink(missing_ok=True)
+    with tempfile.TemporaryDirectory(dir=directory, prefix=".extract-") as staging:
+        with zipfile.ZipFile(archive) as archive_file:
+            archive_file.extractall(staging, members=M5_FILES)
+        for name in M5_FILES:
+            os.replace(Path(staging) / name, directory / name)
+    marker.write_text(digest)
     return directory
 
 
@@ -264,7 +293,10 @@ def load_m5(cache_dir: str | Path | None = None) -> M5Data:
     (days 1 to 1,941) and the 28 evaluation days released after the competition, the
     calendar with the events and the SNAP days, the weekly shelf prices, and the official
     evaluation weights. The 50 MB archive is downloaded once into ``cache_dir`` (default
-    ``~/.cache/numpyro_forecast/m5``) and checked against a pinned SHA-256 digest.
+    ``~/.cache/numpyro_forecast/m5``) and checked against a pinned SHA-256 digest, also
+    when an ``m5.zip`` is already in ``cache_dir``. The files are read from the cache only
+    after a full extraction of the verified archive, so an interrupted download or
+    extraction is redone on the next call.
 
     Reading needs polars (``pip install numpyro_forecast[dataframes]``).
 
