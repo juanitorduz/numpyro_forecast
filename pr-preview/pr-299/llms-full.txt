@@ -4110,7 +4110,9 @@ evaluation weights. The 50 MB archive is downloaded once into ``cache_dir`` (def
 ``~/.cache/numpyro_forecast/m5``) and checked against a pinned SHA-256 digest, also
 when an ``m5.zip`` is already in ``cache_dir``. The files are read from the cache only
 after a full extraction of the verified archive, so an interrupted download or
-extraction is redone on the next call.
+extraction is redone on the next call. A cache folder written before this check
+existed has no completion marker: the first call extracts the files again from its
+``m5.zip``, or downloads the archive again when ``m5.zip`` was removed.
 
 Reading needs polars (``pip install numpyro_forecast[dataframes]``).
 
