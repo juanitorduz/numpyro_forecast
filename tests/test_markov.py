@@ -137,13 +137,22 @@ def test_nested_plates_forecast_tracks_each_cell() -> None:
     assert jnp.allclose(preds[:, :, :, 0, 0].mean(axis=0), PHI * last[..., 0], atol=0.02)
 
 
-def test_duplicate_plate_names_rejected() -> None:
+@pytest.mark.parametrize(
+    ("plates", "init_shape"),
+    [
+        ([("series", 2), ("series", 3)], (2, 3, 1)),
+        ([("series", 2), ("store", 4), ("series", 3)], (2, 4, 3, 1)),
+    ],
+    ids=["adjacent", "non-adjacent"],
+)
+def test_duplicate_plate_names_rejected(
+    plates: list[tuple[str, int]], init_shape: tuple[int, ...]
+) -> None:
     """Two pairs with one name would give the latent two plate frames with that name."""
-    h = Horizon.from_data(empty_covariates(5), jnp.zeros((2, 3, 5, 1)))
+    h = Horizon.from_data(empty_covariates(5), jnp.zeros((5, 1)))
 
     def body() -> None:
-        plates = [("series", 2), ("series", 3)]
-        markov_series(h, "z", jnp.zeros((2, 3, 1)), _ar1_transition, plates=plates)
+        markov_series(h, "z", jnp.zeros(init_shape), _ar1_transition, plates=plates)
 
     with pytest.raises(ValueError, match="distinct"):
         trace(seed(body, random.PRNGKey(0))).get_trace()
@@ -154,15 +163,16 @@ def test_duplicate_plate_names_rejected() -> None:
     [
         ([("item", 3), ("store", 2)], (2, 3, 1), False, r"plate 'item' \(size 3\) at dim -3"),
         ([("store", 2), ("item", 3)], (2, 3), False, r"plate 'item' \(size 3\) at dim -2"),
-        ([("store", 2), ("item", 3)], (2, 3, 2), True, r"plate 'item' \(size 3\) at dim -2"),
+        ([("store", 2), ("item", 3)], (2, 3, 2), True, r"size-1 batch axis.*shape \(2, 3\)"),
+        ([("item", 3)], (3, 2), True, r"size-1 batch axis.*shape \(3,\)"),
     ],
-    ids=["innermost-first", "no-obs-axis", "mvn-without-size-1-axis"],
+    ids=["innermost-first", "no-obs-axis", "mvn-without-size-1-axis", "mvn-one-plate"],
 )
-def test_step_that_does_not_fit_a_plate_names_the_plate(
+def test_step_that_does_not_fit_the_plates_is_rejected(
     plates: list[tuple[str, int]], init_shape: tuple[int, ...], multivariate: bool, match: str
 ) -> None:
-    """A per-step batch shape that a plate cannot broadcast against names that plate."""
-    h = Horizon.from_data(empty_covariates(5), jnp.zeros((2, 3, 5, 1)))
+    """A step layout the plates would break or silently re-shape raises with guidance."""
+    h = Horizon.from_data(empty_covariates(5), jnp.zeros((5, 1)))
 
     def transition(carry: Array, _: Array | None) -> dist.Distribution:
         if multivariate:
@@ -174,6 +184,28 @@ def test_step_that_does_not_fit_a_plate_names_the_plate(
 
     with pytest.raises(ValueError, match=match):
         trace(seed(body, random.PRNGKey(0))).get_trace()
+
+
+@pytest.mark.parametrize(
+    ("plates", "init_shape", "store_shared"),
+    [([("store", 2), ("item", 3)], (2, 3, 1), True), ([("series", 1)], (4, 1), False)],
+    ids=["size-1-batch-axis", "size-1-plate"],
+)
+def test_step_that_broadcasts_against_the_plates_is_accepted(
+    plates: list[tuple[str, int]], init_shape: tuple[int, ...], store_shared: bool
+) -> None:
+    """A size-1 batch axis under a plate, or any batch size under a size-1 plate, broadcasts."""
+    h = Horizon.from_data(empty_covariates(5), jnp.zeros((5, 1)))
+
+    def transition(carry: Array, _: Array | None) -> dist.Distribution:
+        loc = carry.mean(axis=-3, keepdims=True) if store_shared else carry
+        return dist.Normal(PHI * loc, DRIFT)
+
+    def body() -> None:
+        markov_series(h, "z", jnp.zeros(init_shape), transition, plates=plates)
+
+    tr = trace(seed(body, random.PRNGKey(0))).get_trace()
+    assert tr["z"]["value"].shape == (5, *init_shape)
 
 
 def test_reparam_config_with_nested_plates() -> None:
