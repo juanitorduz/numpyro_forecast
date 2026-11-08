@@ -13,7 +13,7 @@ groups are then assembled with `xarray.DataTree.from_dict()`.
 """
 
 from collections.abc import Collection, Mapping, Sequence
-from typing import Any, cast, get_args
+from typing import Any, cast, get_args, no_type_check
 
 import arviz_base
 import jax
@@ -274,6 +274,7 @@ def _require_posterior_names_match_sites(
     """
     sites: dict[str, tuple[str, bool]] = {}
 
+    @no_type_check
     def record_sites(key: Array, model_covariates: Array, draw: Mapping[str, Array]) -> None:
         def posterior_value(msg: dict[str, Any]) -> Array | None:
             # numpyro.infer.Predictive substitutes every site but the deterministic ones.

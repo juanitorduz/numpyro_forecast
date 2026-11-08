@@ -2,10 +2,12 @@
 
 import ast
 import importlib
+import importlib.machinery
 import inspect
 import pkgutil
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import jax
@@ -162,6 +164,42 @@ def test_every_package_function_is_runtime_type_checked() -> None:
             if not hasattr(obj, "__wrapped__"):
                 unchecked.append(f"{info.name}.{name}")
     assert not unchecked, f"not wrapped by the jaxtyping import hook: {unchecked}"
+
+
+def test_nested_functions_are_not_type_checked_per_call() -> None:
+    """No package function gives a nested function or class the hook's decorator (issue #235).
+
+    The hook adds ``jaxtyping.jaxtyped(...)`` to every ``def`` and ``class``. On a
+    nested ``def`` the decorator runs on every call of the enclosing function, and
+    beartype enters ``warnings.catch_warnings()`` while it decorates, which
+    invalidates every warning registry: a warning from a line that already warned
+    shows again under the ``"default"`` filter. A nested dataclass has the same
+    effect through its ``__init__``. A nested function or class therefore carries
+    ``@no_type_check`` (see "Nested functions" in ``AGENTS.md``). The test compiles
+    each module with the hook's own loader, without reading or writing the bytecode
+    cache, and flags every function body (``CO_OPTIMIZED``, unlike a module or class
+    body) that names the hook's decorator, so it checks the effect and not the
+    spelling of the decorator. The ``hooked`` count makes sure the decorator name is
+    still found at all.
+    """
+    hooked, per_call = 0, []
+    for info in pkgutil.walk_packages(numpyro_forecast.__path__, "numpyro_forecast."):
+        spec = importlib.import_module(info.name).__spec__
+        assert spec is not None
+        loader = spec.loader
+        assert isinstance(loader, importlib.machinery.SourceFileLoader)
+        path = loader.get_filename(info.name)
+        stack = [loader.source_to_code(loader.get_data(path), path)]
+        while stack:
+            code = stack.pop()
+            stack.extend(const for const in code.co_consts if isinstance(const, types.CodeType))
+            if "jaxtyped" not in code.co_names:
+                continue
+            hooked += 1
+            if code.co_flags & inspect.CO_OPTIMIZED:
+                per_call.append(f"{info.name}: {code.co_qualname}")
+    assert hooked
+    assert not per_call, f"functions that decorate a nested def or class on every call: {per_call}"
 
 
 def test_import_hook_follows_the_pep484_numeric_tower() -> None:

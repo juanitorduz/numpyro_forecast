@@ -28,7 +28,7 @@ draw array. The ``device`` contract is documented once, on
 """
 
 from collections.abc import Callable, Mapping
-from typing import cast
+from typing import cast, no_type_check
 
 import jax
 import jax.numpy as jnp
@@ -238,6 +238,7 @@ def draw_posterior(
     is_delta = isinstance(guide, AutoDelta)
     sample = None if is_delta else _jitted_sample_posterior(guide)
 
+    @no_type_check
     def draw_fn(key: Array, n: int) -> dict[str, Array]:
         if sample is None:
             point = guide.sample_posterior(key, params)
@@ -391,6 +392,7 @@ def _compiled_predictive(
         The jitted ``(rng_key, posterior, *model_args) -> draws`` function.
     """
 
+    @no_type_check
     def run(
         rng_key: Array, posterior: Mapping[str, Array | np.ndarray], *model_args: Array
     ) -> Array:
@@ -637,6 +639,7 @@ def forecast(
     steps = covariates.shape[-2] - data.shape[-2]
     predictive = _compiled_predictive(model, "forecast", parallel=parallel)
 
+    @no_type_check
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         shape = jax.eval_shape(predictive, key, post, covariates, data).shape
         _require_time_steps(
@@ -778,6 +781,7 @@ def predict_in_sample(
     # No data argument: the model must see ``data=None`` to sample ``obs``.
     predictive = _compiled_predictive(model, "obs", parallel=parallel)
 
+    @no_type_check
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         _require_time_steps(
             jax.eval_shape(predictive, key, post, covariates).shape,

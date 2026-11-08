@@ -5,6 +5,7 @@ pinball (quantile) loss, the Winkler interval score, and a MASE metric factory.
 """
 
 from functools import partial
+from typing import no_type_check
 
 import jax
 import jax.numpy as jnp
@@ -296,6 +297,7 @@ def make_mase(
         )
         raise ValueError(msg)
 
+    @no_type_check
     def mase(pred: Real[ArrayLike, " sample *batch"], truth: Real[ArrayLike, " *batch"]) -> Array:
         """MASE for one ``(pred, truth)`` pair, scaled by the enclosing ``train_data``."""
         require_pred_truth_shapes(pred, truth)

@@ -12,6 +12,12 @@ ftol=1)``, a ``BacktestResult`` built by hand with ``walltime=0``), and a
 a ``float`` still fails an ``int`` hint, so a count is never truncated
 silently.
 
+Nested functions are the exception to the call-time checks: they carry
+``@no_type_check``. Without it the hook would decorate a nested function again
+on every call of the enclosing function, and beartype enters
+``warnings.catch_warnings()`` while it decorates, which invalidates Python's
+warning registries (issue #235).
+
 NumPy scalars are not part of the tower: ``np.int64`` is not a subclass of
 ``int``. A parameter that accepts them says so in its hint with
 `~~numpyro_forecast.typing.IntScalar` or
@@ -33,4 +39,4 @@ BEARTYPE_CONF = BeartypeConf(is_pep484_tower=True)
 """The beartype configuration of the package's runtime type checks."""
 
 typechecker = beartype(conf=BEARTYPE_CONF)
-"""The decorator that the jaxtyping import hook applies to every package function."""
+"""The decorator the jaxtyping import hook applies to every package function but nested ones."""

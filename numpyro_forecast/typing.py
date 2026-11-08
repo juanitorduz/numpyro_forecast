@@ -96,8 +96,10 @@ check that ``truth.shape`` is ``pred.shape[1:]`` and raise ``ValueError``
 otherwise. With the runtime type hook on (the default), the jaxtyping
 annotations reject a mismatched array first and raise
 ``jaxtyping.TypeCheckError``. A Python or NumPy scalar ``truth`` passes the
-annotations, so the explicit check raises ``ValueError`` for it. Either way a
-mismatched ``truth`` never broadcasts into a wrong value.
+annotations, so the explicit check raises ``ValueError`` for it. The metric
+that `~~numpyro_forecast.metrics.make_mase()` returns is a nested function,
+which the hook does not check, so it always raises the ``ValueError``. In every
+case a mismatched ``truth`` never broadcasts into a wrong value.
 
 A NaN is a valid result: the built-in metrics return NaN when a ``truth``
 value or a forecast draw is NaN (see

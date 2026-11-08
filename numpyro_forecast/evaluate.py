@@ -13,7 +13,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from functools import partial
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast, no_type_check
 
 import jax
 import jax.numpy as jnp
@@ -1531,6 +1531,7 @@ def backtest_vectorized(
         raise BacktestWindowError(msg)
     starts = jnp.arange(0, last_start + 1, stride)
 
+    @no_type_check
     def slice_one(t0: Array) -> tuple[Array, Array, Array, Array]:
         train_d = lax.dynamic_slice_in_dim(data, t0, train_window, axis=-2)
         train_c = lax.dynamic_slice_in_dim(covariates, t0, train_window, axis=-2)
@@ -1546,6 +1547,7 @@ def backtest_vectorized(
     model = model_fn()
     resolved_optim = Adam(0.01) if optim is None else optim
 
+    @no_type_check
     def window_svi() -> SVI:
         # An autoguide sets itself up at its first init and caches the
         # data-dependent state of that init on the instance (support transforms,
@@ -1555,6 +1557,7 @@ def backtest_vectorized(
         window_guide = _fresh_copy(guide) if isinstance(guide, AutoGuide) else guide
         return SVI(model, window_guide, resolved_optim, Trace_ELBO())
 
+    @no_type_check
     def fit_and_draw_one(
         init_key: Array, post_key: Array, d: Array, c: Array
     ) -> tuple[dict[str, Array], Array]:
@@ -1600,6 +1603,7 @@ def backtest_vectorized(
         )
         raise RuntimeError(msg)
 
+    @no_type_check
     def forecast_one(key: Array, post_w: dict[str, Array], d: Array, hc: Array) -> Array:
         pred = Predictive(model, posterior_samples=post_w, return_sites=["forecast"])
         return pred(key, hc, d)["forecast"]

@@ -38,7 +38,7 @@ from abc import abstractmethod
 from collections import namedtuple
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal, cast, no_type_check
 
 import jax
 import jax.numpy as jnp
@@ -301,6 +301,7 @@ class _BlackjaxKernel(MCMCKernel):
         kwargs = {} if model_kwargs is None else model_kwargs
         potential_fn = self._potential_fn_gen(*model_args, **kwargs)
 
+        @no_type_check
         def logdensity_fn(position: dict[str, Array]) -> Array:
             return -potential_fn(position)
 
@@ -842,6 +843,7 @@ def fit_pathfinder(
     )
     potential_fn = potential_fn_gen(covariates, data)
 
+    @no_type_check
     def logdensity_fn(position: dict[str, Array]) -> Array:
         return -potential_fn(position)
 
@@ -934,6 +936,7 @@ def pathfinder_samples(
     blackjax = require("blackjax", extra="blackjax")
     _ensure_stable_bfgs_sample()
 
+    @no_type_check
     def draw_fn(key: Array, n: int) -> dict[str, Array]:
         # Split so the discarded init draws and the pathfinder draws use distinct
         # streams (the init param draws are unused, but keep the streams isolated).
@@ -1153,6 +1156,7 @@ def fit_multipathfinder(
 
     potential_fn = potential_fn_gen(covariates, data)
 
+    @no_type_check
     def logdensity_fn(position: dict[str, Array]) -> Array:
         return -potential_fn(position)
 
@@ -1337,6 +1341,7 @@ def multipathfinder_samples(
     # One fresh-draw ``pareto_k`` per PSIS chunk; read after the draws to warn once per call.
     chunk_pareto_ks: list[float] = []
 
+    @no_type_check
     def draw_fn(key: Array, n: int) -> dict[str, Array]:
         # Three isolated streams: the (unused) init param draws, the per-path
         # Pathfinder draws, and the path/index choice.

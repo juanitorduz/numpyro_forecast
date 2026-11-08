@@ -19,7 +19,7 @@ import math
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
 from enum import StrEnum
-from typing import NamedTuple, cast
+from typing import NamedTuple, cast, no_type_check
 
 import equinox as eqx
 import jax
@@ -433,6 +433,7 @@ def markov_series[Carry](
         "observed window alone or a longer array.",
     )
 
+    @no_type_check
     def _body(site_name: str) -> Callable[[Carry, PyTree[Array] | None], tuple[Carry, Array]]:
         def body(carry: Carry, x_t: PyTree[Array] | None) -> tuple[Carry, Array]:
             dist_t = transition(carry, x_t)
@@ -835,6 +836,7 @@ def ssoe[Carry](
     xs_obs = None if xs_scan is None else jax.tree.map(lambda leaf: leaf[: h.t_obs], xs_scan)
     xs_future = None if xs_scan is None else jax.tree.map(lambda leaf: leaf[h.t_obs :], xs_scan)
 
+    @no_type_check
     def filter_body(
         carry: Carry, inputs: tuple[Array, PyTree[Array] | None]
     ) -> tuple[Carry, Array]:
@@ -862,6 +864,7 @@ def ssoe[Carry](
     _validate_future_errors(eps, mu, h.future)
     eps_scan = jnp.moveaxis(eps, -2, 0)
 
+    @no_type_check
     def forecast_body(
         carry: Carry, inputs: tuple[Array, PyTree[Array] | None]
     ) -> tuple[Carry, tuple[Array, Array]]:

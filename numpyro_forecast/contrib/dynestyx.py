@@ -74,7 +74,7 @@ which the drivers read by their bare names, so it cannot run under
 
 import importlib
 import warnings
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, no_type_check
 
 import jax
 import jax.numpy as jnp
@@ -217,6 +217,7 @@ def _in_sample_states(rng_key: Array, result: Any, kind: str, t_obs: int) -> Arr
             jnp.stack(step) for step in zip(*(jax.tree.leaves(d) for d in dists), strict=True)
         ]
 
+        @no_type_check
         def sample_step(step_leaves: list[Array], key: Array) -> Array:
             return jnp.asarray(jax.tree.unflatten(treedef, step_leaves).sample(key))
 
@@ -239,6 +240,7 @@ def _observe(rng_key: Array, dynamics: Any, x: Array, u: Array | None, times: Ar
     does for its own rollout, so the site keeps the package's ``(time, obs)`` layout.
     """
 
+    @no_type_check
     def sample_step(x_t: Array, u_t: Array | None, t: Array, key: Array) -> Array:
         draw = jnp.asarray(dynamics.observation_model(x_t, u_t, t).sample(key))
         return draw[..., None] if draw.ndim == 0 else draw
