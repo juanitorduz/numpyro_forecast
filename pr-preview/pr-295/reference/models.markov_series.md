@@ -56,11 +56,11 @@ Site-name -\> `numpyro.infer.reparam.Reparam` mapping applied **inside** the sca
 
 
 `Array`  
-The latent over the full horizon in package layout `(*plate_batch, duration, obs)` (with the size-1 axis of a transition with an `obs` event before `duration`).
+The latent over the full horizon in package layout `(*plate_batch, duration, obs)` (under `plates`, a transition with an `obs` event keeps its size-1 axis before `duration`).
 
 
 ## Raises
 
 
 `ValueError`  
-If forecasting without observed data (only reachable with a hand-built [Horizon](models.Horizon.md#numpyro_forecast.models.Horizon): [Horizon.from_data()](models.Horizon.md#numpyro_forecast.models.Horizon.from_data) never sets `future > 0` without data), if an `xs` leaf lacks the time or observation axis or does not span `h.duration` rows, if the per-step shape lacks the observation dimension, if an enclosing plate is detected, if two `plates` pairs share a name, if the transition's batch shape has a size other than `1` or the plate size at a plate's dim, or if `advance` is omitted and `init_carry` is not a single array with the shape and dtype of a draw.
+If forecasting without observed data (only reachable with a hand-built [Horizon](models.Horizon.md#numpyro_forecast.models.Horizon): [Horizon.from_data()](models.Horizon.md#numpyro_forecast.models.Horizon.from_data) never sets `future > 0` without data), if an `xs` leaf lacks the time or observation axis or does not span `h.duration` rows, if the per-step shape lacks the observation dimension, if an enclosing plate is detected, if two `plates` pairs share a name, if under `plates` a transition with an `obs` event has a trailing batch axis of a size other than `1`, if the transition's batch shape has a size other than `1` or the plate size at the dim of a plate of size other than `1`, or if `advance` is omitted and `init_carry` is not a single array with the shape and dtype of a draw.
