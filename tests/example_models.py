@@ -132,7 +132,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
 def make_trend_inflation_model(
     num_measures: int,
     *,
-    vol_of_vol: float = 0.1,
+    vol_of_vol: float | Array = 0.1,
     stochastic_volatility: bool = True,
     student_t: bool = False,
 ) -> ForecastModel:
@@ -149,7 +149,8 @@ def make_trend_inflation_model(
     num_measures
         Number of price measures (the observation axis of ``data``).
     vol_of_vol
-        Standard deviation of the log-variance random walk steps, $\gamma$.
+        Standard deviation of the log-variance random walk steps, $\gamma$: a fixed
+        number or a value sampled by an enclosing model.
     stochastic_volatility
         Whether the log-variances move over time; ``False`` keeps them at their
         initial values (constant variances).
