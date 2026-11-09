@@ -254,6 +254,9 @@ def low_frequency_basis(num_periods: int, num_terms: int) -> Float[Array, " peri
     return jnp.asarray(basis * np.sign(basis[0])[None, :], dtype=jnp.float32)
 
 
+MAX_LOG_NU = 8.0
+
+
 def make_rts_model(
     y_init: Array,
     *,
@@ -275,8 +278,9 @@ def make_rts_model(
     a low-frequency random walk in $\ln \sigma^2_{j,t}$ on
     `low_frequency_basis` with $q = \lfloor (t_{\text{obs}} + 12) / 36 \rfloor$
     terms. The paper's common scale $\omega$ is absorbed into the location of
-    the $\ln \sigma_j^2$ prior (site ``log_omega2``), every hierarchical site is
-    non-centered by hand, and the first 12 rows of the panel, ``y_init``, seed
+    the $\ln \sigma_j^2$ prior (site ``log_omega2``), the coefficient, degrees of
+    freedom, outlier scale and volatility hierarchies are non-centered by hand (the
+    innovation scales stay centered), and the first 12 rows of the panel, ``y_init``, seed
     the lag window instead of the paper's stationary prior on the initial values.
 
     Parameters
@@ -288,7 +292,10 @@ def make_rts_model(
         the Minnesota prior $\phi_{j,l} \sim \text{Normal}(0, 0.2 / l)$ and
         $\ln \sigma_j^2 \sim \text{Normal}(\ln \omega^2, 0.3^2)$ of Model I.
     student_t
-        Student-t innovations with series-specific $\nu_j$ (Model III).
+        Student-t innovations with series-specific $\nu_j$ (Model III);
+        $\ln(\nu_j - 2)$ is capped at ``MAX_LOG_NU`` ($\nu_j \le 2 + e^8$), above which
+        a Student-t is Normal to float32 precision and the float32
+        ``StudentT.log_prob`` is inaccurate.
     outliers
         Student-t additive outliers (Model IV).
     stochastic_volatility
@@ -342,12 +349,11 @@ def make_rts_model(
             )
             log_v_sigma = numpyro.sample("log_v_sigma", dist.Normal(jnp.log(0.3**2), 0.5))
             with state_plate:
-                log_sigma2_z = jnp.asarray(numpyro.sample("log_sigma2_z", dist.Normal(0.0, 1.0)))
-            log_sigma2 = jnp.asarray(
-                numpyro.deterministic(
-                    "log_sigma2", log_omega2 + jnp.exp(0.5 * log_v_sigma) * log_sigma2_z
+                log_sigma2 = jnp.asarray(
+                    numpyro.sample(
+                        "log_sigma2", dist.Normal(log_omega2, jnp.exp(0.5 * log_v_sigma))
+                    )
                 )
-            )
         else:
             with lag_plate, state_plate:
                 phi = jnp.asarray(
@@ -363,11 +369,8 @@ def make_rts_model(
             log_v_nu = numpyro.sample("log_v_nu", dist.Normal(jnp.log(0.5**2), 0.5))
             with state_plate:
                 log_nu_z = jnp.asarray(numpyro.sample("log_nu_minus_2_z", dist.Normal(0.0, 1.0)))
-            nu = jnp.asarray(
-                numpyro.deterministic(
-                    "nu", 2.0 + jnp.exp(nu_loc + jnp.exp(0.5 * log_v_nu) * log_nu_z)
-                )
-            )
+            log_nu_minus_2 = jnp.minimum(nu_loc + jnp.exp(0.5 * log_v_nu) * log_nu_z, MAX_LOG_NU)
+            nu = jnp.asarray(numpyro.deterministic("nu", 2.0 + jnp.exp(log_nu_minus_2)))
 
         if outliers:
             # The paper centers the kappa hierarchy at ln(0.1^2) relative to omega; with
@@ -446,13 +449,19 @@ def make_rts_model(
             numpyro.sample("obs", obs_dist, obs=h.data)
         if h.future > 0:
             y_future = r.y_future
+            loc_future = r.mu_future  # (future, states): the one-step means over the horizon
             if outliers:
                 with numpyro.plate("time_future", h.future, dim=-2), state_plate:
                     eta_future = jnp.asarray(
                         numpyro.sample("outlier_eta_future", dist.StudentT(4.0, 0.0, 1.0))
                     )
                 y_future = y_future + kappa * eta_future
+                loc_future = loc_future + kappa * eta_future
             numpyro.deterministic("forecast", y_future)
+            # The location and scale of the one-step predictive given the draw, for the
+            # leave-future-out log score of the notebook.
+            numpyro.deterministic("forecast_loc", loc_future)
+            numpyro.deterministic("forecast_scale", jnp.broadcast_to(scale_future, y_future.shape))
 
     return rts_model
 
