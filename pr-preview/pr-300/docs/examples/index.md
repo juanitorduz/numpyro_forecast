@@ -151,7 +151,7 @@ A hierarchical negative binomial state space model of all 30,490 M5 series, trai
 Trend inflation from four US price measures with stochastic volatility
 
 
-Estimate US trend inflation from CPI, core CPI, PCE and core PCE with a common random-walk trend and stochastic volatility, forecast core PCE eight quarters ahead and backtest a model ladder against the Atkeson and Ohanian benchmark.
+Estimate US trend inflation from CPI, core CPI, PCE and core PCE with a common random-walk trend, a common transitory shock and stochastic volatility, forecast core PCE eight quarters ahead and backtest a model ladder against the Atkeson and Ohanian benchmark.
 
 
 <a href="../../docs/examples/tsb.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/tsb.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
