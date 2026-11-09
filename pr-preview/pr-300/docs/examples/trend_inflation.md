@@ -3,7 +3,7 @@
 
 Trend inflation from four US price measures with stochastic volatility
 
-Inflation has a persistent part and a transitory part. The persistent part, **trend inflation**, is the rate that inflation returns to once the transitory shocks (an energy price spike, a pandemic quarter) have passed, and it is the number that a central bank and a bond investor care about. It is not observed. What is observed is a set of price indexes, each of which measures the same underlying inflation with its own basket, formula and noise. In this notebook we estimate US trend inflation from four quarterly price measures, CPI, core CPI, PCE and core PCE, with one common random-walk trend, one transitory gap per measure, and **stochastic volatility**: the size of the trend shocks and of each gap is itself a random walk, so the model can be quiet in the 1990s and loud in the 1970s and in 2021 to 2023.
+Inflation has a persistent part and a transitory part. The persistent part, **trend inflation**, is the rate that inflation returns to once the transitory shocks (an energy price spike, a pandemic quarter) have passed, and it is the number that a central bank and a bond investor care about. No price index measures it directly: each index measures the same underlying inflation with its own basket, formula and noise. In this notebook we estimate US trend inflation from four quarterly price measures, CPI, core CPI, PCE and core PCE, with one common random-walk trend, one transitory gap per measure, and **stochastic volatility**: the size of the trend shocks and of each gap is itself a random walk, so the model can be quiet in the 1990s and loud in the 1970s and in 2021 to 2023.
 
 The model is a multi-measure version of the unobserved components stochastic volatility (UCSV) model of [Stock and Watson (2007)](https://doi.org/10.1111/j.1538-4616.2007.00014.x), close in spirit to [Stock and Watson (2016)](https://doi.org/10.1162/REST_a_00608) and [Mertens (2016)](https://doi.org/10.1162/REST_a_00549). It fits in the building blocks of `numpyro_forecast` without new code: [`innovations`](../../reference/models.innovations.md) samples the standardized steps of every random walk, [`predict`](../../reference/models.predict.md) takes an observation noise whose scale changes over time, and [`backtest`](../../reference/evaluate.backtest.md) runs the rolling-origin evaluation. The data ship with the package as [`load_us_inflation`](../../reference/datasets.load_us_inflation.md).
 
@@ -49,7 +49,6 @@ from numpyro_forecast import (
     BacktestResult,
     Horizon,
     backtest,
-    eval_coverage,
     eval_crps,
     eval_mae,
     forecast,
@@ -94,7 +93,7 @@ where P\_{t, m} is the quarterly average level of measure m in quarter t. The sa
 Two conventions of the loader matter below:
 
 - **Core PCE is the last column.** It is the measure the Federal Reserve targets, it is the reference measure of the model (its offset is zero, so the trend is on the core PCE scale) and it is the series we score in the evaluation.
-- **Time is at axis -2 and the measures at axis -1**, the package layout, so the `(quarters, measures)` array is the `data` of every model call.
+- Time is at axis -2 and the measures at axis -1, the package layout, so the `(quarters, measures)` array is the `data` of every model call.
 
 
 ``` python
@@ -132,14 +131,14 @@ fig.suptitle("Annualized quarterly inflation, 1959Q2 to 2026Q3", fontsize=16, fo
 </figure>
 
 
-The four series tell the same story at different volumes:
+The four series move together, with different amplitudes:
 
-- The 1970s have two peaks, around 1974 and 1980, where every measure runs above 10\\ for several quarters.
-- The Great Moderation, from the mid 1980s to 2007, keeps every measure in a narrow band around 2\\ to 3\\, and the core measures are visibly smoother than the headline ones.
-- 2008Q4 is the quarter where the headline measures fall far below zero as oil prices collapse, while the core measures barely move.
-- 2021 to 2023 is the surge after the pandemic, and 2020Q2 is the single-quarter dip before it.
+- The 1970s have two peaks, around 1974 and 1980, where every measure reaches 10\\ at least once: CPI peaks at 15.5\\ in 1980Q1 and core PCE at 11.3\\ in 1974Q3.
+- The Great Moderation, from 1985 to 2007, keeps the four measures at an average of 2.5\\ to 3.0\\, and the core measures are visibly smoother than the headline ones.
+- 2008Q4 is the quarter where the headline measures fall far below zero as oil prices collapse, CPI to -9.3\\ and PCE to -6.4\\, while the core measures stay near zero.
+- 2021 to 2023 is the surge after the pandemic, with CPI at 9.3\\ in 2022Q2 and core PCE at 5.9\\ in 2022Q1, and 2020Q2 is the single-quarter dip before it, to -3.9\\ for CPI and -0.8\\ for core PCE.
 
-The headline measures (CPI, PCE) swing more than their core counterparts at every date, because food and energy prices are in their baskets, and CPI runs above PCE on average, because of the formula and weight differences between the two indexes. The model below has one parameter for the average wedge (the measure offset) and one time-varying scale per measure for the difference in noise.
+From the mid 1980s on, the headline measures (CPI, PCE) swing more from quarter to quarter than their core counterparts, because food and energy prices are in their baskets, and CPI runs above PCE on average, because of the formula and weight differences between the two indexes. The model below has one parameter for the average wedge (the measure offset) and one time-varying scale per measure for the difference in noise.
 
 
 # Evaluation metrics and the benchmark
@@ -181,7 +180,7 @@ On the scale of the data, where a typical quarter of core inflation sits between
 - h_0 = -1.5 is a trend shock with standard deviation \exp(-0.75) \approx 0.47 percentage points per quarter, and the prior standard deviation of 1 on h_0 lets that scale range from about 0.3 to 0.8 within one standard deviation.
 - g\_{0, m} = 0 is a gap with a standard deviation of 1 percentage point, the right order for the core measures; the headline measures move up from there through g\_{t, m}.
 - \alpha_m \sim \text{Normal}(0, 1) allows offsets of about \pm 2 percentage points, which is wide for the CPI to PCE wedge of a few tenths.
-- \gamma is fixed, as in Stock and Watson (2007). After t quarters the log-variance has prior standard deviation \gamma \sqrt{t}, about 1.6 for \gamma = 0.1 and t = 270, so a volatility can drift by a factor of \exp(0.8) \approx 2.2 in either direction over the sample within one standard deviation. The fourth panel of the prior figure plots this band, because it is what \gamma means. We fix \gamma instead of learning it because the data say little about it: the *Sensitivity to the vol-of-vol* section fits the model with a prior on \gamma and shows what the posterior does.
+- \gamma is fixed, as in Stock and Watson (2007). After t quarters the log-variance has prior standard deviation \gamma \sqrt{t}, about 1.6 for \gamma = 0.1 and t = 270, so a volatility can drift by a factor of \exp(0.82) \approx 2.3 in either direction over the sample within one standard deviation. The fourth panel of the prior figure plots this band, the quantity that \gamma controls. We fix \gamma instead of learning it because the data say little about it: the *Sensitivity to the vol-of-vol* section fits the model with a prior on \gamma and shows what the posterior does.
 
 
 ``` python
@@ -201,8 +200,9 @@ axes[1, 0].set(
     xlim=(0, 4),
 )
 
-# Prior 94% band of the trend volatility exp(h_t / 2) after t quarters, for three vol-of-vol values.
-# h_t ~ Normal(-1.5, sqrt(1 + gamma^2 t)), so the band is exp((-1.5 +/- z sqrt(1 + gamma^2 t)) / 2).
+# Prior 94% band of the trend volatility exp(h_t / 2) after t quarters, for three vol-of-vol
+# values: h_t ~ Normal(-1.5, sqrt(1 + gamma^2 t)), so the band is
+# exp((-1.5 +/- z sqrt(1 + gamma^2 t)) / 2).
 steps = jnp.arange(num_quarters)  # (quarters,)
 z_97 = norm.ppf(0.97)
 
@@ -228,7 +228,7 @@ fig.suptitle("Priors", fontsize=16, fontweight="bold");
 </figure>
 
 
-The three densities are the priors on the initial values, on the scale of the data. The fourth panel is what the fixed \gamma implies: with \gamma = 0.1 the 94\\ prior band of the trend volatility widens from (0.18, 1.2) percentage points per quarter at the start of the sample to (0.02, 10) at its end, so the prior lets the volatility fall by a factor of ten or rise by a factor of ten over 67 years, and it says nothing about when. With \gamma = 0.05 the band at the end is four times narrower; with \gamma = 0.2 it reaches from 0.001 to 200, which is the range where the prior stops constraining anything and the posterior has to find the path on its own.
+The three densities are the priors on the initial values, on the scale of the data: a trend between -1\\ and 7\\, a trend shock of 0.2 to 1.2 percentage points per quarter, a gap of 0.4 to 2.6 points. The fourth panel shows the consequence of the fixed \gamma. With \gamma = 0.1 the 94\\ prior band of the trend volatility widens from 0.18 to 1.2 points per quarter in 1959 to 0.08 to 2.9 in 2026: the prior lets the volatility fall or rise by a factor of about 2.4 over the sample and says nothing about when. With \gamma = 0.05 the band ends at 0.14 to 1.6, close to where it started. With \gamma = 0.2 it ends at 0.02 to 12, where the prior stops constraining the path and the posterior has to find it on its own.
 
 
 # The model function
@@ -384,12 +384,12 @@ ax.set(title="Prior predictive check: core PCE inflation", ylabel="percent");
 </figure>
 
 
-The prior band widens with time, because both random walks accumulate variance: the 94\\ band is about \pm 6 percentage points wide in 1960 and about \pm 20 percentage points wide in 2026. It contains the data everywhere, with the 1980 peak well inside the band, and it also allows annualized rates of -15\\ at the end of the sample, which the US has never produced in a quarter. The priors are weak on purpose: the posterior will have to decide how volatile the trend and the gaps are at each date, and the only thing fixed is how fast that volatility is allowed to change.
+The prior band widens with time, because both random walks accumulate variance. In 1959Q2 the 94\\ band of core PCE inflation runs from -1.6\\ to 7.9\\; in 1980Q1 from -11\\ to 16\\; in 2026Q3 from -26\\ to 32\\, and even the 50\\ band spans -4\\ to 9\\ there. The first criterion holds: the data stay inside the band everywhere, the 1980 peak of 9.7\\ included. The second fails in the last decades, because the band allows annualized rates of -26\\ that no US price index has produced in a quarter, and we accept that. The priors are weak on purpose: the posterior has to decide how volatile the trend and the gaps are at each date, and the only thing fixed is how fast that volatility can change.
 
 
 # Inference with NUTS
 
-We sample the posterior with four NUTS chains of 1{,}000 warmup and 1{,}000 draws each. The model has about 1{,}600 latent dimensions (five standardized random walks of 270 steps plus the initial values and the offsets), all continuous, and the non-centered form keeps the geometry regular enough for the default settings except for one knob: we raise `target_accept_prob` from its default of 0.8 to 0.9, which shortens the leapfrog steps, because the posterior has a funnel where a gap volatility approaches zero. The figure after the trace plot shows where the remaining divergent transitions sit.
+We sample the posterior with four NUTS chains of 1{,}000 warmup and 1{,}000 draws each. The model has about 1{,}630 latent dimensions (six standardized random walks of 270 steps: the trend steps, the trend log-variance and the four gap log-variances, plus the initial values and the offsets), all continuous, and the non-centered form keeps the geometry regular enough for the default settings except for one knob: `target_accept_prob` is 0.9 instead of its default of 0.8, which shortens the leapfrog steps around a funnel where a gap volatility approaches zero. A scratch run at the default had more divergent transitions and the same posterior. The figure after the trace plot shows where the remaining divergent transitions sit.
 
 The fit returns the `MCMC` object and the wall time. `export` turns the posterior into an ArviZ `DataTree` with [`to_datatree`](../../reference/convert.to_datatree.md): the four chains, the in-sample posterior predictive, the eight-quarter forecast (because `covariates_full` extends past the data) and the quarter dates as the `time` coordinate, with the measure names on every site that has a measure axis.
 
@@ -399,7 +399,6 @@ NUM_CHAINS = 4
 FULL_WARMUP = 1_000
 FULL_SAMPLES = 1_000
 TARGET_ACCEPT = 0.9
-GLOBAL_SITES = ("tau0", "h0", "g0", "alpha", "nu", "vol_of_vol")
 
 
 def fit_nuts(
@@ -417,31 +416,6 @@ def fit_nuts(
     mcmc.run(rng_key, jnp.zeros((data.shape[0], 0)), data, extra_fields=("diverging",))
     jax.block_until_ready(mcmc.get_samples())
     return mcmc, perf_counter() - start
-
-
-def num_divergences(mcmc: MCMC) -> int:
-    """Total number of divergent transitions across chains."""
-    return int(np.asarray(mcmc.get_extra_fields()["diverging"]).sum())
-
-
-def diagnostics(mcmc: MCMC, sites: tuple[str, ...] = GLOBAL_SITES) -> tuple[float, float]:
-    """Largest split R-hat and smallest effective sample size over the ``sites`` of the fit."""
-    samples = mcmc.get_samples(group_by_chain=True)
-    summary = numpyro.diagnostics.summary(
-        {site: samples[site] for site in sites if site in samples}, group_by_chain=True
-    )
-    r_hat = max(float(np.max(stats["r_hat"])) for stats in summary.values())
-    ess = min(float(np.min(stats["n_eff"])) for stats in summary.values())
-    return r_hat, ess
-
-
-def fit_title(label: str, mcmc: MCMC, seconds: float) -> str:
-    """Title line with the wall time, the divergences, the largest R-hat and the smallest ESS."""
-    r_hat, ess = diagnostics(mcmc)
-    return (
-        f"{label}: {seconds:.0f} s, {num_divergences(mcmc)} divergences, "
-        rf"max $\hat{{R}}$ {r_hat:.3f}, min ESS {ess:,.0f}"
-    )
 
 
 rng_key, key_fit = random.split(rng_key)
@@ -481,7 +455,7 @@ def export(rng_key: Array, model: ForecastModel, mcmc: MCMC) -> xr.DataTree:
     )
 
 
-rng_key, key_tree = random.split(rng_key)
+rng_key, key_tree, key_trend = random.split(rng_key, 3)
 tree = export(key_tree, model, mcmc)
 tree
 ```
@@ -1057,7 +1031,7 @@ Group: /
 │           trend_vol              (chain, draw, time, trend_vol_dim_0) float32 4MB 0...
 │           trend_z                (chain, draw, trend_z_dim_0, trend_z_dim_1) float32 4MB ...
 │       Attributes:
-│           created_at:                 2026-11-08T21:19:02.758515+00:00
+│           created_at:                 2026-11-09T07:15:08.410120+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1072,7 +1046,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, measure) float32 17MB 1.256 2.835 ... 2.392
 │       Attributes:
-│           created_at:                 2026-11-08T21:19:03.001713+00:00
+│           created_at:                 2026-11-09T07:15:08.655137+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1085,7 +1059,7 @@ Group: /
 │       Data variables:
 │           obs      (time, measure) float32 4kB 0.6892 2.221 1.622 ... 2.067 2.438
 │       Attributes:
-│           created_at:                 2026-11-08T21:19:03.002050+00:00
+│           created_at:                 2026-11-09T07:15:08.655487+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1098,7 +1072,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 0B 
 │       Attributes:
-│           created_at:                 2026-11-08T21:19:03.002305+00:00
+│           created_at:                 2026-11-09T07:15:08.655743+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1113,7 +1087,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, measure) float32 512kB 4.736 4.267 ... 1.104
 │       Attributes:
-│           created_at:                 2026-11-08T21:19:03.430510+00:00
+│           created_at:                 2026-11-09T07:15:09.101706+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1126,7 +1100,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 0B 
         Attributes:
-            created_at:                 2026-11-08T21:19:03.430804+00:00
+            created_at:                 2026-11-09T07:15:09.102036+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1647,7 +1621,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T21:19:02.758515+00:00
+2026-11-09T07:15:08.410120+00:00
 
 creation_library :  
 ArviZ
@@ -1783,7 +1757,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T21:19:03.001713+00:00
+2026-11-09T07:15:08.655137+00:00
 
 creation_library :  
 ArviZ
@@ -1877,7 +1851,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T21:19:03.002050+00:00
+2026-11-09T07:15:08.655487+00:00
 
 creation_library :  
 ArviZ
@@ -1965,7 +1939,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T21:19:03.002305+00:00
+2026-11-09T07:15:08.655743+00:00
 
 creation_library :  
 ArviZ
@@ -2101,7 +2075,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T21:19:03.430510+00:00
+2026-11-09T07:15:09.101706+00:00
 
 creation_library :  
 ArviZ
@@ -2189,7 +2163,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-08T21:19:03.430804+00:00
+2026-11-09T07:15:09.102036+00:00
 
 creation_library :  
 ArviZ
@@ -2218,6 +2192,39 @@ sample_dims :
 
 
 ``` python
+GLOBAL_SITES = ("tau0", "h0", "g0", "alpha", "nu", "vol_of_vol")
+
+
+def num_divergences(mcmc: MCMC) -> int:
+    """Total number of divergent transitions across chains."""
+    return int(np.asarray(mcmc.get_extra_fields()["diverging"]).sum())
+
+
+def divergence_label(count: int) -> str:
+    """``"1 divergence"`` or ``"<count> divergences"``."""
+    return f"{count} divergence" + ("" if count == 1 else "s")
+
+
+def diagnostics(mcmc: MCMC, sites: tuple[str, ...] = GLOBAL_SITES) -> tuple[float, float]:
+    """Largest split R-hat and smallest effective sample size over the ``sites`` of the fit."""
+    samples = mcmc.get_samples(group_by_chain=True)
+    summary = numpyro.diagnostics.summary(
+        {site: samples[site] for site in sites if site in samples}, group_by_chain=True
+    )
+    r_hat = max(float(np.max(stats["r_hat"])) for stats in summary.values())
+    ess = min(float(np.min(stats["n_eff"])) for stats in summary.values())
+    return r_hat, ess
+
+
+def fit_title(label: str, mcmc: MCMC, seconds: float) -> str:
+    """Title line with the wall time, the divergences, the largest R-hat and the smallest ESS."""
+    r_hat, ess = diagnostics(mcmc)
+    return (
+        f"{label}: {seconds:.0f} s, {divergence_label(num_divergences(mcmc))}, "
+        rf"max $\hat{{R}}$ {r_hat:.3f}, min ESS {ess:,.0f}"
+    )
+
+
 pc = az.plot_trace_dist(
     tree, var_names=["tau0", "h0", "g0", "alpha"], compact=True, figure_kwargs={"figsize": (12, 9)}
 )
@@ -2235,7 +2242,7 @@ pc.viz["figure"].item().suptitle(
 </figure>
 
 
-The four chains agree on every global parameter: the densities overlap, the largest \hat{R} is below 1.01 and the smallest effective sample size is in the hundreds. The divergences in the title are a small fraction of the 4{,}000 draws. They are not a step-size problem, because the standardized steps have unit scale by construction. The next figure locates them: for every draw we take the smallest gap volatility of core PCE over the sample and mark the divergent draws on it.
+The four chains agree on every global parameter: the densities overlap, the largest \hat{R} is 1.005 and the smallest effective sample size is 974 of 4{,}000 draws. The 22 divergent transitions are half a percent of the draws, and they come from the geometry of the posterior rather than from the sampler settings. The next figure locates them: for every draw we take the smallest gap volatility of core PCE over the sample and mark the divergent draws on it.
 
 
 ``` python
@@ -2273,7 +2280,7 @@ ax.set(
 </figure>
 
 
-The divergent draws sit in the left tail of the distribution, where the gap volatility of core PCE falls to a tenth of a percentage point or less. There the likelihood pins the trend to core PCE almost exactly in those quarters, the posterior narrows sharply in the direction of the trend steps, and the leapfrog integrator overshoots. The posterior mass in that tail is small, the chains agree on every parameter, and the quarters where it happens are the ones where core PCE is smoothest (the Great Moderation), so the draws we keep describe the same posterior. A model that put a floor under the gap volatility would remove the funnel, at the price of an extra parameter with no data to set it.
+The divergent draws sit in the left tail of the distribution: their smallest core PCE gap volatility is between 0.05 and 0.10 percentage points, against a median of 0.15 over all draws. There the likelihood pins the trend to core PCE almost exactly in those quarters, the posterior narrows sharply in the direction of the trend steps, and the leapfrog integrator overshoots. The posterior mass in that tail is small, the chains agree on every parameter, and the quarters where it happens are the ones where core PCE is smoothest (the late 2010s and the 2020s, as the gap volatility figure below shows), so the draws we keep describe the same posterior. A model that put a floor under the gap volatility would remove the funnel, at the price of an extra parameter with no data to set it.
 
 
 # Trend inflation
@@ -2352,7 +2359,15 @@ ax.set(title="Trend inflation", ylabel="percent");
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The band is narrow: the 94\\ HDI of the trend is 0.8 percentage points wide in a typical quarter and 2.4 at its widest, in 1974, and core PCE inflation stays inside it for most of the sample, because core PCE is the smoothest of the four measures and has the smallest gap volatility. Along the sample:
+
+- The trend starts at 1.9\\ in 1959Q2 (94\\ HDI 1.4 to 2.3), dips to 1.3\\ in 1965 and climbs to 4.8\\ by 1970Q1.
+- It peaks twice, at 11.0\\ in 1974Q3 and 10.8\\ in 1980Q1. At the second peak core PCE is at 9.7\\ and the trend sits above it: the two headline measures, at 15.5\\ and 11.8\\, pull the common component up.
+- The disinflation takes it to 4.2\\ in 1985Q1 and 2.3\\ in 1995Q1. From 1995 to 2019 the posterior mean stays between -0.1\\ (2008Q4) and 2.9\\.
+- 2020Q2 is a one-quarter dip to -0.8\\ (94\\ HDI -1.2 to -0.5). The trend follows core PCE down and back, because the gap volatility of core PCE at that date is 0.2 percentage points and leaves no room to call the quarter transitory.
+- The surge takes the trend to 5.7\\ in 2021Q2 and 6.0\\ in 2022Q1, and it comes down to 2.4\\ in 2026Q3 (94\\ HDI 2.0 to 2.7).
+
+For the forecast, the 2020Q2 reading matters: the model treats that quarter as a move of the trend rather than as noise, and a Student-t gap would treat it differently.
 
 
 # Volatilities
@@ -2374,7 +2389,14 @@ ax.set(title=r"Trend volatility $\exp(h_t / 2)$", ylabel="percentage points per 
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The trend volatility is the standard deviation of the quarterly change of the trend, in annualized percentage points. Its path is the reason for stochastic volatility in the model:
+
+- It rises from 0.5 in 1959 to 1.0 in 1974Q3 (94\\ HDI 0.7 to 1.2), stays near 0.9 through 1980 and falls through the 1980s.
+- It falls to 0.37 in 1995Q1 (94\\ HDI 0.24 to 0.50) and reaches its minimum of 0.36 in 1996Q3, in the middle of the Great Moderation: the persistent part of inflation moved by about a third of a percentage point per quarter.
+- It climbs again from 2005, to 0.67 in 2008Q4, holds there through the 2010s and reaches its maximum of 1.06 in 2020Q3, before the surge: the 2020Q2 dip pushes it up, since the trend absorbs that quarter.
+- It ends at 0.87 (94\\ HDI 0.5 to 1.2), two and a half times the mid-1990s value, so the forecast bands below widen faster than they would have in 2005.
+
+With \gamma = 0.1 the log-variance moves by a few tenths per quarter at most, which is why the path is smooth. The volatility does not jump at 2008Q4 or 2020Q2; it turns over several quarters.
 
 
 ``` python
@@ -2397,7 +2419,14 @@ fig.suptitle(r"Gap volatility $\exp(g_{t, m} / 2)$ per measure", fontsize=16, fo
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The four gap volatilities separate the measures:
+
+- CPI has the largest and most variable gap: 0.9 percentage points in 1959, 1.9 in 1980, 0.9 in 1995 and 2.3 at its peak in 2008Q4, the quarter of the oil price collapse; it ends at 1.3.
+- Core CPI peaks at 1.6 in 1980Q3, falls to 0.5 by 1995 and stays between 0.5 and 0.7 after that; 2008Q4 leaves no mark on it.
+- PCE follows CPI with a smaller amplitude: 0.5 in 1959, 1.6 at the 2008Q4 peak, 0.8 at the end.
+- Core PCE is the quietest measure at every date: 0.4 in 1959, 0.8 at its peak in 1979Q3, 0.3 on average from 1995 to 2007, and 0.2 from 2018 on, its minimum.
+
+The 2008Q4 peak appears in the two headline measures and not in the two core measures, because the core measures exclude the energy component. The core PCE path also explains the divergences of the fit: its gap volatility is the smallest of the four, and the posterior puts mass close to zero from 2018 on. And since the trend is on the core PCE scale and the core PCE gap ends at 0.2, the trend tracks core PCE almost one for one in the last decade.
 
 
 # Measure offsets
@@ -2416,7 +2445,13 @@ pc.viz["figure"].item().suptitle("Measure offsets over core PCE", fontsize=14);
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The posterior puts the offsets at:
+
+- CPI runs 0.36 points above core PCE (94\\ HDI 0.22 to 0.51).
+- Core CPI runs 0.39 points above core PCE (94\\ HDI 0.30 to 0.48), with the tightest interval, because core CPI has the second smallest gap.
+- PCE runs 0.02 points below core PCE (94\\ HDI -0.12 to 0.08): no wedge.
+
+The wedge of about 0.4 points separates the two CPI measures from the two PCE measures, so it is a property of the index formula and not of the food and energy components: the CPI prices a fixed basket and gives housing a larger weight, and the PCE index is chain weighted, so its basket follows substitution.
 
 
 # Forecast
@@ -2460,16 +2495,56 @@ ax = pc.viz["figure"].item().axes[0]
     date_num[plot_start:], rates[plot_start:, -1], color="black", lw=1, label="core PCE inflation"
 )
 ax.legend(handles=[*band_handles, core_line], loc="upper left", bbox_to_anchor=(1.01, 1.0))
-ax.set(title="Core PCE inflation: smoothed fit and eight-quarter forecast", ylabel="percent");
+four_quarter_average = forecast_draws[:, :4].mean(axis=1)  # (samples,)
+lower, upper = az.hdi(four_quarter_average, prob=0.94)
+ax.set(
+    title=(
+        "Core PCE inflation: smoothed fit and eight-quarter forecast "
+        rf"(4-quarter average: median {np.median(four_quarter_average):.1f}, "
+        rf"$94\%$ HDI {lower:.1f} to {upper:.1f})"
+    ),
+    ylabel="percent",
+);
 ```
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-17-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-17-output-1.png" class="figure-img" width="1345" height="611" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The in-sample band is the smoothed fit: given the whole sample, the model knows the trend at each date, and the 94\\ band of about 1.1 percentage points is the gap noise of core PCE. The forecast band starts at 3.6 points wide in 2026Q4 (94\\ HDI 0.5 to 4.0 around a median of 2.4\\) and reaches 9.5 points in 2028Q3 (-2.5 to 7.0), because the trend is a random walk whose quarterly standard deviation is now 0.9 points and the eight steps accumulate. The median stays flat at 2.4\\, the last trend level: a random walk forecasts its last value. The 4-quarter average over 2026Q4 to 2027Q3, in the title, has a median of 2.4\\ and a 94\\ HDI of 0.1 to 4.7. With the trend volatility at its 2021 level, the model cannot rule out either 0\\ or 5\\ core inflation two years out.
+
+The forecast of core PCE is the forecast of the trend plus the gap noise. A `Predictive` call with its own key returns the `trend` site over the full horizon, and its band says how much of the forecast width is the trend itself; the vertical line marks the last observation.
+
+
+``` python
+trend_horizon = np.asarray(
+    Predictive(model, mcmc.get_samples(), return_sites=["trend"])(
+        key_trend, covariates_full, rates
+    )["trend"]
+)  # (samples, quarters + 8, 1)
+horizon_date_num = np.concatenate([date_num, future_date_num])
+
+pc, band_handles = plot_bands(
+    trend_horizon[:, plot_start:], horizon_date_num[plot_start:], ["trend"], color="C2"
+)
+ax = pc.viz["figure"].item().axes[0]
+(core_line,) = ax.plot(
+    date_num[plot_start:], rates[plot_start:, -1], color="black", lw=1, label="core PCE inflation"
+)
+ax.axvline(date_num[-1], color="C3", lw=1, label="last observation")
+ax.legend(handles=[*band_handles, core_line], loc="upper left", bbox_to_anchor=(1.01, 1.0))
+ax.set(title="Trend inflation: posterior and eight-quarter forecast", ylabel="percent");
+```
+
+
+<figure class="figure">
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-18-output-1.png" class="figure-img" width="1211" height="611" /></p>
+</figure>
+
+
+In sample the trend band is narrower than the smoothed fit of core PCE (0.7 points wide against 1.1 in 2026Q3), because the gap noise is not in it. Over the horizon the two bands are the same width within the Monte Carlo noise of the draws: the trend band is 3.5 points wide after one quarter and 9.9 after eight. The gap noise of core PCE, 0.2 points, adds nothing visible to a trend whose own standard deviation is 0.9 points after one quarter, so the forecast uncertainty of core PCE is the uncertainty of where the trend goes.
 
 
 # Backtest
@@ -2484,7 +2559,7 @@ The ladder has four models, each adding one component to the previous one, and t
 - **M2**: all four measures, stochastic volatility: the model of this notebook.
 - **M2-t**: M2 with Student-t gaps.
 
-Every window fits the model with four NUTS chains of 1{,}000 warmup and 250 draws, so that a window takes a fraction of the full fit while the metrics still see 1{,}000 forecast draws. `forecast_fn` records the divergences of every window, so that the scores can be checked against the fits that produced them. The metrics are the ones of *Evaluation metrics and the benchmark*, all on the core PCE column; `on_core_pce` and `four_quarter_average` turn a package metric into one on that column and on the 4-quarter average, and `atkeson_ohanian` is a per-window metric that reads the last four quarters of the training window through the `per_window_metrics` hook of [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest).
+Every window fits the model with four NUTS chains of 1{,}000 warmup and 250 draws, so that a window takes a fraction of the full fit while the metrics still see 1{,}000 forecast draws. `forecast_fn` records the divergences of every window, so that the scores can be checked against the fits that produced them. The CRPS and the MAE of *Evaluation metrics and the benchmark* are scored per window, on the core PCE column: `on_core_pce` and `four_quarter_average` turn a package metric into one on that column and on the 4-quarter average, and `atkeson_ohanian` is a per-window metric that reads the last four quarters of the training window through the `per_window_metrics` hook of [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). The coverage comes later, per horizon step, from the stored forecast draws.
 
 
 ``` python
@@ -2546,7 +2621,7 @@ def four_quarter_average(metric: Metric) -> Metric:
 
 
 def atkeson_ohanian(train: Array) -> tuple[Metric, Metric]:
-    """MAE of the Atkeson and Ohanian forecast, on the quarterly rates and on the 4-quarter average.
+    """MAE of the Atkeson and Ohanian forecast on the quarterly rates and the 4-quarter average.
 
     The forecast is the mean core PCE inflation of the last four quarters of ``train``, held
     flat over the horizon; ``pred`` is ignored.
@@ -2571,8 +2646,6 @@ def benchmark_metrics(t0: int, t1: int, t2: int) -> dict[str, Metric]:
 METRICS = {
     "crps": on_core_pce(eval_crps),
     "mae": on_core_pce(eval_mae),
-    "coverage_50": on_core_pce(partial(eval_coverage, alpha=0.5)),
-    "coverage_94": on_core_pce(partial(eval_coverage, alpha=0.94)),
     "crps_4q": four_quarter_average(eval_crps),
     "mae_4q": four_quarter_average(eval_mae),
 }
@@ -2662,13 +2735,20 @@ fig.suptitle("Backtest: mean scores over 40 windows, core PCE", fontsize=16, fon
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-20-output-1.png" class="figure-img" width="1411" height="811" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-21-output-1.png" class="figure-img" width="1411" height="811" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+Each step of the ladder changes the scores as follows:
 
-The means hide where the differences come from. The next figure shows the CRPS of every window against its origin date, one line per rung, so the periods where one component helps stand out.
+- M0 to M1, adding stochastic volatility to the univariate model, lowers the CRPS from 0.558 to 0.507 on the quarterly rates and from 0.376 to 0.326 on the 4-quarter average, and the MAE from 0.657 to 0.636 and from 0.417 to 0.405. Every score improves.
+- M1 to M2, adding the three other measures, raises the CRPS to 0.539 and 0.356 and the MAE to 0.690 and 0.466. On average over the 40 windows, pooling does not help the core PCE forecast.
+- M2 to M2-t, the Student-t gaps, moves every score by less than 0.01 in the direction of M1: 0.532, 0.351, 0.681 and 0.457.
+- The Atkeson and Ohanian benchmark has an MAE of 0.685 on the quarterly rates and 0.450 on the 4-quarter average. M0 and M1 beat it on both; M2 and M2-t do not.
+
+The benchmark is hard for the reason Atkeson and Ohanian gave: on the 4-quarter average, the last year of inflation is as good a point forecast as a model of its persistent part. M1 beats it by 0.045 points, a tenth of the score. The next figures say where in time the differences come from and whether they are larger than their noise.
+
+The next figure shows the CRPS of every window against its origin date, one line per rung, so that the periods where one component helps stand out.
 
 
 ``` python
@@ -2688,11 +2768,17 @@ ax.set(title="CRPS per window, core PCE quarterly rates", xlabel="forecast origi
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-21-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-22-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The per-origin scores separate three periods:
+
+- From 1985 to 2019 the scores stay between 0.25 and 0.85, and the four rungs are within 0.1 of each other at most origins. The two exceptions are 1991, where M2 and M2-t score 0.85 against 0.45 for the univariate rungs, and 2009 to 2018, where M1 is the lowest at every origin: with the trend volatility near its 2010 level, the univariate bands are tighter and the realized quarters stay inside them.
+- The 2020 and 2021 origins dominate the averages. At the 2021Q1 origin M1 scores 2.8, M0 2.3, and M2 and M2-t 2.0: the multi-measure models are the least wrong there. That single window adds 0.07 to the 40-window mean of M1 and accounts for 0.02 of its gap to M2.
+- The 2022 to 2024 origins, the disinflation, score between 0.35 and 1.2 for every rung, with M1 and M2 alternating.
+
+The paired differences in the next figure put a standard error on these gaps.
 
 A difference of means over 40 windows can be noise. For each step of the ladder we take the paired per-window difference in CRPS (the model with the component minus the model without it, on the same windows) and show its mean with two standard errors. The standard error treats the windows as independent; consecutive windows share four of their eight quarters, so it understates the uncertainty, and a bar that reaches zero is a difference the backtest cannot establish.
 
@@ -2727,11 +2813,17 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-22-output-1.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-23-output-1.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The paired differences settle one step of the ladder and leave the other two open.
+
+- M1 - M0: -0.051 \pm 0.035. Stochastic volatility improves the CRPS, and the interval excludes zero.
+- M2 - M1: +0.033 \pm 0.055. Pooling costs on average, but the interval includes zero: the 2021 windows pull the difference down, the 2009 to 2018 windows push it up, and 40 overlapping windows cannot separate the two.
+- M2-t - M2: -0.007 \pm 0.007. The Student-t gaps help by a small amount on average, with little spread across windows, and the interval touches zero.
+
+The first result is the only one to take at face value; the other two intervals include zero before the overlap of the windows is accounted for.
 
 The scores so far average over the eight horizon steps. The stored forecast draws let us score each step on its own: the CRPS at horizon h and the coverage of the two central intervals at horizon h, averaged over the windows. Forty windows give one realized value per step, so the coverage of a calibrated forecast scatters around the nominal level with a binomial standard deviation of \sqrt{0.94 \times 0.06 / 40} \approx 3.8 percentage points at the 94\\ level and 7.9 at the 50\\ level; the shaded band in the coverage panels is two of those standard deviations around the nominal level.
 
@@ -2782,11 +2874,17 @@ fig.suptitle("Scores by horizon step, core PCE quarterly rates", fontsize=16, fo
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-23-output-1.png" class="figure-img" width="1611" height="506" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-24-output-1.png" class="figure-img" width="1611" height="506" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The scores change with the horizon step in three ways:
+
+- The CRPS rises from 0.38 at one quarter, where the four rungs coincide, to 0.59 (M1), 0.63 (M2-t), 0.65 (M2) and 0.67 (M0) at eight quarters. The gain of M1 is in the horizons from four quarters on.
+- The 94\\ intervals are calibrated at every horizon: the coverage stays between 92.5\\ and 100\\, inside the binomial band of \pm 7.5 points around the nominal level.
+- The 50\\ intervals are too wide beyond the first quarter. At one quarter the coverage is 48\\ to 65\\, on target. From the second quarter on it climbs, to 67\\ (M1), 80\\ (M2 and M2-t) and 88\\ (M0) at eight quarters, above the binomial band of \pm 16 points at most horizons, with M0 the widest and M1 the closest to the nominal level.
+
+A 50\\ interval that covers 80\\ of the outcomes while the 94\\ interval covers 95\\ means the forecast distribution has the right tails and too much mass in the shoulders: the random-walk trend spreads the center of the distribution faster than core PCE moves over two years. The realized path stays closer to the origin than the model's center expects; a trend with some mean reversion would narrow the center.
 
 The stored draws also let us look at one origin in detail. 2021Q1 is the origin just before the surge: the last observed quarter is 2020Q4, and the next eight quarters are the fastest core inflation since the early 1980s. We plot the forecast of every rung from that origin against the realized path.
 
@@ -2826,11 +2924,16 @@ fig.suptitle("Forecasts from the 2021Q1 origin", fontsize=16, fontweight="bold")
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-24-output-1.png" class="figure-img" width="1411" height="806" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-25-output-1.png" class="figure-img" width="1411" height="806" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The surge is the window where the ladder matters most. After the first quarter, the realized core PCE rates run from 4.6\\ to 5.9\\:
+
+- M0 and M1 forecast medians near 1.8\\ and 1.6\\ with 94\\ bands that top out at 4.9\\ and 3.5\\. M1 covers none of the eight quarters, and M0 covers two, the first and the last.
+- M2 forecasts the same median, 1.9\\, but its 94\\ band widens from 4.4 points at one quarter to 12.1 points at eight, and its upper edge rises to 8.0\\. It covers seven of the eight quarters and misses only 2021Q2, the first surge quarter. M2-t gives the same picture.
+
+The multi-measure models did not predict the surge: their medians are as low as the univariate ones, and no rung puts a single realized quarter inside its 50\\ interval. M2 had a wider band in 2021Q1, because the trend volatility estimated from four measures was already high after 2020Q2. The CRPS gap between M1 (2.8) and M2 (2.0) at this origin comes from the width of the bands; the medians are the same.
 
 The last check on the backtest is the fits themselves: the divergences of every window, per rung.
 
@@ -2839,8 +2942,9 @@ The last check on the backtest is the fits themselves: the divergences of every 
 fig, ax = plt.subplots(figsize=(12, 4))
 
 for label in backtest_results:
+    rung_origins = [origin for rung, origin, _ in backtest_divergences if rung == label]
     counts = [count for rung, _, count in backtest_divergences if rung == label]
-    ax.plot(origins, counts, marker="o", color=RUNG_COLORS[label], label=label)
+    ax.plot(rung_origins, counts, marker="o", color=RUNG_COLORS[label], label=label)
 
 locator = mdates.AutoDateLocator()
 ax.xaxis.set_major_locator(locator)
@@ -2855,11 +2959,11 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-25-output-1.png" class="figure-img" width="1211" height="411" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-26-output-1.png" class="figure-img" width="1211" height="411" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The two multi-measure rungs are clean: M2-t has no divergent transition in any window, and M2 has at most four in a window, with its counts at the 2008, 2014 and 2020 to 2024 origins. The two univariate rungs have divergences in the early windows: M1 has up to 38 divergent draws of 1{,}000 at the origins between 1985 and 1993 and 10 to 14 at the 2003 and 2004 origins, and M0 has up to 11, at the 1985 and 1990 origins. A single series with a volatility random walk has the least information about its own scale, so its funnel is the widest, and the shortest windows are where it shows most. The counts are a few percent of the draws at most, and from 2009 on no rung has more than four in a window, so only the scores of M0 and M1 at the early origins rest on fits that are slightly worse than the others.
 
 The M2-t rung has one parameter the others do not have, the degrees of freedom \nu of its gaps, and the backtest fits do not keep it. We fit M2-t once on the full sample to read it.
 
@@ -2884,11 +2988,11 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-26-output-1.png" class="figure-img" width="1211" height="435" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-27-output-1.png" class="figure-img" width="1211" height="435" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The degrees of freedom have a posterior mean of 5.2 and the four chains agree: no divergent transition, and a largest \hat{R} of 1.014 over the global parameters, just above the 1.01 guideline. A Student-t with five degrees of freedom has tails well outside the Normal, so a quarter four scales away from the trend is an ordinary event instead of an impossible one. The data pull \nu down from the prior center of 10, which says that the measures have quarters, 2008Q4 and 2020Q2 among them, that Normal gaps with a slowly moving volatility cannot absorb. The backtest gain of M2-t over M2 is small because those quarters are few.
 
 
 # Sensitivity to the vol-of-vol
@@ -2937,11 +3041,17 @@ fig.suptitle("Trend volatility under three vol-of-vol values", fontsize=16, font
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-27-output-1.png" class="figure-img" width="1211" height="1006" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-28-output-1.png" class="figure-img" width="1211" height="1006" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The three fits agree on the shape of the trend volatility and disagree on its amplitude:
+
+- With \gamma = 0.05 the path runs from 0.6 in 1959 to 0.85 in 1975, down to 0.5 in 1997 and up to 0.9 in 2021, a range of less than a factor of two, with no divergent transition and the largest effective sample size.
+- With \gamma = 0.1 the range is 0.36 to 1.06, a factor of three, with 22 divergent draws.
+- With \gamma = 0.2 the path has sharper peaks, about 1.2 in both 1975 and 2021, and a floor near 0.25 in 1997, with 165 divergent draws, a largest \hat{R} of 1.028 and a smallest effective sample size of 276. A larger vol-of-vol lets every volatility path move faster, which deepens the funnel where a gap volatility approaches zero.
+
+The slowest path is the easiest to sample. The next figure scores the three in the backtest.
 
 
 ``` python
@@ -2971,11 +3081,11 @@ fig.suptitle("Backtest CRPS of M2 against the vol-of-vol", fontsize=16, fontweig
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-28-output-1.png" class="figure-img" width="1211" height="411" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-29-output-1.png" class="figure-img" width="1211" height="411" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The backtest prefers the faster volatility: the CRPS on the quarterly rates falls from 0.559 at \gamma = 0.05 to 0.539 at 0.1 and 0.527 at 0.2, and on the 4-quarter average from 0.382 to 0.356 to 0.337. The whole range is 0.03, smaller than the M1 to M0 step. A larger \gamma lets the volatility react faster after 2020, and the 2020 and 2021 windows dominate the averages, so the faster path scores better on average and pays for it with the sampling diagnostics of the previous figure. We keep 0.1 as the value of the notebook, the order of magnitude Stock and Watson (2007) use on quarterly data, and the next figure shows what happens when the data choose.
 
 
 ``` python
@@ -3003,11 +3113,11 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-29-output-1.png" class="figure-img" width="1211" height="435" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-30-output-1.png" class="figure-img" width="1211" height="435" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The fit with a learned \gamma does not converge: the four chains land on different modes between 0.25 and 0.35, the largest \hat{R} is 1.246, the effective sample size of \gamma is 13 and 103 transitions diverge. The posterior mean of 0.32 is far above the prior center of 0.1 and above the 97\\ quantile of the prior (0.18): the likelihood pushes the vol-of-vol up as far as the prior allows. The funnel explains it: a larger \gamma lets a gap volatility collapse to zero in the quiet quarters and the trend pass through those points exactly, which raises the likelihood without bound. Stock and Watson (2007) fix \gamma for this reason, and so does this notebook. A prior that puts a floor under the gap volatility, or a vol-of-vol that differs between the trend and the gaps, are two ways to make \gamma learnable.
 
 
 # Cost
@@ -3028,7 +3138,7 @@ axes[0].bar(list(full_fits), [fit[1] for fit in full_fits.values()], color=["C0"
 for position, (fit, fit_seconds) in enumerate(full_fits.values()):
     r_hat, ess = diagnostics(fit)
     axes[0].annotate(
-        f"{num_divergences(fit)} divergences, min ESS {ess:,.0f}",
+        f"{divergence_label(num_divergences(fit))}, min ESS {ess:,.0f}",
         (position, fit_seconds),
         xytext=(0, 4),
         textcoords="offset points",
@@ -3055,16 +3165,33 @@ fig.suptitle("Wall time", fontsize=16, fontweight="bold");
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-30-output-1.png" class="figure-img" width="1411" height="511" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-31-output-1.png" class="figure-img" width="1411" height="511" /></p>
 </figure>
 
 
-Takeaway, to be read from the figure after execution.
+The M2 fit takes 50 seconds for four chains of 1{,}000 warmup and 1{,}000 draws. The same model under the discrete cosine transform of [time_reparam](../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) takes 86 seconds, 1.7 times as long, with one divergent transition instead of 22 and a smaller effective sample size (525 against 974): the innovation sites are already standardized, so the rotation has nothing to decorrelate, and the transform adds work to every gradient. The backtests take 2.8 minutes (M0), 5.2 (M1), 10.5 (M2) and 13.3 (M2-t) for 40 windows each, so the whole ladder runs in about half an hour with four chains in parallel.
 
 
 # Discussion
 
-Discussion, to be written from the outputs after execution.
+- **Four measures give a core PCE trend with a wider band.** Core PCE has the smallest gap volatility at every date, 0.2 percentage points at the end of the sample, so the common trend tracks it almost one for one. The other three measures change the volatility estimate: the trend volatility since 2020 is about 0.9 to 1.1 points per quarter. In the backtest, that extra width saves the 2021 windows and costs the 2009 to 2018 ones.
+- **Stochastic volatility pays.** M1 beats M0 by 0.051 \pm 0.035 CRPS, improves every score, and beats the Atkeson and Ohanian benchmark on the 4-quarter MAE (0.405 against 0.450). The 1970s, the Great Moderation and the 2020s need three different volatility levels, and a model with one scale for the whole sample cannot fit all three.
+- **Pooling does not help on average.** M2 scores 0.033 \pm 0.055 CRPS worse than M1 over the 40 windows and loses to the benchmark on the 4-quarter MAE. Its gain is concentrated at the 2020 and 2021 origins, where its wider bands cover the surge that no rung's median predicted.
+- **The 50\\ intervals are too wide beyond one quarter**, while the 94\\ intervals are calibrated: the center of the forecast distribution spreads too fast. A trend with some mean reversion is the first change to try.
+
+Open weaknesses of the model:
+
+- **\gamma is fixed.** Under a prior, \gamma runs to the edge of the prior with four disagreeing chains, so the value is a judgment, and the backtest ranks 0.2 above 0.1 above 0.05 within 0.03 CRPS. A floor on the gap volatility, or separate vol-of-vol values for the trend and the gaps, would make \gamma learnable and may remove the divergences at the same time.
+- **Independent gaps.** The model treats the gaps as independent across measures, but CPI and PCE share the energy component, and core CPI is a part of CPI. The 2008Q4 peak in the two headline gap volatilities is that shared component absorbed by two independent noises; a common factor for the headline gaps, as in Stock and Watson (2016), would separate it from the trend.
+- **Constant offsets.** The CPI to PCE wedge has moved with the index methodologies (rental equivalence entered the CPI in 1983), and a slowly moving offset would take that out of the gaps.
+- **Student-t gaps are not an outlier model.** M2-t improves the CRPS by 0.007, and with \nu = 5 the trend still dips to -0.8\\ in 2020Q2. An explicit outlier component, a mixture on the gap, would keep the trend at its 2020Q1 level through that quarter.
+- **The October 2025 CPI is interpolated.** The two CPI series carry a filled month in 2025Q4, so their 2025Q4 and 2026Q1 rates depend on the interpolation instead of on a published value.
+
+Fairness notes on the evaluation:
+
+- No information about the forecast horizon enters any model: the windows expand to the origin and the forecast uses the posterior at the origin only.
+- The data are the revised series as published on 2026-11-08, not the vintages a forecaster had at each origin. Revised data make every model and the benchmark look better than they would have in real time, and the PCE revisions are larger than the CPI ones, so the comparison with Atkeson and Ohanian (2001), who used real-time data, is not exact.
+- The 40 windows overlap by four quarters each, so the standard errors of the paired differences are understated, and the 2020 to 2021 windows carry a large share of every mean.
 
 
 # References
