@@ -10,6 +10,7 @@ from numpyro_forecast import datasets
 from numpyro_forecast.datasets import (
     bart_available,
     load_bart_hierarchical,
+    load_state_employment,
     load_us_inflation,
     load_victoria_electricity,
 )
@@ -138,3 +139,40 @@ def test_load_us_inflation_rates_match_levels() -> None:
         levels = np.loadtxt(handle, delimiter=",", skiprows=1, usecols=(1, 2, 3, 4))
     expected = 400.0 * np.diff(np.log(levels), axis=0)
     np.testing.assert_allclose(np.asarray(load_us_inflation().rates), expected, rtol=1e-6)
+
+
+def test_load_state_employment_shapes_and_names() -> None:
+    data = load_state_employment()
+    assert data.growth.shape == (data.dates.shape[0], 51)
+    assert data.growth.dtype == jnp.float32
+    assert data.dates.dtype == np.dtype("datetime64[D]")
+    assert data.states[:3] == ("AK", "AL", "AR")
+    assert "DC" in data.states
+    assert len(set(data.states)) == 51
+
+
+def test_load_state_employment_first_month() -> None:
+    data = load_state_employment()
+    assert data.dates[0] == np.datetime64("1990-02-01")
+    california = data.states.index("CA")
+    first_rate = 1_200.0 * (np.log(12_514.4) - np.log(12_496.6))
+    assert float(data.growth[0, california]) == pytest.approx(first_rate, abs=1e-4)
+
+
+def test_load_state_employment_dates_are_consecutive_months() -> None:
+    dates = load_state_employment().dates
+    months = dates.astype("datetime64[M]")
+    assert np.all((dates - months).astype(int) == 0)
+    assert np.all(np.diff(months) == np.timedelta64(1, "M"))
+
+
+def test_load_state_employment_growth_is_finite() -> None:
+    assert bool(jnp.all(jnp.isfinite(load_state_employment().growth)))
+
+
+def test_load_state_employment_growth_matches_levels() -> None:
+    source = importlib.resources.files("numpyro_forecast").joinpath("data", "state_employment.csv")
+    with source.open("r", encoding="utf-8") as handle:
+        levels = np.loadtxt(handle, delimiter=",", skiprows=1, usecols=range(1, 52))
+    expected = 1_200.0 * np.diff(np.log(levels), axis=0)
+    np.testing.assert_allclose(np.asarray(load_state_employment().growth), expected, rtol=1e-5)

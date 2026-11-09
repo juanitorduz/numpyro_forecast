@@ -217,6 +217,61 @@ def load_us_inflation() -> USInflation:
     )
 
 
+class StateEmployment(NamedTuple):
+    r"""Monthly employment growth for the 50 US states and the District of Columbia.
+
+    Attributes
+    ----------
+    growth
+        Annualized month-on-month log growth of total nonfarm employment in
+        percentage points, $1200 \, (\log E_t - \log E_{t-1})$, shape
+        ``(months, states)`` with time at axis ``-2``.
+    dates
+        First day of the month of each growth rate as ``datetime64[D]``, starting
+        at 1990-02-01.
+    states
+        Two-letter postal codes of the columns of ``growth``, in alphabetical
+        order (``"AK"``, ``"AL"``, ..., ``"WY"``), the District of Columbia as ``"DC"``.
+    """
+
+    growth: Float[Array, " months states"]
+    dates: np.ndarray
+    states: tuple[str, ...]
+
+
+def load_state_employment() -> StateEmployment:
+    r"""Load monthly employment growth for the 50 US states and the District of Columbia.
+
+    The bundled CSV holds the monthly, seasonally adjusted level of total
+    nonfarm employment (thousands of persons) in each state from the BLS Current
+    Employment Statistics, state and area, downloaded from FRED (series
+    ``<postal code>NA``, for example ``CANA``) on 2026-11-09 by
+    ``scripts/build_state_employment_csv.py``. The levels run from 1990-01 to
+    2026-09, the last month published for every state, as revised data at that
+    date, not real-time vintages. The loader turns the levels into annualized
+    monthly log growth rates in percentage points,
+    $1200 \, (\log E_t - \log E_{t-1})$, the transformation of Müller and Watson
+    (2026), so the growth rates start in 1990-02. The series are public domain
+    (FRED tag *Public Domain: Citation Requested*; source BLS).
+
+    Returns
+    -------
+    StateEmployment
+        The growth rates ``(months, states)`` as ``float32``, the month dates and
+        the postal codes of the columns.
+    """
+    source = importlib.resources.files("numpyro_forecast").joinpath("data", "state_employment.csv")
+    with source.open("r", encoding="utf-8") as handle:
+        header = handle.readline().strip().split(",")
+        table = np.loadtxt(handle, delimiter=",", dtype=str)
+    levels = table[:, 1:].astype(np.float64)
+    growth = 1_200.0 * np.diff(np.log(levels), axis=0)
+    dates = table[1:, 0].astype("datetime64[D]")
+    return StateEmployment(
+        growth=jnp.asarray(growth, dtype=jnp.float32), dates=dates, states=tuple(header[1:])
+    )
+
+
 M5_URL = (
     "https://github.com/Nixtla/m5-forecasts/raw/"
     "72b8e7fd3b565b3c538adcb1d1a05117d8562d7e/datasets/m5.zip"

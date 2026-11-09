@@ -220,6 +220,8 @@ reference:
       - datasets.M5Data
       - datasets.load_us_inflation
       - datasets.USInflation
+      - datasets.load_state_employment
+      - datasets.StateEmployment
 
   - title: Optional dependencies
     desc: Lazy imports behind pyproject extras.
