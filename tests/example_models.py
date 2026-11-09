@@ -129,20 +129,84 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
     return hierarchical_model
 
 
+TREND_INFLATION_GAP_FLOOR = 0.1
+"""Smallest gap volatility of ``make_trend_inflation_model``, in percentage points."""
+
+
+def _log_volatility(h: Horizon, name: str, initial: Array, vol_of_vol: float | Array) -> Array:
+    """Volatility ``exp(log_var / 2)`` of a log-variance random walk from standardized steps."""
+    steps = innovations(h, name, dist.Normal(0.0, 1.0))
+    return jnp.exp((initial + vol_of_vol * jnp.cumsum(steps, axis=-2)) / 2.0)
+
+
+def _measure_offsets(num_measures: int) -> Array:
+    """Offsets of the measures over the last one, whose offset is zero."""
+    if num_measures == 1:
+        return jnp.zeros(1)
+
+    alpha = numpyro.sample("alpha", dist.Normal(0.0, 1.0).expand([num_measures - 1]).to_event(1))
+    offset = jnp.concatenate([jnp.asarray(alpha), jnp.zeros(1)])
+    return jnp.asarray(numpyro.deterministic("offset", offset))
+
+
+def _trend_component(h: Horizon, vol_of_vol: float | Array, stochastic_volatility: bool) -> Array:
+    """Random-walk trend ``(duration, 1)`` whose step volatility is itself a random walk."""
+    tau0 = jnp.asarray(numpyro.sample("tau0", dist.Normal(3.0, 2.0)))
+    h0 = jnp.asarray(numpyro.sample("h0", dist.Normal(-1.5, 1.0)))
+
+    if stochastic_volatility:
+        trend_vol = _log_volatility(h, "trend_log_var_z", h0, vol_of_vol)
+    else:
+        trend_vol = jnp.full((h.duration, 1), jnp.exp(h0 / 2.0))
+
+    trend_vol = jnp.asarray(numpyro.deterministic("trend_vol", trend_vol))
+    trend_z = innovations(h, "trend_z", dist.Normal(0.0, 1.0))
+    return jnp.asarray(
+        numpyro.deterministic("trend", tau0 + jnp.cumsum(trend_vol * trend_z, axis=-2))
+    )
+
+
+def _gap_volatility(
+    h: Horizon, num_measures: int, vol_of_vol: float | Array, stochastic_volatility: bool
+) -> Array:
+    """Gap volatility ``(duration, num_measures)``: the floor plus a log-variance random walk."""
+    with numpyro.plate("measure", num_measures, dim=-1):
+        g0 = jnp.asarray(numpyro.sample("g0", dist.Normal(0.0, 1.0)))
+
+        if stochastic_volatility:
+            scale = _log_volatility(h, "gap_log_var_z", g0, vol_of_vol)
+        else:
+            scale = jnp.broadcast_to(jnp.exp(g0 / 2.0), (h.duration, num_measures))
+
+    return jnp.asarray(numpyro.deterministic("gap_vol", TREND_INFLATION_GAP_FLOOR + scale))
+
+
+def _common_transitory_shock(h: Horizon, vol_of_vol: float | Array) -> Array:
+    """White-noise shock ``(duration, 1)`` shared by every measure, with stochastic volatility."""
+    q0 = jnp.asarray(numpyro.sample("q0", dist.Normal(0.0, 1.0)))
+    common_vol = numpyro.deterministic(
+        "common_vol", _log_volatility(h, "common_log_var_z", q0, vol_of_vol)
+    )
+    common_z = innovations(h, "common_z", dist.Normal(0.0, 1.0))
+    return jnp.asarray(numpyro.deterministic("common_shock", jnp.asarray(common_vol) * common_z))
+
+
 def make_trend_inflation_model(
     num_measures: int,
     *,
     vol_of_vol: float | Array = 0.1,
     stochastic_volatility: bool = True,
-    student_t: bool = False,
+    common_transitory: bool = False,
 ) -> ForecastModel:
     r"""Build the multi-measure trend inflation model of ``trend_inflation.ipynb``.
 
-    Every measure is a common random-walk trend plus a measure offset (zero
-    for the last measure) plus a transitory gap. The log-variances of the trend
-    shock and of each gap are random walks with the fixed vol-of-vol
-    ``vol_of_vol``, and the random walks are built from standardized steps with
-    ``jnp.cumsum`` (non-centered form).
+    Every measure is a common random-walk trend plus a measure offset (zero for
+    the last measure), plus, when ``common_transitory`` is set, a white-noise shock
+    shared by every measure, plus a transitory gap of its own. The gap volatility
+    is ``TREND_INFLATION_GAP_FLOOR`` plus ``exp(g / 2)``. The log-variances of the
+    trend shock, of the shared shock and of each gap are random walks with the
+    vol-of-vol ``vol_of_vol``, built from standardized steps with ``jnp.cumsum``
+    (non-centered form).
 
     Parameters
     ----------
@@ -152,10 +216,11 @@ def make_trend_inflation_model(
         Standard deviation of the log-variance random walk steps, $\gamma$: a fixed
         number or a value sampled by an enclosing model.
     stochastic_volatility
-        Whether the log-variances move over time; ``False`` keeps them at their
-        initial values (constant variances).
-    student_t
-        Whether the gaps are Student-t instead of Normal.
+        Whether the trend and gap log-variances move over time; ``False`` keeps them
+        at their initial values (constant variances).
+    common_transitory
+        Whether a white-noise shock with stochastic volatility moves every measure
+        by the same amount.
 
     Returns
     -------
@@ -175,46 +240,15 @@ def make_trend_inflation_model(
             Observed rates ``(duration, num_measures)`` (``None`` for prior sampling).
         """
         h = Horizon.from_data(covariates, data)
-        measure_plate = numpyro.plate("measure", num_measures, dim=-1)
-
-        if num_measures > 1:
-            alpha = numpyro.sample(
-                "alpha", dist.Normal(0.0, 1.0).expand([num_measures - 1]).to_event(1)
-            )
-            offset = jnp.concatenate([jnp.asarray(alpha), jnp.zeros(1)])
-        else:
-            offset = jnp.zeros(1)
-        numpyro.deterministic("offset", offset)
-
-        tau0 = numpyro.sample("tau0", dist.Normal(3.0, 2.0))
-        h0 = numpyro.sample("h0", dist.Normal(-1.5, 1.0))
-        trend_z = innovations(h, "trend_z", dist.Normal(0.0, 1.0))
-        if stochastic_volatility:
-            trend_log_var_z = innovations(h, "trend_log_var_z", dist.Normal(0.0, 1.0))
-            log_var_trend = h0 + vol_of_vol * jnp.cumsum(trend_log_var_z, axis=-2)
-        else:
-            log_var_trend = h0 * jnp.ones_like(trend_z)
-        trend_vol = jnp.asarray(numpyro.deterministic("trend_vol", jnp.exp(log_var_trend / 2.0)))
-        trend = jnp.asarray(
-            numpyro.deterministic("trend", tau0 + jnp.cumsum(trend_vol * trend_z, axis=-2))
+        prediction = _trend_component(h, vol_of_vol, stochastic_volatility) + _measure_offsets(
+            num_measures
         )
 
-        with measure_plate:
-            g0 = numpyro.sample("g0", dist.Normal(0.0, 1.0))
-        if stochastic_volatility:
-            with measure_plate:
-                gap_log_var_z = innovations(h, "gap_log_var_z", dist.Normal(0.0, 1.0))
-            log_var_gap = g0 + vol_of_vol * jnp.cumsum(gap_log_var_z, axis=-2)
-        else:
-            log_var_gap = jnp.broadcast_to(g0, (h.duration, num_measures))
-        gap_vol = numpyro.deterministic("gap_vol", jnp.exp(log_var_gap / 2.0))
+        if common_transitory:
+            prediction = prediction + _common_transitory_shock(h, vol_of_vol)
 
-        prediction = trend + offset
-        if student_t:
-            nu = numpyro.sample("nu", dist.Gamma(10.0, 1.0))
-            predict(h, dist.StudentT(nu, 0.0, gap_vol), prediction)
-        else:
-            predict(h, dist.Normal(0.0, gap_vol), prediction)
+        gap_vol = _gap_volatility(h, num_measures, vol_of_vol, stochastic_volatility)
+        predict(h, dist.Normal(0.0, gap_vol), prediction)
 
     return trend_inflation_model
 

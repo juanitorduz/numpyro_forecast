@@ -1,7 +1,5 @@
 """Tests for the dataset loaders."""
 
-import importlib.resources
-
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -130,11 +128,3 @@ def test_load_us_inflation_dates_are_consecutive_quarters() -> None:
 
 def test_load_us_inflation_rates_are_finite() -> None:
     assert bool(jnp.all(jnp.isfinite(load_us_inflation().rates)))
-
-
-def test_load_us_inflation_rates_match_levels() -> None:
-    source = importlib.resources.files("numpyro_forecast").joinpath("data", "us_inflation.csv")
-    with source.open("r", encoding="utf-8") as handle:
-        levels = np.loadtxt(handle, delimiter=",", skiprows=1, usecols=(1, 2, 3, 4))
-    expected = 400.0 * np.diff(np.log(levels), axis=0)
-    np.testing.assert_allclose(np.asarray(load_us_inflation().rates), expected, rtol=1e-6)

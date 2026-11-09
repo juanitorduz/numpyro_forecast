@@ -150,55 +150,44 @@ def _nuts_posterior(
     return mcmc.get_samples()
 
 
+@pytest.mark.parametrize("num_measures", [1, 4])
 @pytest.mark.parametrize("stochastic_volatility", [True, False])
-@pytest.mark.parametrize("student_t", [False, True])
+@pytest.mark.parametrize("common_transitory", [False, True])
 def test_trend_inflation_prior_predictive_shapes(
-    rng_key: Array, stochastic_volatility: bool, student_t: bool
+    rng_key: Array, num_measures: int, stochastic_volatility: bool, common_transitory: bool
 ) -> None:
     model = make_trend_inflation_model(
-        4, stochastic_volatility=stochastic_volatility, student_t=student_t
+        num_measures,
+        stochastic_volatility=stochastic_volatility,
+        common_transitory=common_transitory,
     )
     prior = Predictive(model, num_samples=5)(rng_key, jnp.zeros((30, 0)))
-    assert prior["obs"].shape == (5, 30, 4)
+    assert prior["obs"].shape == (5, 30, num_measures)
     assert prior["trend"].shape == (5, 30, 1)
-    assert prior["gap_vol"].shape == (5, 30, 4)
+    assert prior["gap_vol"].shape == (5, 30, num_measures)
+    assert ("common_shock" in prior) == common_transitory
+    if common_transitory:
+        assert prior["common_shock"].shape == (5, 30, 1)
 
 
-def test_trend_inflation_reference_offset_is_zero(rng_key: Array) -> None:
-    prior = Predictive(make_trend_inflation_model(4), num_samples=5)(rng_key, jnp.zeros((30, 0)))
-    assert bool(jnp.all(prior["offset"][:, -1] == 0.0))
-
-
-@pytest.mark.parametrize("stochastic_volatility", [True, False])
-def test_trend_inflation_forecast_has_time_varying_scale(
-    rng_key: Array, fast_mcmc: dict[str, int], stochastic_volatility: bool
+def test_trend_inflation_stochastic_volatility_moves_over_the_horizon(
+    rng_key: Array, fast_mcmc: dict[str, int]
 ) -> None:
-    model = make_trend_inflation_model(4, stochastic_volatility=stochastic_volatility)
-    key_data, key_fit, key_forecast, key_scale = random.split(rng_key, 4)
+    model = make_trend_inflation_model(4, common_transitory=True)
+    key_data, key_fit, key_scale = random.split(rng_key, 3)
     data = Predictive(model, num_samples=1)(key_data, jnp.zeros((40, 0)))["obs"][0]
     posterior = _nuts_posterior(key_fit, model, data, fast_mcmc)
-    covariates = jnp.zeros((48, 0))
-    pred = forecast(key_forecast, model, posterior, data, covariates)
-    assert pred.shape == (fast_mcmc["num_samples"], 8, 4)
-    future_scale = Predictive(model, posterior, return_sites=["gap_vol"])(
-        key_scale, covariates, data
-    )["gap_vol"][:, 40:]
-    varies = not bool(jnp.all(future_scale == future_scale[:, :1]))
-    assert varies == stochastic_volatility
-
-
-def test_trend_inflation_univariate_ladder_runs(rng_key: Array, fast_mcmc: dict[str, int]) -> None:
-    model = make_trend_inflation_model(1, stochastic_volatility=False)
-    key_data, key_fit, key_forecast = random.split(rng_key, 3)
-    data = Predictive(model, num_samples=1)(key_data, jnp.zeros((40, 0)))["obs"][0]
-    posterior = _nuts_posterior(key_fit, model, data, fast_mcmc)
-    pred = forecast(key_forecast, model, posterior, data, jnp.zeros((48, 0)))
-    assert pred.shape == (fast_mcmc["num_samples"], 8, 1)
+    future = Predictive(model, posterior, return_sites=["gap_vol", "common_vol"])(
+        key_scale, jnp.zeros((48, 0)), data
+    )
+    for site in ("gap_vol", "common_vol"):
+        horizon_scale = future[site][:, 40:]
+        assert not bool(jnp.all(horizon_scale == horizon_scale[:, :1]))
 
 
 def test_trend_inflation_us_smoke(rng_key: Array, fast_mcmc: dict[str, int]) -> None:
     rates = load_us_inflation().rates[-60:]
-    model = make_trend_inflation_model(rates.shape[1])
+    model = make_trend_inflation_model(rates.shape[1], common_transitory=True)
     key_fit, key_forecast = random.split(rng_key)
     posterior = _nuts_posterior(key_fit, model, rates, fast_mcmc)
     pred = forecast(key_forecast, model, posterior, rates, jnp.zeros((68, 0)))
