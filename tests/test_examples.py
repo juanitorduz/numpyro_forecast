@@ -5,9 +5,16 @@ from typing import cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import pytest
-from example_models import make_hierarchical_model, make_trend_inflation_model, univariate_model
+from example_models import (
+    low_frequency_basis,
+    make_hierarchical_model,
+    make_rts_model,
+    make_trend_inflation_model,
+    univariate_model,
+)
 from jax import Array, random
 from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
@@ -16,6 +23,7 @@ from numpyro_forecast.datasets import (
     bart_available,
     load_bart_hierarchical,
     load_bart_weekly,
+    load_state_employment,
     load_us_inflation,
 )
 from numpyro_forecast.evaluate import eval_crps
@@ -204,3 +212,121 @@ def test_trend_inflation_us_smoke(rng_key: Array, fast_mcmc: dict[str, int]) -> 
     pred = forecast(key_forecast, model, posterior, rates, jnp.zeros((68, 0)))
     assert pred.shape == (fast_mcmc["num_samples"], 8, 4)
     assert bool(jnp.all(jnp.isfinite(pred)))
+
+
+def test_low_frequency_basis_is_the_random_walk_spectrum() -> None:
+    basis = np.asarray(low_frequency_basis(107, 3))
+    assert basis.shape == (107, 3)
+    cumsum = np.tril(np.ones((107, 107)))
+    demean = np.eye(107) - 1.0 / 107
+    covariance = demean @ cumsum @ cumsum.T @ demean.T
+    eigenvalues = np.sort(np.linalg.eigvalsh(covariance))[::-1]
+    np.testing.assert_allclose(np.sum(basis**2, axis=0), eigenvalues[:3], rtol=1e-4)
+    assert np.all(basis[0] > 0.0)
+    assert np.abs(basis[:, 0]).max() > np.abs(basis[:, 1]).max() > np.abs(basis[:, 2]).max()
+
+
+@pytest.mark.parametrize("outliers", [False, True])
+@pytest.mark.parametrize("stochastic_volatility", [False, True])
+def test_rts_prior_predictive_shapes(
+    rng_key: Array, outliers: bool, stochastic_volatility: bool
+) -> None:
+    model = make_rts_model(
+        jnp.zeros((12, 3)),
+        student_t=True,
+        outliers=outliers,
+        stochastic_volatility=stochastic_volatility,
+    )
+    history = jnp.zeros((72, 3))
+    prior = Predictive(model, num_samples=4)(rng_key, history)
+    assert prior["obs"].shape == (4, 72, 3)
+    assert prior["mu_t"].shape == (4, 72, 3)
+    assert prior["phi"].shape == (4, 12, 3)
+    assert prior["nu"].shape == (4, 3)
+    assert ("outlier" in prior) == outliers
+    assert ("log_var" in prior) == stochastic_volatility
+    if stochastic_volatility:
+        assert prior["log_var"].shape == (4, 72, 3)
+    forecast_draws = Predictive(model, num_samples=4)(
+        rng_key, jnp.concatenate([history, jnp.zeros((8, 3))]), history
+    )
+    assert forecast_draws["forecast"].shape == (4, 8, 3)
+
+
+def test_rts_outlier_leaves_the_lag_window(rng_key: Array) -> None:
+    growth = load_state_employment().growth[:84, :2]
+    y_init, history = growth[:12], growth[12:]
+    model = make_rts_model(y_init, student_t=True, outliers=True)
+    draw = Predictive(model, num_samples=1)(rng_key, history)
+    values = {name: value[0] for name, value in draw.items() if name != "obs"}
+    values["outlier_eta"] = jnp.zeros_like(history)
+    clean = numpyro.handlers.trace(numpyro.handlers.condition(model, data=values)).get_trace(
+        history, history
+    )
+    spike = 50.0
+    spiked = history.at[20, 0].add(spike)
+    kappa = jnp.asarray(clean["kappa"]["value"])
+    values["outlier_eta"] = values["outlier_eta"].at[20, 0].set(spike / kappa[0])
+    with_outlier = numpyro.handlers.trace(
+        numpyro.handlers.condition(model, data=values)
+    ).get_trace(spiked, spiked)
+    np.testing.assert_allclose(
+        np.asarray(with_outlier["mu_t"]["value"]),
+        np.asarray(clean["mu_t"]["value"]),
+        atol=1e-3,
+    )
+
+
+def test_rts_forecast_is_the_cumulative_growth_path(
+    rng_key: Array, fast_mcmc: dict[str, int]
+) -> None:
+    growth = load_state_employment().growth[:120, :4]
+    y_init, history = growth[:12], growth[12:]
+    model = make_rts_model(y_init, hierarchical=False)
+    key_fit, key_forecast = random.split(rng_key)
+    mcmc = MCMC(
+        NUTS(model),
+        num_warmup=fast_mcmc["num_warmup"],
+        num_samples=fast_mcmc["num_samples"],
+        num_chains=fast_mcmc["num_chains"],
+        progress_bar=False,
+    )
+    mcmc.run(key_fit, history, history)
+    covariates = jnp.concatenate([history, jnp.zeros((6, 4))])
+    pred = forecast(key_forecast, model, mcmc.get_samples(), history, covariates)
+    assert pred.shape == (fast_mcmc["num_samples"], 6, 4)
+    assert bool(jnp.all(jnp.isfinite(pred)))
+    growth_3 = jnp.cumsum(pred, axis=1)[:, 2] / 3.0
+    np.testing.assert_allclose(
+        np.asarray(growth_3), np.asarray(pred[:, :3].mean(axis=1)), rtol=1e-5
+    )
+
+
+def test_rts_ols_plug_in_forecast_mean_is_the_one_step_prediction(rng_key: Array) -> None:
+    growth = load_state_employment().growth[:120, :3]
+    y_init, history = growth[:12], growth[12:]
+    num_lags, num_states = y_init.shape
+    panel = jnp.concatenate([y_init, history])
+    rows = jnp.arange(history.shape[0])[:, None] + (num_lags - 1 - jnp.arange(num_lags))[None, :]
+    design = jnp.concatenate([jnp.ones((history.shape[0], 1, num_states)), panel[rows]], axis=1)
+    coefficients = jnp.stack(
+        [jnp.linalg.lstsq(design[:, :, s], history[:, s])[0] for s in range(num_states)],
+        axis=1,
+    )  # (13, states): intercept then the 12 lag coefficients
+    intercept, phi = coefficients[0], coefficients[1:]
+    residual = history - jnp.einsum("tks,ks->ts", design, coefficients)
+    log_sigma2 = jnp.log(residual.var(axis=0))
+    num_draws = 4_000
+    posterior = {
+        "mu": jnp.broadcast_to(intercept / (1.0 - phi.sum(axis=0)), (num_draws, num_states)),
+        "phi": jnp.broadcast_to(phi, (num_draws, num_lags, num_states)),
+        "log_omega2": jnp.broadcast_to(log_sigma2.mean(), (num_draws,)),
+        "log_sigma2": jnp.broadcast_to(log_sigma2, (num_draws, num_states)),
+    }
+    model = make_rts_model(y_init, hierarchical=False)
+    pred = forecast(
+        rng_key, model, posterior, history, jnp.concatenate([history, jnp.zeros((6, 3))])
+    )
+    one_step = intercept + jnp.einsum("ls,ls->s", phi, history[-num_lags:][::-1])
+    tolerance = 3.0 * jnp.exp(0.5 * log_sigma2) / jnp.sqrt(num_draws)
+    assert bool(jnp.all(jnp.abs(pred[:, 0].mean(axis=0) - one_step) < tolerance))

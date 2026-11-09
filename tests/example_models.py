@@ -8,8 +8,10 @@ target for the full fit-draw-forecast path.
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
+from jaxtyping import Float
 from numpyro.handlers import scope
 from numpyro.infer.reparam import LocScaleReparam
 
@@ -217,6 +219,242 @@ def make_trend_inflation_model(
             predict(h, dist.Normal(0.0, gap_vol), prediction)
 
     return trend_inflation_model
+
+
+def low_frequency_basis(num_periods: int, num_terms: int) -> Float[Array, " periods terms"]:
+    r"""Leading eigenvectors of a demeaned random walk, scaled by the root eigenvalues.
+
+    Müller and Watson (2026, Section 3.5) write the covariance matrix of a
+    demeaned random walk of length $T$ with unit innovation variance as
+    $\bar\Sigma_{RW} = \sum_l \varphi_l \varphi_l'$ with
+    $\varphi_l = \lambda_l^{1/2} e_l$, and keep the $q$ columns with the largest
+    eigenvalues: the demeaned walk is approximately $\sum_{l \le q} \varphi_l \xi_l$
+    with iid $\xi_l$ of the innovation variance. Column $l$ is close to a cosine
+    of $l$ half-periods over the sample and has amplitude of order
+    $\sqrt{2T}/(l\pi)$. The sign of each column is fixed by a positive first row.
+
+    Parameters
+    ----------
+    num_periods
+        Length $T$ of the walk.
+    num_terms
+        Number of columns $q$ kept (the largest eigenvalues first).
+
+    Returns
+    -------
+    Float[Array, " periods terms"]
+        The basis $(\varphi_1, \dots, \varphi_q)$ as a ``(num_periods, num_terms)`` array.
+    """
+    cumsum = np.tril(np.ones((num_periods, num_periods)))
+    demean = np.eye(num_periods) - np.ones((num_periods, num_periods)) / num_periods
+    covariance = demean @ cumsum @ cumsum.T @ demean.T
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+    order = np.argsort(eigenvalues)[::-1][:num_terms]
+    basis = eigenvectors[:, order] * np.sqrt(eigenvalues[order])
+    return jnp.asarray(basis * np.sign(basis[0])[None, :], dtype=jnp.float32)
+
+
+def make_rts_model(
+    y_init: Array,
+    *,
+    hierarchical: bool = True,
+    student_t: bool = False,
+    outliers: bool = False,
+    stochastic_volatility: bool = False,
+) -> ForecastModel:
+    r"""Build the related time series ladder of ``related_time_series.ipynb``.
+
+    Each series $j$ is an AR(12) around its mean, $y_{j,t} = \mu_j + u_{j,t} + o_{j,t}$
+    with $u_{j,t} = \sum_{l \le 12} \phi_{j,l} u_{j,t-l} + \sigma_{j,t} \varepsilon_{j,t}$,
+    run through `~~numpyro_forecast.models.ssoe()` on the observed history
+    (Müller and Watson, 2026, Models I to V). The switches add the paper's
+    features one at a time: hierarchical priors that pool $\phi_{j,l}$ and
+    $\ln \sigma_j^2$ across series, Student-t innovations with pooled degrees of
+    freedom, Student-t additive outliers $o_{j,t} = \kappa_j \eta_{j,t}$ with
+    $\nu^o = 4$ that leave the lag window (the recursion runs on $y - o$), and
+    a low-frequency random walk in $\ln \sigma^2_{j,t}$ on
+    `low_frequency_basis` with $q = \lfloor (t_{\text{obs}} + 12) / 36 \rfloor$
+    terms. The paper's common scale $\omega$ is absorbed into the location of
+    the $\ln \sigma_j^2$ prior (site ``log_omega2``), every hierarchical site is
+    non-centered by hand, and the first 12 rows of the panel, ``y_init``, seed
+    the lag window instead of the paper's stationary prior on the initial values.
+
+    Parameters
+    ----------
+    y_init
+        The 12 rows before the first likelihood row, shape ``(12, states)``.
+    hierarchical
+        Pool $\phi_{j,l}$ and $\ln \sigma_j^2$ across series (Model II); otherwise
+        the Minnesota prior $\phi_{j,l} \sim \text{Normal}(0, 0.2 / l)$ and
+        $\ln \sigma_j^2 \sim \text{Normal}(\ln \omega^2, 0.3^2)$ of Model I.
+    student_t
+        Student-t innovations with series-specific $\nu_j$ (Model III).
+    outliers
+        Student-t additive outliers (Model IV).
+    stochastic_volatility
+        Low-frequency random walk in the log innovation variance (Model V).
+
+    Returns
+    -------
+    ForecastModel
+        A callable ``(covariates, data=None) -> None`` that reads the observed
+        history from ``covariates[..., :t_obs, :]`` (the panel itself, shape
+        ``(duration, states)``); ``data`` is the same panel while training.
+    """
+    num_lags, num_states = y_init.shape
+    lags = jnp.arange(1, num_lags + 1, dtype=jnp.float32)
+    minnesota_scale = 0.2 / lags  # (12,): the prior sd of phi_{j,l} shrinks with the lag
+
+    def rts_model(covariates: Array, data: Array | None = None) -> None:
+        """Define the related time series model.
+
+        Parameters
+        ----------
+        covariates
+            The growth panel ``(duration, states)``; rows past ``t_obs`` are unread.
+        data
+            Observed growth ``(t_obs, states)`` (``None`` for prior sampling).
+        """
+        h = Horizon.from_data(covariates, data)
+        y = covariates[..., : h.t_obs, :]  # (t_obs, states): the observed history
+        state_plate = numpyro.plate("state", num_states, dim=-1)
+        lag_plate = numpyro.plate("lag", num_lags, dim=-2)
+
+        mu = jnp.asarray(
+            numpyro.sample("mu", dist.Normal(0.0, 10.0).expand([num_states]).to_event(1))
+        )
+        log_omega2 = numpyro.sample("log_omega2", dist.Normal(0.0, 10.0))
+        if hierarchical:
+            phi_loc = jnp.asarray(
+                numpyro.sample("phi_loc", dist.Normal(0.0, 0.5 * minnesota_scale).to_event(1))
+            )
+            log_v_phi = jnp.asarray(
+                numpyro.sample(
+                    "log_v_phi", dist.Normal(jnp.log(minnesota_scale**2), 0.5).to_event(1)
+                )
+            )
+            with lag_plate, state_plate:
+                phi_z = jnp.asarray(numpyro.sample("phi_z", dist.Normal(0.0, 1.0)))
+            phi = jnp.asarray(
+                numpyro.deterministic(
+                    "phi", phi_loc[:, None] + jnp.exp(0.5 * log_v_phi)[:, None] * phi_z
+                )
+            )
+            log_v_sigma = numpyro.sample("log_v_sigma", dist.Normal(jnp.log(0.3**2), 0.5))
+            with state_plate:
+                log_sigma2_z = jnp.asarray(numpyro.sample("log_sigma2_z", dist.Normal(0.0, 1.0)))
+            log_sigma2 = jnp.asarray(
+                numpyro.deterministic(
+                    "log_sigma2", log_omega2 + jnp.exp(0.5 * log_v_sigma) * log_sigma2_z
+                )
+            )
+        else:
+            with lag_plate, state_plate:
+                phi = jnp.asarray(
+                    numpyro.sample("phi", dist.Normal(0.0, minnesota_scale[:, None]))
+                )
+            with state_plate:
+                log_sigma2 = jnp.asarray(
+                    numpyro.sample("log_sigma2", dist.Normal(log_omega2, 0.3))
+                )
+
+        if student_t:
+            nu_loc = numpyro.sample("nu_loc", dist.Normal(jnp.log(10.0), 0.5))
+            log_v_nu = numpyro.sample("log_v_nu", dist.Normal(jnp.log(0.5**2), 0.5))
+            with state_plate:
+                log_nu_z = jnp.asarray(numpyro.sample("log_nu_minus_2_z", dist.Normal(0.0, 1.0)))
+            nu = jnp.asarray(
+                numpyro.deterministic(
+                    "nu", 2.0 + jnp.exp(nu_loc + jnp.exp(0.5 * log_v_nu) * log_nu_z)
+                )
+            )
+
+        if outliers:
+            # The paper centers the kappa hierarchy at ln(0.1^2) relative to omega; with
+            # omega absorbed the location moves with log_omega2 and the paper's two
+            # 0.5^2 variances add up.
+            kappa_loc = numpyro.sample(
+                "kappa_loc", dist.Normal(log_omega2 + jnp.log(0.1**2), jnp.sqrt(0.5**2 + 0.5**2))
+            )
+            log_v_kappa = numpyro.sample("log_v_kappa", dist.Normal(jnp.log(0.3**2), 0.5))
+            with state_plate:
+                log_kappa2_z = jnp.asarray(numpyro.sample("log_kappa2_z", dist.Normal(0.0, 1.0)))
+            kappa = jnp.asarray(
+                numpyro.deterministic(
+                    "kappa", jnp.exp(0.5 * (kappa_loc + jnp.exp(0.5 * log_v_kappa) * log_kappa2_z))
+                )
+            )
+            with numpyro.plate("time", h.t_obs, dim=-2), state_plate:
+                eta = jnp.asarray(numpyro.sample("outlier_eta", dist.StudentT(4.0, 0.0, 1.0)))
+            outlier = jnp.asarray(numpyro.deterministic("outlier", kappa * eta))  # (t_obs, states)
+        else:
+            outlier = jnp.zeros_like(y)
+
+        if stochastic_volatility:
+            num_terms = max(1, (h.t_obs + num_lags) // 36)  # the paper counts T from 1990m2
+            basis = low_frequency_basis(h.t_obs, num_terms)  # (t_obs, q)
+            xi_loc = jnp.asarray(
+                numpyro.sample("xi_loc", dist.Normal(0.0, 0.01).expand([num_terms]).to_event(1))
+            )
+            log_v_xi = numpyro.sample("log_v_xi", dist.Normal(jnp.log(0.01**2), 0.5))
+            with numpyro.plate("term", num_terms, dim=-2), state_plate:
+                xi_z = jnp.asarray(numpyro.sample("xi_z", dist.Normal(0.0, 1.0)))
+            xi = xi_loc[:, None] + jnp.exp(0.5 * log_v_xi) * xi_z  # (q, states)
+            log_var = jnp.asarray(numpyro.deterministic("log_var", log_sigma2 + basis @ xi))
+            scale = jnp.exp(0.5 * log_var)  # (t_obs, states)
+            if h.future > 0:
+                with numpyro.plate("time_future", h.future, dim=-2), state_plate:
+                    log_var_z = jnp.asarray(
+                        numpyro.sample("log_var_z_future", dist.Normal(0.0, 1.0))
+                    )
+                # The log variance continues as a random walk with step variance v_xi.
+                log_var_future = log_var[-1] + jnp.exp(0.5 * log_v_xi) * jnp.cumsum(
+                    log_var_z, axis=0
+                )
+                scale_future = jnp.exp(0.5 * log_var_future)  # (future, states)
+            else:
+                scale_future = jnp.exp(0.5 * log_sigma2)
+        else:
+            scale = jnp.exp(0.5 * log_sigma2)  # (states,)
+            scale_future = scale
+
+        # AR(12) around the mean: y_t - mu = sum_l phi_l (y_{t-l} - mu) + error, written
+        # with the intercept mu (1 - sum_l phi_l) on the lag window of y itself.
+        intercept = mu * (1.0 - phi.sum(axis=0))  # (states,)
+
+        def mean(window: Array, _: object) -> Array:
+            """Conditional mean from the lag window ``(12, states)``, most recent row last."""
+            return intercept + jnp.einsum("ls,ls->s", phi, window[::-1])
+
+        def update(window: Array, y_t: Array, eps_t: Array, _: object) -> Array:
+            """Shift the lag window by one row."""
+            return jnp.concatenate([window[1:], y_t[None]], axis=0)
+
+        noise = (
+            dist.StudentT(nu, 0.0, scale_future) if student_t else dist.Normal(0.0, scale_future)
+        )
+        # The recursion runs on the series without its additive outliers, so an outlier
+        # never enters the lag window.
+        r = ssoe(h, "eps", y - outlier, y_init, mean, update, noise)
+        mu_t = jnp.asarray(numpyro.deterministic("mu_t", r.mu))  # (t_obs, states)
+        obs_dist = (
+            dist.StudentT(nu, mu_t + outlier, scale)
+            if student_t
+            else dist.Normal(mu_t + outlier, scale)
+        )
+        with numpyro.plate("time", h.t_obs, dim=-2), state_plate:
+            numpyro.sample("obs", obs_dist, obs=h.data)
+        if h.future > 0:
+            y_future = r.y_future
+            if outliers:
+                with numpyro.plate("time_future", h.future, dim=-2), state_plate:
+                    eta_future = jnp.asarray(
+                        numpyro.sample("outlier_eta_future", dist.StudentT(4.0, 0.0, 1.0))
+                    )
+                y_future = y_future + kappa * eta_future
+            numpyro.deterministic("forecast", y_future)
+
+    return rts_model
 
 
 def _level_channel(h: Horizon, name: str, values: Array, gate: Array) -> tuple[SSOEResult, Array]:
