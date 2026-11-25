@@ -74,14 +74,17 @@ which the drivers read by their bare names, so it cannot run under
 
 import importlib
 import warnings
+from collections.abc import Mapping
 from typing import Any, NamedTuple, no_type_check
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
+import numpyro.distributions as dist
 from jax import random
 from jaxtyping import Float
+from numpyro.distributions import constraints
 
 from numpyro_forecast.models import Horizon
 from numpyro_forecast.names import Site
@@ -96,6 +99,18 @@ _PREDICTED_OBSERVATIONS = "_predicted_observations"
 
 _PREDICTED_STATES = "_predicted_states"
 """Suffix of the site a dynestyx Simulator registers with the state rollout."""
+
+_FILTERED_MEAN = "_filtered_states_mean"
+"""Suffix of the site a dynestyx Gaussian filter records with the filtered state means."""
+
+_FILTERED_COV = "_filtered_states_cov"
+"""Suffix of the site a dynestyx Gaussian filter records with the filtered state covariances."""
+
+_START_MEAN = "_start_mean"
+"""Suffix of the sample site with the mean that `start_state()` reads."""
+
+_START_COV = "_start_cov"
+"""Suffix of the sample site with the covariance that `start_state()` reads."""
 
 _CONDITIONING_SITES = {
     "FILTER": "_marginal_loglik",
@@ -476,3 +491,232 @@ def state_space(
         u = None if controls is None else controls[: h.t_obs]
         numpyro.deterministic(Site.OBS, _observe(key_obs, dynamics, x_in_sample, u, obs_times))
     return StateSpaceResult(x_in_sample=x_in_sample, x_future=x_future)
+
+
+def end_state(
+    samples: Mapping[str, Array | np.ndarray], name: str
+) -> dict[str, Array | np.ndarray]:
+    """Take the filtered state at the last step as the start of the next window.
+
+    The function reads the two sites that a dynestyx Gaussian filter records,
+    ``f"{name}_filtered_states_mean"`` of shape ``(*sample, time, state)`` and
+    ``f"{name}_filtered_states_cov"`` of shape ``(*sample, time, state, state)``,
+    with any number of leading sample axes. It returns their last row on the
+    time axis under the names of the two sample sites that `start_state()`
+    reads. Add the result to the posterior of a driver call on a model function
+    that calls `start_state()`: the model then continues the filter on new
+    observations and does not read the earlier window again.
+
+    - dynestyx records each of the two sites by default only while it has at
+      most ``100_000`` elements per draw (``time * state`` for the mean,
+      ``time * state**2`` for the covariance). Set
+      ``record_filtered_states_mean=True`` and ``record_filtered_states_cov=True``
+      in the filter configuration to record them at any size.
+    - The function reads the covariance site, not the
+      ``f"{name}_filtered_states_chol_cov"`` site: only the cuthbert backend
+      records that one, and the diagonal of its factor can be negative.
+    - The function reads the whole ``(sample, time, ...)`` arrays to take one
+      row, so the earlier run holds them in memory once.
+    - The state at an earlier step comes from the same samples. A filter is
+      causal: the first ``t`` rows are the filter of the first ``t``
+      observations. Slice both sites to ``[..., :t, :]`` and ``[..., :t, :, :]``
+      before the call. One filter pass then serves several forecast origins.
+    - The two sites of a resumed run give the start of the next window, so the
+      updates chain: each new window needs only the output of the window before.
+    - The tested filters are ``KFConfig()``, ``KFConfig(filter_source="cuthbert")``
+      and ``EKFConfig()``.
+
+    Parameters
+    ----------
+    samples
+        Draws that hold the two filtered sites: ``mcmc.get_samples()`` or the
+        output of `~~numpyro_forecast.predictive.draw_posterior()` for a fit
+        under a ``Filter``, or the output of a plain ``numpyro.infer.Predictive``
+        call with ``return_sites`` under a ``Filter``. Other keys are ignored.
+    name
+        The site prefix of the `state_space()` call.
+
+    Returns
+    -------
+    dict[str, Array | np.ndarray]
+        ``f"{name}_start_mean"``, shape ``(*sample, state)``, and
+        ``f"{name}_start_cov"``, shape ``(*sample, state, state)``. The values
+        are indexed, not converted: a NumPy input gives NumPy values.
+
+    Raises
+    ------
+    ValueError
+        If ``samples`` does not hold both filtered sites.
+
+    See Also
+    --------
+    start_state : The model-side function that reads the two returned sites.
+    state_space : The building block that runs the filter.
+
+    Examples
+    --------
+    The filtered state at the end of a window, from one pass of the filter at
+    the parameter draws of a fit:
+
+    ```python
+    sites = ["f_filtered_states_mean", "f_filtered_states_cov"]
+    with Filter(filter_config=KFConfig(filter_source="cuthbert")):
+        samples = Predictive(model, posterior_samples=parameters, return_sites=sites)(
+            rng_key, series[:t_obs], series[:t_obs]
+        )
+
+    posterior = parameters | end_state(samples, "f")
+
+    # the state at an earlier forecast origin t, from the same pass
+    earlier = {
+        "f_filtered_states_mean": samples["f_filtered_states_mean"][..., :t, :],
+        "f_filtered_states_cov": samples["f_filtered_states_cov"][..., :t, :, :],
+    }
+    posterior_at_t = parameters | end_state(earlier, "f")
+    ```
+    """
+    mean_site, cov_site = f"{name}{_FILTERED_MEAN}", f"{name}{_FILTERED_COV}"
+    missing = [site for site in (mean_site, cov_site) if site not in samples]
+    if missing:
+        msg = (
+            f"samples holds no {' and no '.join(map(repr, missing))} site: end_state reads the "
+            "filtered states that a run of the model under a dynestyx Filter with a Gaussian "
+            "filter configuration (KFConfig, EKFConfig) records. dynestyx drops a site above "
+            "100_000 elements per draw unless the filter configuration sets "
+            "record_filtered_states_mean=True, record_filtered_states_cov=True"
+        )
+        raise ValueError(msg)
+    return {
+        f"{name}{_START_MEAN}": samples[mean_site][..., -1, :],
+        f"{name}{_START_COV}": samples[cov_site][..., -1, :, :],
+    }
+
+
+def start_state(
+    name: str, state_dim: int
+) -> tuple[Float[Array, " *batch state"], Float[Array, " *batch state state"]]:
+    r"""Read the filtered state at the end of the earlier window inside a model.
+
+    The function registers the two sample sites ``f"{name}_start_mean"`` (event
+    shape ``(state_dim,)``) and ``f"{name}_start_cov"`` (event shape
+    ``(state_dim, state_dim)``) and returns their values. They are sample sites,
+    not deterministic sites, because the drivers substitute sample sites only.
+    The values come from the posterior of the driver call, where `end_state()`
+    put them. The returned pair is the mean and the covariance of the filtering
+    distribution at the last step $T$ of the earlier window,
+    $p(x_T \mid y_{1:T}, \theta)$, one per posterior draw $\theta$.
+
+    Parameters
+    ----------
+    name
+        The site prefix of the `state_space()` call, as given to `end_state()`.
+    state_dim
+        The dimension of the state vector.
+
+    Returns
+    -------
+    tuple[Array, Array]
+        The mean, shape ``(state_dim,)``, and the covariance, shape
+        ``(state_dim, state_dim)``, of the filtered state.
+
+    Raises
+    ------
+    ValueError
+        If the posterior does not hold the two sites; if their values do not
+        have the state dimension ``state_dim``.
+
+    Notes
+    -----
+    - dynestyx puts the ``initial_condition`` at the first observation time,
+      which is one step after the end of the earlier window. The model must
+      move the state one transition forward before it builds the initial
+      condition: ``A @ mean`` and ``A @ cov @ A.T + Q`` for a linear Gaussian
+      evolution with matrix ``A`` and noise covariance ``Q``. A nonlinear
+      evolution needs a linearization.
+    - An evolution that reads the control needs the control of the last step of
+      the earlier window for that transition. The covariates of the resumed
+      window do not hold it.
+    - The time grid of `state_space()` starts at 0 again in the resumed window,
+      so the dynamics must not read the absolute time.
+    - The function is for prediction only. Use the resumed model function with
+      `~~numpyro_forecast.predictive.forecast()`,
+      `~~numpyro_forecast.predictive.predict_in_sample()` and
+      `~~numpyro_forecast.convert.to_datatree()` and a fixed posterior. Do not
+      fit it with ``MCMC`` or ``SVI``, where the two sites would be latent
+      variables.
+    - A particle filter and a ``LatentPathBuilder`` record no Gaussian filtering
+      distribution, so they give no state to resume from.
+    - For a linear Gaussian model the resumed form and the whole-window form
+      agree up to floating point. With an extended Kalman filter they agree up
+      to the linearization of one extra transition.
+
+    See Also
+    --------
+    end_state : The function that builds the two sites from the samples of a filter run.
+    state_space : The building block that runs the filter.
+
+    Examples
+    --------
+    The local level model of `state_space()` in resumed form. Stage 1 fits the
+    model on the first window and keeps the filtered state at its end. Stage 2
+    forecasts from the new observations only:
+
+    ```python
+    def resumed_local_level(covariates, data=None):
+        h = Horizon.from_data(covariates, data)
+        y = covariates[..., : h.t_obs, :]
+        q = numpyro.sample("q", dist.HalfNormal(1.0))
+        r = numpyro.sample("r", dist.HalfNormal(1.0))
+        mean, cov = start_state("f", 1)
+        dynamics = DynamicalModel(
+            # one transition forward, with A = I and Q = q**2 I
+            initial_condition=dist.MultivariateNormal(mean, cov + q**2 * jnp.eye(1)),
+            state_evolution=LinearGaussianStateEvolution(A=jnp.eye(1), cov=q**2 * jnp.eye(1)),
+            observation_model=LinearGaussianObservation(H=jnp.eye(1), R=r**2 * jnp.eye(1)),
+        )
+        state_space(h, "f", y, dynamics)
+
+
+    # stage 1: fit local_level on the first window, keep the parameters and the end state
+    kalman = KFConfig(filter_source="cuthbert")
+    with Filter(filter_config=kalman):
+        mcmc.run(key_fit, series[:t_obs], series[:t_obs])
+
+    samples = mcmc.get_samples()
+    parameters = {k: v for k, v in samples.items() if not k.startswith("f_")}
+    posterior = parameters | end_state(samples, "f")
+
+    # stage 2: filter the new observations only, then forecast
+    new, covariates = series[t_obs:t_new], series[t_obs : t_new + horizon]
+    with DiscreteTimeSimulator(n_simulations=1), Filter(filter_config=kalman):
+        draws = forecast(key_forecast, resumed_local_level, posterior, new, covariates)
+    ```
+    """
+    mean_site, cov_site = f"{name}{_START_MEAN}", f"{name}{_START_COV}"
+    try:
+        mean = jnp.asarray(
+            numpyro.sample(
+                mean_site, dist.ImproperUniform(constraints.real_vector, (), (state_dim,))
+            )
+        )
+        cov = jnp.asarray(
+            numpyro.sample(
+                cov_site,
+                dist.ImproperUniform(
+                    constraints.independent(constraints.real, 2), (), (state_dim, state_dim)
+                ),
+            )
+        )
+    except NotImplementedError:
+        msg = (
+            f"start_state found no value for the sites {mean_site!r} and {cov_site!r}: add "
+            f"end_state(samples, {name!r}) to the posterior of the driver call"
+        )
+        raise ValueError(msg) from None
+    if mean.shape[-1:] != (state_dim,) or cov.shape[-2:] != (state_dim, state_dim):
+        msg = (
+            f"start_state needs sites of state_dim={state_dim}, got {mean_site!r} of shape "
+            f"{mean.shape} and {cov_site!r} of shape {cov.shape}"
+        )
+        raise ValueError(msg)
+    return mean, cov
