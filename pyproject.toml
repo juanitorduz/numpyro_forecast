@@ -76,9 +76,10 @@ docs = [
     "numpyro_forecast[dynestyx]",
 ]
 # dynestyx is pre-1.0 and changes its handler semantics between minor releases (0.8.0
-# added automatic default handlers), so the extra is capped at the tested minor version.
+# added automatic default handlers), so the extra is capped at the tested minor version,
+# which is the latest release.
 dynestyx = [
-    "dynestyx>=0.8.0,<0.9",
+    "dynestyx>=0.9.0,<0.10",
 ]
 # jax-cuda12-plugin ships no darwin wheel; the marker keeps `uv workspace metadata`
 # (called by the ty pre-commit hook) working on macOS while `all_cuda` on Linux is unchanged.

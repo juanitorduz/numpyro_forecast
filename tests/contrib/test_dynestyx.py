@@ -29,8 +29,7 @@ from numpyro_forecast.typing import Array, ForecastModel
 
 pytest.importorskip("dynestyx")
 from dynestyx import DiscreteTimeSimulator, DynamicalModel, Filter, LatentPathBuilder, Smoother
-from dynestyx.inference.configs.smoother import KFSmootherConfig
-from dynestyx.inference.filters import KFConfig
+from dynestyx.configs import KFConfig, KFSmootherConfig
 from dynestyx.models import LinearGaussianObservation, LinearGaussianStateEvolution
 
 T_OBS, FUTURE = 24, 6
@@ -452,7 +451,7 @@ def test_model_relations_trace_a_latent_path_with_controls() -> None:
 def test_the_block_refuses_to_run_without_a_conditioning_handler(call: str) -> None:
     """Without a Filter, Smoother or LatentPathBuilder the block raises, in every mode.
 
-    dynestyx 0.8 would pick a default handler itself and only log the choice, so a
+    dynestyx would pick a default handler itself and only log the choice, so a
     forgotten handler would fit or forecast under an inference method nobody chose. A
     Simulator alone is not a conditioning handler.
     """
@@ -594,8 +593,8 @@ def test_an_untested_dynestyx_version_warns(monkeypatch: pytest.MonkeyPatch) -> 
     """The extra is capped at the tested minor version; another installed version warns."""
     import dynestyx
 
-    monkeypatch.setattr(dynestyx, "__version__", "0.9.0")
-    with smoother, pytest.warns(UserWarning, match="tested with dynestyx 0.8"):
+    monkeypatch.setattr(dynestyx, "__version__", "0.10.0")
+    with smoother, pytest.warns(UserWarning, match="tested with dynestyx 0.9"):
         log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
 
 

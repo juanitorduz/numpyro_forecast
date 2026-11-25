@@ -43,7 +43,7 @@ with DiscreteTimeSimulator(n_simulations=1), Smoother(smoother_config=...):
 ```
 
 The block raises when no ``Filter``, ``Smoother`` or ``LatentPathBuilder`` is
-active. Without one, dynestyx 0.8 would pick a default itself and only log the
+active. Without one, dynestyx would pick a default itself and only log the
 choice, so a forgotten handler would fit or forecast under an inference method
 nobody chose. The check reads dynestyx's handler stack through a private
 dynestyx query (``dynestyx.handlers._dynestyx_stack_kind``), which a canary test
@@ -63,7 +63,7 @@ handler-stack query above, the result types ``LatentStateResult``
 (``state_path``) and the ``dists`` of a smoother's result, the site suffixes
 ``_marginal_loglik``, ``_state_path_params``, ``_predicted_observations`` and
 ``_predicted_states``, and ``DynamicalModel.observation_model(x, u, t)``.
-dependency (``pip install numpyro_forecast[dynestyx]``, ``dynestyx>=0.8.0,<0.9``)
+dependency (``pip install numpyro_forecast[dynestyx]``, ``dynestyx>=0.9.0,<0.10``)
 imported lazily through `~~numpyro_forecast.optional.require()` at the first
 call, which warns when the installed minor version is not the tested one. The
 block models one series per model function: it has no batch dims (``dsx.plate``
@@ -88,7 +88,7 @@ from numpyro_forecast.names import Site
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array
 
-_TESTED_DYNESTYX = (0, 8)
+_TESTED_DYNESTYX = (0, 9)
 """The dynestyx minor version the block is tested with; other versions warn."""
 
 _PREDICTED_OBSERVATIONS = "_predicted_observations"
@@ -210,7 +210,7 @@ def _in_sample_states(rng_key: Array, result: Any, kind: str, t_obs: int) -> Arr
         x = jnp.asarray(result.state_path)
     else:
         dists = getattr(result, "dists", None)
-        if not dists:  # pragma: no cover - defensive: no discrete-time smoother of dynestyx 0.8
+        if not dists:  # pragma: no cover - defensive: no discrete-time smoother of dynestyx 0.9
             msg = "the dynestyx Smoother returned no per-step marginals to draw from"
             raise ValueError(msg)
         treedef = jax.tree.structure(dists[0])
@@ -289,7 +289,7 @@ def state_space(
       ``"forecast"``, shape ``(future, obs)``, read from the rollout of a
       ``DiscreteTimeSimulator(n_simulations=1)`` placed outside the ``Filter``,
       ``Smoother`` or ``LatentPathBuilder`` (the explicit simulator is the
-      recommended form; dynestyx 0.8 adds one itself when none is active). The
+      recommended form; dynestyx adds one itself when none is active). The
       rollout starts from the conditioned state at the last observation: the
       filtering or smoothing distribution at the parameters of each posterior
       draw (the two coincide there), or the sampled final state of the path
