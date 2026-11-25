@@ -505,7 +505,7 @@ Forecasting uses the package's [`forecast`](../../reference/predictive.forecast.
 
 For the direct model the in-sample innovations are replayed from the posterior and the future ones are drawn from the prior. For the `dynestyx` models every draw conditions again on the training window with its own (q, r): the smoother recomputes the smoothing distribution and the builder reconstructs the posterior path. The simulator then rolls the conditioned state forward.
 
-This re-conditioning is one vectorized pass over the window per draw, which is cheap here. For a long history that many forecasts share, [`end_state`](../../reference/contrib.dynestyx.end_state.md) and [`start_state`](../../reference/contrib.dynestyx.start_state.md) filter it once and resume from the filtered state, as the section *Reusing a Filtered History* of the [getting started example](dynestyx_getting_started.md) shows.
+This re-conditioning is one vectorized pass over the window per draw, which is cheap here. For a long history that many forecasts share, [`end_state`](../../reference/contrib.dynestyx.end_state.md) and [`start_state`](../../reference/contrib.dynestyx.start_state.md) let the forecasts resume from the filtered state of one filter pass, as the section *Reusing a Filtered History* of the [getting started example](dynestyx_getting_started.md) shows.
 
 For the `dynestyx` models a `DiscreteTimeSimulator` goes around the call, outside the handler of the fit. The driver compiles once per call, so the handlers that are active at the call apply to it, and they run under the `jit` and `vmap` of the driver without special treatment.
 

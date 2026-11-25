@@ -1060,7 +1060,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/dynestyx.py#L610-L738" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/dynestyx.py#L610-L739" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">dynestyx</span><span class="op">.</span><span class="va">start_state</span>(
@@ -1069,7 +1069,7 @@ window.Quarto = {
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The function registers the two sample sites <code>f"{name}_start_mean"</code> (event shape <code>(state_dim,)</code>) and <code>f"{name}_start_cov"</code> (event shape <code>(state_dim, state_dim)</code>) and returns their values. They are sample sites, not deterministic sites, because the drivers substitute sample sites only. The values come from the posterior of the driver call, where <a href="contrib.dynestyx.end_state.html#numpyro_forecast.contrib.dynestyx.end_state" class="gdls-link gdls-code">end_state()</a> put them. The returned pair is the mean and the covariance of the filtering distribution at the last step <span class="math inline">T</span> of the earlier window, <span class="math inline">p(x_T \mid y_{1:T}, \theta)</span>, one per posterior draw <span class="math inline">\theta</span>.</p>
+<p>The function registers the two sample sites <code>f"{name}_start_mean"</code> (event shape <code>(state_dim,)</code>) and <code>f"{name}_start_cov"</code> (event shape <code>(state_dim, state_dim)</code>) and returns their values. They are sample sites, not deterministic sites, because the drivers substitute sample sites only. The values come from the output of <a href="contrib.dynestyx.end_state.html#numpyro_forecast.contrib.dynestyx.end_state" class="gdls-link gdls-code">end_state()</a>, which the caller adds to the posterior of the driver call. The returned pair is the mean and the covariance of the filtering distribution at the last step <span class="math inline">T</span> of the earlier window, <span class="math inline">p(x_T \mid y_{1:T}, \theta)</span>, one per posterior draw <span class="math inline">\theta</span>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -1115,7 +1115,7 @@ If the posterior does not hold the two sites; if their values do not have the st
 <li>An evolution that reads the control needs the control of the last step of the earlier window for that transition. The covariates of the resumed window do not hold it.</li>
 <li>The time grid of <a href="contrib.dynestyx.state_space.html#numpyro_forecast.contrib.dynestyx.state_space" class="gdls-link gdls-code">state_space()</a> starts at 0 again in the resumed window, so the dynamics must not read the absolute time.</li>
 <li>The function is for prediction only. Use the resumed model function with <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>, <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> and a fixed posterior. Do not fit it with <code>MCMC</code> or <code>SVI</code>, where the two sites would be latent variables.</li>
-<li>A <code>LatentPathBuilder</code> and a <code>Smoother</code> record no filtered state. A particle filter records the mean and the covariance of its weighted particles under the same two site names, so <a href="contrib.dynestyx.end_state.html#numpyro_forecast.contrib.dynestyx.end_state" class="gdls-link gdls-code">end_state()</a> returns them without an error. The resumed state is then a Gaussian approximation of the particles and is not tested.</li>
+<li>A <code>LatentPathBuilder</code> and a <code>Smoother</code> record no filtered state. The ensemble Kalman filter (the default <code>Filter()</code>), the unscented Kalman filter and the particle filter record an approximation (the moments of an ensemble, of sigma points or of particles) under the same two site names, so <a href="contrib.dynestyx.end_state.html#numpyro_forecast.contrib.dynestyx.end_state" class="gdls-link gdls-code">end_state()</a> returns them without an error. Resuming from them is not tested.</li>
 <li>For a linear Gaussian model the resumed form and the whole-window form agree up to floating point. With an extended Kalman filter they agree up to the linearization of one extra transition.</li>
 </ul>
 </section>

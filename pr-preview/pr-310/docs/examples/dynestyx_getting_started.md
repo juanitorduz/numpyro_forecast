@@ -2030,7 +2030,7 @@ numpyro.render_model(
 
 Compared with the Normal model, the graph has one more parameter: the degrees of freedom `nu` of the Student-T noise.
 
-Both fits run their chains one after the other (`chain_method="sequential"`). In an earlier run with `dynestyx` 0.8.0, jax 0.11.2 and Python 3.14, parallel chains under a `LatentPathBuilder` crashed the Python process (`dynestyx` declares support for Python 3.12 and 3.13). This run did not try them again. The explicit path runs 4{,}000 warmup steps and 4{,}000 draws per chain, against 2{,}000 and 1{,}000 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), because it mixes more slowly. The per-parameter table below shows its slowest parameter.
+Both fits run their chains one after the other (`chain_method="sequential"`). In an earlier run with `dynestyx` 0.8.0, JAX 0.11.2 and Python 3.14, parallel chains under a `LatentPathBuilder` crashed the Python process (`dynestyx` declares support for Python 3.12 and 3.13). This run did not try them again. The explicit path runs 4{,}000 warmup steps and 4{,}000 draws per chain, against 2{,}000 and 1{,}000 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), because it mixes more slowly. The per-parameter table below shows its slowest parameter.
 
 We keep the `LatentPathBuilder` instance of the fit. The builder records the pattern of missing observations from the concrete data of the fit. The drivers later run the model under `jax.jit`, where the data are traced, so every later call must use the same instance.
 
@@ -2075,7 +2075,7 @@ shape: (2, 7)
 | "innovations" | 473 | 888 | 1.006 | 0 | 261.0 | 69.9 |
 
 
-With these chain lengths the [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) fit converges and the explicit path nearly converges:
+With these chain lengths the explicit path nearly converges and the [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) fit converges:
 
 - The largest \hat{R} of the explicit path is 1.012, just above the usual threshold of 1.01, and its smallest bulk ESS is 372.
 - The largest \hat{R} of [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) is 1.006 and its smallest bulk ESS is 888.
@@ -2145,7 +2145,7 @@ shape: (6, 6)
 | "innovations"          | "sigma"       | 0.0171 | 0.002  | 888      | 1.001 |
 
 
-`drift_scale` is the slowest parameter of the explicit path, and the one with the largest \hat{R} (1.012): its bulk ESS is 372 from 16{,}000 draws, against 1{,}412 from 4{,}000 draws for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). The builder samples the states in centered form and has no reparameterization option, while [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) samples the non-centered steps.
+`drift_scale` is the slowest parameter of the explicit path: its bulk ESS is 372 from 16{,}000 draws, against 1{,}412 from 4{,}000 draws for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). It also has the largest \hat{R} of the explicit path (1.012). The builder samples the states in centered form and has no reparameterization option, while [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) samples the non-centered steps.
 
 
 ``` python
@@ -2302,7 +2302,7 @@ shape: (1, 7)
 | "gap fit" | 472 | 407 | 1.01 | 0 | 177.2 | 59.8 |
 
 
-The gap fit converges, at the limit: the largest \hat{R} is 1.01, which is the usual threshold, the smallest bulk ESS is 407, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
+The gap fit converges, but its largest \hat{R} is 1.01, which is the usual threshold. The smallest bulk ESS is 407, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
 
 We draw the in-sample predictive of the gap fit, which covers the gap weeks, under the builder of that fit. As a reference we draw the in-sample predictive of the fit on all weeks from the previous section. That fit has seen the weeks of the gap, so we expect it to score better there.
 
@@ -2598,11 +2598,11 @@ The two posteriors are close, and the true values lie inside the bulk of both. T
 
 # Reusing a Filtered History
 
-This section forecasts from new observations without a second pass over the history. Every [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) call conditions on the whole observed window again, for every posterior draw. Between two refits, new weeks arrive while the parameters stay at the posterior draws of the last fit, and only the level moves. The filter of the history is then the same computation in every call, so we run it once and keep its result.
+This section forecasts from new observations without a second pass over the history, that is, the training window. Every [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) call conditions on the whole observed window again, for every posterior draw. Between two refits, new weeks arrive while the parameters stay at the posterior draws of the last fit, and only the level moves. The filter of the history is then the same computation in every call, so we run it once and keep its result.
 
 The result to keep is the **filtering distribution at the last week** T of the training window. It is the distribution of the level given the observations up to that week and the parameters \theta of one posterior draw:
 
- \ell_T \mid y\_{1:T}, \theta \sim \text{Normal}(m_T, P_T). 
+ \ell_T \mid y\_{1:T}, \theta \sim \text{Normal}(m_T, P_T) 
 
 The Kalman filter computes the mean m_T and the variance P_T in closed form, so there is one pair (m_T, P_T) per posterior draw. Two functions of `numpyro_forecast.contrib.dynestyx` carry this pair from one window to the next:
 
@@ -2646,7 +2646,7 @@ def resumed_ssm(covariates: Array, data: Array | None = None) -> None:
 ```
 
 
-The first stage, the filter of the history, needs no new computation here. The fit of *Local Level with a Kalman Filter* ran under the Kalman filter, and `dynestyx` recorded the filtered mean and variance of every week for every draw, as the sites `f_filtered_states_mean` and `f_filtered_states_cov`. [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) takes their last week, so no extra pass over the history is needed. We add the two sites that it returns to the parameter draws `kalman_parameters`.
+The filter of the history needs no new computation here. The fit of *Local Level with a Kalman Filter* ran under the Kalman filter, and `dynestyx` recorded the filtered mean and variance of every week for every draw, as the sites `f_filtered_states_mean` and `f_filtered_states_cov`. [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) takes their last week. We add the two sites that it returns to the parameter draws `kalman_parameters`.
 
 `dynestyx` records such a site by default only while it has at most 100{,}000 elements per draw. Here each site has 417. A larger site needs `record_filtered_states_mean=True` and `record_filtered_states_cov=True` in the filter configuration.
 
@@ -2660,7 +2660,7 @@ assert posterior_resumed["f_start_cov"].shape == (4_000, 1, 1)
 ```
 
 
-Now we check that the resumed model gives the forecast of the whole window. Suppose that the first 8 weeks of the test year arrive. We forecast the remaining 44 weeks in two ways, with the same random key:
+Now we check that the resumed model gives the forecast of the whole window. Suppose that the first 8 weeks of the test year arrive. We forecast the remaining 44 weeks in two forms, with the same random key:
 
 - **Whole window:** `forecast_whole` conditions `gaussian_ssm` on the window of 417 + 8 = 425 weeks.
 - **Resumed:** `forecast_resumed` conditions `resumed_ssm` on the 8 new weeks only, and starts from the filtered state of the fit.
@@ -2743,13 +2743,13 @@ ax.set(
 The two forecasts coincide: the largest absolute difference between their draws is 9.5 \times 10^{-7} on the log scale, which is the rounding error of single precision. The dashed mean of the whole-window forecast runs through the middle of the resumed bands. There are two reasons for the agreement:
 
 - The Kalman filter is exact for this model, so the filtered state at the last week of the training window holds all that the earlier observations say about the level.
-- A start site that the posterior fills consumes no random number, so the two forms draw the same noise from the same key.
+- The posterior gives the values of the two sites that [start_state](../../reference/contrib.dynestyx.start_state.md#numpyro_forecast.contrib.dynestyx.start_state) reads, so these sites consume no random number and the two forms draw the same noise from the same key.
 
 Next we measure what the resumed form saves.
 
-Per draw, the resumed form runs 8 filter steps and the whole-window form 425. To measure the saving we time many forecasts. A plain [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) call compiles its program on every call, and that time would hide the difference. We therefore put each function through one `jax.jit(jax.vmap(...))`, which compiles once for all the forecasts of the same shapes, and we time the second call. Inside `jax.jit`, [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) needs `batch_size` and `device` at their defaults.
+Per draw, the whole-window form runs 425 filter steps and the resumed form 8. To measure the saving we time many forecasts. A plain [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) call compiles its program on every call, and that time would hide the difference. We therefore put each function through one `jax.jit(jax.vmap(...))`, which compiles once for all the forecasts of the same shapes, and we time the second call. Inside `jax.jit`, [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) needs `batch_size` and `device` at their defaults.
 
-The forecasts are 32 **scenarios**. Each scenario is a possible first 8 weeks of the test year: one draw of the forecast of the fit from *In-Sample Predictive and Forecast*. Each scenario gets its own key. The figure shows the wall time of the 32 forecasts, with 4{,}000 draws each, for the two forms.
+We time one forecast for each of 32 **scenarios**. Each scenario is a possible first 8 weeks of the test year: one draw of the forecast of the fit from *In-Sample Predictive and Forecast*. Each scenario gets its own key. The figure shows the wall time of the 32 forecasts, with 4{,}000 draws each, for the two forms.
 
 
 ``` python
@@ -2795,13 +2795,13 @@ ax.set(
 
 The 32 forecasts took 0.40 seconds in the whole-window form and 0.26 seconds in the resumed form, so the resumed form is 1.5 times faster. The saving is much smaller than the ratio of the filter steps, 425 against 8 per draw. The 417 filter steps that the resumed form skips cost the difference of 0.14 seconds. After the filter, both forms roll the level forward over the same 44 weeks and draw the observations, and this rollout is most of the time of the resumed form.
 
-The recipe has these limits:
+Resuming from a filtered state has these limits:
 
-- **The step into the new window is the job of the model.** It has a closed form for a linear Gaussian evolution, as here. A nonlinear evolution needs a linearization.
-- **An evolution that reads the control** needs the control of the last week of the earlier window, which the covariates of the new window do not hold.
-- **The time grid restarts at 0** in the new window, so the dynamics must not read the absolute time.
-- **The resumed model function is for the predictive drivers with a fixed posterior**: [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree). It is not for a fit, where the two start sites would be latent variables.
-- **The helpers are tested with the Kalman filter and the extended Kalman filter** (`KFConfig`, `EKFConfig`); a `LatentPathBuilder` and a `Smoother` record no filtered state. A particle filter records the moments of its particles under the same site names, so resuming from them is a Gaussian approximation that is not tested.
+- The step into the new window is the job of the model. It has a closed form for a linear Gaussian evolution, as here. A nonlinear evolution needs a linearization.
+- An evolution that reads the control needs the control of the last week of the earlier window, which the covariates of the new window do not hold.
+- The time grid restarts at 0 in the new window, so the dynamics must not read the absolute time.
+- The resumed model function is for the predictive drivers with a fixed posterior: [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree). It is not for a fit, where the two start sites would be latent variables.
+- [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) and [start_state](../../reference/contrib.dynestyx.start_state.md#numpyro_forecast.contrib.dynestyx.start_state) are tested with the Kalman filter and the extended Kalman filter (`KFConfig`, `EKFConfig`). A `LatentPathBuilder` and a `Smoother` record no filtered state. An ensemble Kalman filter (the default `Filter()`), an unscented Kalman filter and a particle filter record the moments of an approximation under the same site names, so resuming from them is a Gaussian approximation that is not tested.
 
 
 # Conclusion
@@ -2811,15 +2811,15 @@ The recipe has these limits:
 
 - **One model function, any handler.** [state_space](../../reference/contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space) turns a `DynamicalModel` into a `numpyro_forecast` model. The handler around each call selects the inference: a Kalman filter or smoother integrates the level out, a `LatentPathBuilder` samples it. [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) work unchanged with the handler around the call, and the block raises an error when the handler is missing.
 - **The Kalman filter integrates the level out.** For the Normal model it gives the same posteriors and the same in-sample and test CRPS as [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), with 55 parameters for NUTS instead of 472. A Kalman smoother exports the filter fit with [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), without a refit.
-- **A filtered history is reused.** [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) and [start_state](../../reference/contrib.dynestyx.start_state.md#numpyro_forecast.contrib.dynestyx.start_state) resume the Kalman filter from the filtered level of the fit. The resumed forecast equals the whole-window forecast, and 32 forecasts in one compiled call were 1.5 times faster.
-- **The explicit path covers Student-T noise and gaps.** Its posteriors and forecast match [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), but it samples the states in centered form and needs longer chains. With 16{,}000 draws the fit on all weeks nearly converges (largest \hat{R} 1.012, just above the usual threshold of 1.01), and the fit through the gap converges (largest \hat{R} 1.01).
+- **New forecasts reuse the filtered history.** [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) and [start_state](../../reference/contrib.dynestyx.start_state.md#numpyro_forecast.contrib.dynestyx.start_state) resume the Kalman filter from the filtered state of the fit. The resumed forecast equals the whole-window forecast, and 32 forecasts in one compiled call were 1.5 times faster.
+- **The explicit path covers Student-T noise and gaps.** Its posteriors and forecast match [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), but it samples the states in centered form and needs longer chains. With 16{,}000 draws the fit on all weeks nearly converges: its largest \hat{R} is 1.012, just above the usual threshold of 1.01. With the same number of draws the fit through the gap converges, with a largest \hat{R} of 1.01.
 - **The Kalman filter gives the exact ARMA(1,1) likelihood**, up to a small jitter. Its posteriors are close to those of the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) model of the ARMA example.
 
 
 ## Limitations
 
 - The in-sample draws under a smoother are independent across weeks. For joint paths, use [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) or a `LatentPathBuilder`.
-- The `LatentPathBuilder` has no reparameterization option, and every later call must use the builder instance of the fit. In an earlier run with `dynestyx` 0.8.0 and jax 0.11.2, parallel chains under it crashed the Python process. This run did not try them again.
+- The `LatentPathBuilder` has no reparameterization option, and every later call must use the builder instance of the fit. In an earlier run with `dynestyx` 0.8.0, JAX 0.11.2 and Python 3.14, parallel chains under it crashed the Python process. This run did not try them again.
 - The block models one series per model function, with the step index as its time grid.
 
 

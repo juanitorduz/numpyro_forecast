@@ -18,7 +18,7 @@ The function reads the two sites that a dynestyx Gaussian filter records, `f"{na
 
 - dynestyx records each of the two sites by default only while it has at most `100_000` elements per draw (`time * state` for the mean, `time * state**2` for the covariance). Set `record_filtered_states_mean=True` and `record_filtered_states_cov=True` in the filter configuration to record them at any size.
 - The function reads the covariance site, not the `f"{name}_filtered_states_chol_cov"` site: only the cuthbert backend records that one, and the diagonal of its factor can be negative.
-- The function reads the whole `(sample, time, ...)` arrays to take one row, so the earlier run holds them in memory once.
+- The function reads the whole `(sample, time, ...)` arrays to copy one row, so those arrays must fit in memory.
 - The state at an earlier step comes from the same samples. A filter is causal: the first `t` rows are the filter of the first `t` observations. Slice both sites to `[..., :t, :]` and `[..., :t, :, :]` before the call. One filter pass then serves several forecast origins.
 - The two sites of a resumed run give the start of the next window, so the updates chain: each new window needs only the output of the window before.
 - The tested filters are `KFConfig()`, `KFConfig(filter_source="cuthbert")` and `EKFConfig()`.

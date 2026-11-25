@@ -1029,7 +1029,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li>dynestyx records each of the two sites by default only while it has at most <code>100_000</code> elements per draw (<code>time * state</code> for the mean, <code>time * state**2</code> for the covariance). Set <code>record_filtered_states_mean=True</code> and <code>record_filtered_states_cov=True</code> in the filter configuration to record them at any size.</li>
 <li>The function reads the covariance site, not the <code>f"{name}_filtered_states_chol_cov"</code> site: only the cuthbert backend records that one, and the diagonal of its factor can be negative.</li>
-<li>The function reads the whole <code>(sample, time, ...)</code> arrays to take one row, so the earlier run holds them in memory once.</li>
+<li>The function reads the whole <code>(sample, time, ...)</code> arrays to copy one row, so those arrays must fit in memory.</li>
 <li>The state at an earlier step comes from the same samples. A filter is causal: the first <code>t</code> rows are the filter of the first <code>t</code> observations. Slice both sites to <code>[..., :t, :]</code> and <code>[..., :t, :, :]</code> before the call. One filter pass then serves several forecast origins.</li>
 <li>The two sites of a resumed run give the start of the next window, so the updates chain: each new window needs only the output of the window before.</li>
 <li>The tested filters are <code>KFConfig()</code>, <code>KFConfig(filter_source="cuthbert")</code> and <code>EKFConfig()</code>.</li>

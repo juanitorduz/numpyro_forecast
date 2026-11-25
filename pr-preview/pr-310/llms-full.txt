@@ -1595,12 +1595,12 @@ hashable or not. A repeated call with the same model and shapes, for
 example in a scenario loop, therefore compiles again; so does
 `~~numpyro_forecast.convert.to_datatree()`, which runs the drivers itself.
 To compile a loop over forecasts of the same shapes once, wrap the call in
-one ``jax.jit`` and map it over the scenarios with ``jax.vmap``, with
-``batch_size`` and ``device`` at their defaults (a ``batch_size`` inside
-``jax.jit`` raises a tracer error).
-``jax.lax.map(f, xs, batch_size=n)`` over the scenarios is the memory limit
-of that form. The program is then traced once, so it keeps the model as it
-was at that trace.
+one ``jax.jit`` and map it over the scenarios with ``jax.vmap``. Keep the
+``batch_size`` and ``device`` arguments of this function at their defaults
+(a ``batch_size`` of this function inside ``jax.jit`` raises a tracer
+error). To limit the memory of that form, map over the scenarios with
+``jax.lax.map(f, xs, batch_size=n)`` in place of ``jax.vmap``. The program
+is then traced once, so it keeps the model as it was at that trace.
 
 predict_in_sample(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch time obs'] | jaxtyping.Num[ndarray, 'sample *batch time obs']
 
@@ -3662,8 +3662,8 @@ observations and does not read the earlier window again.
 - The function reads the covariance site, not the
   ``f"{name}_filtered_states_chol_cov"`` site: only the cuthbert backend
   records that one, and the diagonal of its factor can be negative.
-- The function reads the whole ``(sample, time, ...)`` arrays to take one
-  row, so the earlier run holds them in memory once.
+- The function reads the whole ``(sample, time, ...)`` arrays to copy one
+  row, so those arrays must fit in memory.
 - The state at an earlier step comes from the same samples. A filter is
   causal: the first ``t`` rows are the filter of the first ``t``
   observations. Slice both sites to ``[..., :t, :]`` and ``[..., :t, :, :]``
@@ -3731,10 +3731,10 @@ The function registers the two sample sites ``f"{name}_start_mean"`` (event
 shape ``(state_dim,)``) and ``f"{name}_start_cov"`` (event shape
 ``(state_dim, state_dim)``) and returns their values. They are sample sites,
 not deterministic sites, because the drivers substitute sample sites only.
-The values come from the posterior of the driver call, where `end_state()`
-put them. The returned pair is the mean and the covariance of the filtering
-distribution at the last step $T$ of the earlier window,
-$p(x_T \mid y_{1:T}, \theta)$, one per posterior draw $\theta$.
+The values come from the output of `end_state()`, which the caller adds to
+the posterior of the driver call. The returned pair is the mean and the
+covariance of the filtering distribution at the last step $T$ of the earlier
+window, $p(x_T \mid y_{1:T}, \theta)$, one per posterior draw $\theta$.
 
 Parameters
 ----------
@@ -3774,11 +3774,12 @@ Notes
   `~~numpyro_forecast.convert.to_datatree()` and a fixed posterior. Do not
   fit it with ``MCMC`` or ``SVI``, where the two sites would be latent
   variables.
-- A ``LatentPathBuilder`` and a ``Smoother`` record no filtered state. A
-  particle filter records the mean and the covariance of its weighted
-  particles under the same two site names, so `end_state()` returns them
-  without an error. The resumed state is then a Gaussian approximation of
-  the particles and is not tested.
+- A ``LatentPathBuilder`` and a ``Smoother`` record no filtered state. The
+  ensemble Kalman filter (the default ``Filter()``), the unscented Kalman
+  filter and the particle filter record an approximation (the moments of an
+  ensemble, of sigma points or of particles) under the same two site names,
+  so `end_state()` returns them without an error. Resuming from them is not
+  tested.
 - For a linear Gaussian model the resumed form and the whole-window form
   agree up to floating point. With an extended Kalman filter they agree up
   to the linearization of one extra transition.
