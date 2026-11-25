@@ -73,7 +73,7 @@ handler-stack query above, the result types ``LatentStateResult``
 (``state_path``) and the ``dists`` of a smoother's result, the site suffixes
 ``_marginal_loglik``, ``_state_path_params``, ``_predicted_observations``,
 ``_predicted_states``, ``_filtered_states_mean`` and ``_filtered_states_cov``,
-and ``DynamicalModel.observation_model(x, u, t)``.
+and ``DynamicalModel.observation_model(x, u, t)``. dynestyx is an optional
 dependency (``pip install numpyro_forecast[dynestyx]``, ``dynestyx>=0.9.0,<0.10``)
 imported lazily through `~~numpyro_forecast.optional.require()` at the first
 call, which warns when the installed minor version is not the tested one. The
@@ -554,8 +554,9 @@ def end_state(
     -------
     dict[str, Array | np.ndarray]
         ``f"{name}_start_mean"``, shape ``(*sample, state)``, and
-        ``f"{name}_start_cov"``, shape ``(*sample, state, state)``. The values
-        are indexed, not converted: a NumPy input gives NumPy values.
+        ``f"{name}_start_cov"``, shape ``(*sample, state, state)``. The two rows
+        are copies, so ``samples`` can be dropped afterwards. A NumPy input
+        gives NumPy values.
 
     Raises
     ------
@@ -601,8 +602,8 @@ def end_state(
         )
         raise ValueError(msg)
     return {
-        f"{name}{_START_MEAN}": samples[mean_site][..., -1, :],
-        f"{name}{_START_COV}": samples[cov_site][..., -1, :, :],
+        f"{name}{_START_MEAN}": samples[mean_site][..., -1, :].copy(),
+        f"{name}{_START_COV}": samples[cov_site][..., -1, :, :].copy(),
     }
 
 
@@ -658,8 +659,11 @@ def start_state(
       `~~numpyro_forecast.convert.to_datatree()` and a fixed posterior. Do not
       fit it with ``MCMC`` or ``SVI``, where the two sites would be latent
       variables.
-    - A particle filter and a ``LatentPathBuilder`` record no Gaussian filtering
-      distribution, so they give no state to resume from.
+    - A ``LatentPathBuilder`` and a ``Smoother`` record no filtered state. A
+      particle filter records the mean and the covariance of its weighted
+      particles under the same two site names, so `end_state()` returns them
+      without an error. The resumed state is then a Gaussian approximation of
+      the particles and is not tested.
     - For a linear Gaussian model the resumed form and the whole-window form
       agree up to floating point. With an extended Kalman filter they agree up
       to the linearization of one extra transition.
@@ -716,9 +720,7 @@ def start_state(
         cov = jnp.asarray(
             numpyro.sample(
                 cov_site,
-                dist.ImproperUniform(
-                    constraints.independent(constraints.real, 2), (), (state_dim, state_dim)
-                ),
+                dist.ImproperUniform(constraints.real_matrix, (), (state_dim, state_dim)),
             )
         )
     except NotImplementedError:
