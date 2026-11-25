@@ -851,6 +851,7 @@ def test_end_state_takes_the_last_filtered_step(
     assert type(state["f_start_mean"]) is type(mean)
     np.testing.assert_array_equal(state["f_start_mean"], mean[:, :, -1])
     np.testing.assert_array_equal(state["f_start_cov"], cov[:, :, -1])
+    assert not np.shares_memory(state["f_start_cov"], cov)
 
 
 def test_end_state_names_the_missing_site_and_the_record_flags() -> None:

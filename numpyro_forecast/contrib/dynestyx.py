@@ -529,8 +529,8 @@ def end_state(
     - The function reads the covariance site, not the
       ``f"{name}_filtered_states_chol_cov"`` site: only the cuthbert backend
       records that one, and the diagonal of its factor can be negative.
-    - The function reads the whole ``(sample, time, ...)`` arrays to take one
-      row, so the earlier run holds them in memory once.
+    - The function reads the whole ``(sample, time, ...)`` arrays to copy one
+      row, so those arrays must fit in memory.
     - The state at an earlier step comes from the same samples. A filter is
       causal: the first ``t`` rows are the filter of the first ``t``
       observations. Slice both sites to ``[..., :t, :]`` and ``[..., :t, :, :]``
@@ -595,8 +595,8 @@ def end_state(
     if missing:
         msg = (
             f"samples holds no {' and no '.join(map(repr, missing))} site: end_state reads the "
-            "filtered states that a run of the model under a dynestyx Filter with a Gaussian "
-            "filter configuration (KFConfig, EKFConfig) records. dynestyx drops a site above "
+            "filtered states. A run of the model under a dynestyx Filter with a Gaussian filter "
+            "configuration (KFConfig, EKFConfig) records them. dynestyx drops a site above "
             "100_000 elements per draw unless the filter configuration sets "
             "record_filtered_states_mean=True, record_filtered_states_cov=True"
         )
@@ -616,10 +616,10 @@ def start_state(
     shape ``(state_dim,)``) and ``f"{name}_start_cov"`` (event shape
     ``(state_dim, state_dim)``) and returns their values. They are sample sites,
     not deterministic sites, because the drivers substitute sample sites only.
-    The values come from the posterior of the driver call, where `end_state()`
-    put them. The returned pair is the mean and the covariance of the filtering
-    distribution at the last step $T$ of the earlier window,
-    $p(x_T \mid y_{1:T}, \theta)$, one per posterior draw $\theta$.
+    The values come from the output of `end_state()`, which the caller adds to
+    the posterior of the driver call. The returned pair is the mean and the
+    covariance of the filtering distribution at the last step $T$ of the earlier
+    window, $p(x_T \mid y_{1:T}, \theta)$, one per posterior draw $\theta$.
 
     Parameters
     ----------
@@ -659,11 +659,12 @@ def start_state(
       `~~numpyro_forecast.convert.to_datatree()` and a fixed posterior. Do not
       fit it with ``MCMC`` or ``SVI``, where the two sites would be latent
       variables.
-    - A ``LatentPathBuilder`` and a ``Smoother`` record no filtered state. A
-      particle filter records the mean and the covariance of its weighted
-      particles under the same two site names, so `end_state()` returns them
-      without an error. The resumed state is then a Gaussian approximation of
-      the particles and is not tested.
+    - A ``LatentPathBuilder`` and a ``Smoother`` record no filtered state. The
+      ensemble Kalman filter (the default ``Filter()``), the unscented Kalman
+      filter and the particle filter record an approximation (the moments of an
+      ensemble, of sigma points or of particles) under the same two site names,
+      so `end_state()` returns them without an error. Resuming from them is not
+      tested.
     - For a linear Gaussian model the resumed form and the whole-window form
       agree up to floating point. With an extended Kalman filter they agree up
       to the linearization of one extra transition.
