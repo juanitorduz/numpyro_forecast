@@ -4,6 +4,7 @@ import warnings
 from collections.abc import Callable
 from typing import Literal
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -916,3 +917,44 @@ def test_a_resumed_filter_matches_the_whole_window(config: KFConfig | EKFConfig)
         )
     assert ahead_resumed.shape == (8, FUTURE, 1)
     assert jnp.allclose(ahead_resumed, ahead_whole, atol=1e-3)
+
+
+def test_a_resumed_model_exports_with_to_datatree() -> None:
+    """``to_datatree`` exports the resumed model and keeps the start sites in the posterior."""
+    first = _filtered_end(
+        KFConfig(filter_source="cuthbert"), _trend(resume=False), TREND_DRAWS, SERIES[:18]
+    )
+    with DiscreteTimeSimulator(n_simulations=1), smoother:
+        tree = to_datatree(
+            random.PRNGKey(1), _trend(resume=True), TREND_DRAWS | first, SERIES[18:24], SERIES[18:]
+        )
+    assert tree["posterior_predictive"]["obs"].shape == (1, 8, 6, 1)
+    assert tree["predictions"]["obs"].shape == (1, 8, FUTURE, 1)
+    assert {"f_start_mean", "f_start_cov"} <= set(tree["posterior"].data_vars)
+    assert np.isfinite(tree["predictions"]["obs"].to_numpy()).all()
+
+
+def test_resumed_forecasts_run_under_jit_with_vmap_and_lax_map() -> None:
+    """One ``jax.jit`` around ``forecast``, mapped over scenarios, gives the plain-call draws."""
+    posterior = TREND_DRAWS | _filtered_end(
+        KFConfig(filter_source="cuthbert"), _trend(resume=False), TREND_DRAWS, SERIES[:18]
+    )
+    resumed = _trend(resume=True)
+
+    def one(rng_key: Array, covariates: Array) -> Array:
+        with (
+            DiscreteTimeSimulator(n_simulations=1),
+            Filter(filter_config=KFConfig(filter_source="cuthbert")),
+        ):
+            return jnp.asarray(forecast(rng_key, resumed, posterior, covariates[:6], covariates))
+
+    scenarios = jnp.stack([SERIES[18:] + shift for shift in (0.0, 0.5, -0.5)])
+    keys = random.split(random.PRNGKey(2), 3)
+    looped = jnp.stack([one(key, rows) for key, rows in zip(keys, scenarios, strict=True)])
+    batched = jax.jit(jax.vmap(one))(keys, scenarios)
+    chunked = jax.jit(lambda k, c: jax.lax.map(lambda kc: one(*kc), (k, c), batch_size=2))(
+        keys, scenarios
+    )
+    assert batched.shape == (3, 8, FUTURE, 1)
+    assert jnp.allclose(batched, looped, atol=1e-5)
+    assert jnp.allclose(chunked, looped, atol=1e-5)
