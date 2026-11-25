@@ -54,8 +54,7 @@ from dynestyx import (
     Simulator,
     Smoother,
 )
-from dynestyx.inference.configs.smoother import KFSmootherConfig
-from dynestyx.inference.filters import KFConfig
+from dynestyx.configs import KFConfig, KFSmootherConfig
 from jax import random
 from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
@@ -97,17 +96,30 @@ numpyro.set_host_device_count(n=4)
 
 rng_key = random.PRNGKey(seed=42)
 
-print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__version__}")
-
 %load_ext autoreload
 %autoreload 2
 %load_ext jaxtyping
 %jaxtyping.typechecker beartype.beartype
 %config InlineBackend.figure_format = "retina"
+
+# the versions that produced the stored outputs
+pl.DataFrame(
+    {
+        "package": ["dynestyx", "numpyro", "jax"],
+        "version": [dsx.__version__, numpyro.__version__, jax.__version__],
+    }
+)
 ```
 
 
-    dynestyx 0.8.0, numpyro 0.22.0, jax 0.11.2
+shape: (3, 2)
+
+| package    | version    |
+|------------|------------|
+| str        | str        |
+| "dynestyx" | "0.9.0"    |
+| "numpyro"  | "0.22.0"   |
+| "jax"      | "0.12.0.1" |
 
 
 # The Building Block
@@ -373,18 +385,18 @@ shape: (3, 11)
 | fit | mean q | sd q | ess_bulk q | r_hat q | mean r | sd r | ess_bulk r | r_hat r | leapfrog steps | wall time (s) |
 |----|----|----|----|----|----|----|----|----|----|----|
 | str | f64 | f64 | f64 | f64 | f64 | f64 | f64 | f64 | i64 | f64 |
-| "direct (innovations)" | 0.389 | 0.061 | 726.0 | 1.009 | 0.441 | 0.051 | 763.0 | 1.008 | 1013890 | 12.9 |
-| "dynestyx, explicit path" | 0.389 | 0.063 | 630.0 | 1.011 | 0.44 | 0.053 | 985.0 | 1.005 | 66512 | 8.4 |
-| "dynestyx, Kalman smoother" | 0.387 | 0.061 | 1590.0 | 1.003 | 0.44 | 0.051 | 1694.0 | 1.004 | 17992 | 12.5 |
+| "direct (innovations)" | 0.386 | 0.059 | 669.0 | 1.006 | 0.442 | 0.05 | 754.0 | 1.005 | 1018374 | 7.4 |
+| "dynestyx, explicit path" | 0.387 | 0.062 | 674.0 | 1.009 | 0.44 | 0.052 | 1138.0 | 1.002 | 65544 | 8.1 |
+| "dynestyx, Kalman smoother" | 0.387 | 0.061 | 1590.0 | 1.003 | 0.44 | 0.051 | 1694.0 | 1.004 | 17992 | 12.0 |
 
 
-The three posterior means agree closely. The \hat{R} values are between 1.003 and 1.011: the explicit path is slightly above the usual threshold of 1.01 for q. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
+The three posterior means agree closely. The \hat{R} values are between 1.002 and 1.009, below the usual threshold of 1.01. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
 
 The smoothed model reaches the largest effective sample size with a small fraction of the gradient evaluations. It moves in a 2-dimensional posterior instead of a 123-dimensional one, where the likelihood still couples q to every innovation after the non-centered reparameterization.
 
-The explicit path built by `dynestyx` sits between the two. It needs fewer gradients than the direct model but mixes less well on q. A plausible reason is that the builder samples the path in centered form and has no reparameterization option, but we did not test this.
+The explicit path built by `dynestyx` sits between the two. It needs far fewer gradients than the direct model and reaches about the same effective sample size for q (674 against 669), less than half of the smoother's 1{,}590.
 
-Each smoother gradient costs more than a gradient of the direct model: it runs a Kalman pass over the window instead of a sum of Gaussian log densities. So on a short series on the CPU the wall times are similar. The advantage grows with the length of the series. The dimension of the direct posterior grows with it, while the dimension the smoother's sampler explores stays 2, and the cost of a Kalman pass is linear in the length. On accelerators the `cuthbert` backend can also use its associative (parallel-in-time) scan, which we do not measure here.
+Each smoother gradient costs more than a gradient of the direct model: it runs a Kalman pass over the window instead of a sum of Gaussian log densities. So on a short series on the CPU the smoother fit is not faster: it took 12.0 seconds against 7.4 seconds for the direct model, compilation and warmup included. The advantage grows with the length of the series. The dimension of the direct posterior grows with it, while the dimension the smoother's sampler explores stays 2, and the cost of a Kalman pass is linear in the length. On accelerators the `cuthbert` backend can also use its associative (parallel-in-time) scan, which we do not measure here.
 
 We now measure the two costs that the building block section refers to. The first is a full model evaluation, which returns the marginal log likelihood and the state estimates. The second is the gradient of the log density, which is what NUTS and SVI evaluate; we also measure it for the direct model. Both are compiled with `jax.jit` on the training window and timed at the true scales, after the compilation. The direct model also needs its innovations, which we take from one posterior draw.
 
@@ -461,12 +473,12 @@ shape: (3, 3)
 | model                  | evaluation (ms) | gradient (ms) |
 |------------------------|-----------------|---------------|
 | str                    | f64             | f64           |
-| "Filter"               | 0.05            | 0.158         |
-| "Smoother"             | 0.086           | 0.157         |
-| "direct (innovations)" | null            | 0.009         |
+| "Filter"               | 0.051           | 0.16          |
+| "Smoother"             | 0.08            | 0.162         |
+| "direct (innovations)" | null            | 0.01          |
 
 
-A full evaluation costs more under the `Smoother` because of its backward pass. The gradient costs the same under both handlers, because the marginal log likelihood depends on the forward pass only and JAX drops the unused backward pass from the compiled gradient. A gradient of the direct model costs much less than either. The smoother needs far fewer gradients, but each one costs more, which is why the wall times of the fits are similar.
+A full evaluation costs more under the `Smoother` because of its backward pass. The gradient costs the same under both handlers, because the marginal log likelihood depends on the forward pass only and JAX drops the unused backward pass from the compiled gradient. A gradient of the direct model costs much less than either. The smoother needs far fewer gradients, but each one costs more, which is why its fit is not faster than the direct fit on this short series.
 
 Next, we overlay the three posteriors of the two scales.
 
@@ -612,8 +624,8 @@ shape: (3, 6)
 | strategy                    | MAE   | RMSE  | CRPS  | coverage (50%) | coverage (94%) |
 |-----------------------------|-------|-------|-------|----------------|----------------|
 | str                         | f64   | f64   | f64   | f64            | f64            |
-| "direct (innovations)"      | 0.445 | 0.59  | 0.439 | 0.833          | 1.0            |
-| "dynestyx, explicit path"   | 0.447 | 0.586 | 0.441 | 0.833          | 1.0            |
+| "direct (innovations)"      | 0.445 | 0.589 | 0.437 | 0.833          | 1.0            |
+| "dynestyx, explicit path"   | 0.451 | 0.587 | 0.441 | 0.833          | 1.0            |
 | "dynestyx, Kalman smoother" | 0.448 | 0.591 | 0.439 | 0.833          | 1.0            |
 
 
@@ -1206,7 +1218,7 @@ Group: /
 │           q                                 (chain, draw) float32 16kB 0.3207 ... 0...
 │           r                                 (chain, draw) float32 16kB 0.4482 ... 0...
 │       Attributes:
-│           created_at:                 2026-11-06T09:29:21.156909+00:00
+│           created_at:                 2026-11-25T22:07:52.970018+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1221,7 +1233,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB -12.31 -12.32 ... -9.626
 │       Attributes:
-│           created_at:                 2026-11-06T09:29:21.738162+00:00
+│           created_at:                 2026-11-25T22:07:53.538659+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1234,7 +1246,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 480B -12.66 -12.45 -11.69 ... -9.059 -9.236
 │       Attributes:
-│           created_at:                 2026-11-06T09:29:21.738393+00:00
+│           created_at:                 2026-11-25T22:07:53.538897+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1247,7 +1259,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 480B -12.66 -12.45 ... -9.236
 │       Attributes:
-│           created_at:                 2026-11-06T09:29:21.738575+00:00
+│           created_at:                 2026-11-25T22:07:53.539078+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1262,7 +1274,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 384kB -10.23 -9.461 ... -6.908
 │       Attributes:
-│           created_at:                 2026-11-06T09:29:22.162459+00:00
+│           created_at:                 2026-11-25T22:07:54.007488+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1275,7 +1287,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 96B -9.941 -9.607 ... -8.9 -8.8
         Attributes:
-            created_at:                 2026-11-06T09:29:22.162693+00:00
+            created_at:                 2026-11-25T22:07:54.007723+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1612,7 +1624,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:29:21.156909+00:00
+2026-11-25T22:07:52.970018+00:00
 
 creation_library :  
 ArviZ
@@ -1748,7 +1760,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:29:21.738162+00:00
+2026-11-25T22:07:53.538659+00:00
 
 creation_library :  
 ArviZ
@@ -1842,7 +1854,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:29:21.738393+00:00
+2026-11-25T22:07:53.538897+00:00
 
 creation_library :  
 ArviZ
@@ -1936,7 +1948,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:29:21.738575+00:00
+2026-11-25T22:07:53.539078+00:00
 
 creation_library :  
 ArviZ
@@ -2072,7 +2084,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:29:22.162459+00:00
+2026-11-25T22:07:54.007488+00:00
 
 creation_library :  
 ArviZ
@@ -2166,7 +2178,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:29:22.162693+00:00
+2026-11-25T22:07:54.007723+00:00
 
 creation_library :  
 ArviZ
@@ -2350,8 +2362,8 @@ shape: (4, 3)
 |-----------------------------|-------|-------|
 | str                         | f64   | f64   |
 | "dynestyx, Kalman filter"   | 0.325 | 0.184 |
-| "direct (innovations)"      | 0.278 | 0.156 |
-| "dynestyx, explicit path"   | 0.278 | 0.156 |
+| "direct (innovations)"      | 0.277 | 0.156 |
+| "dynestyx, explicit path"   | 0.279 | 0.156 |
 | "dynestyx, Kalman smoother" | 0.278 | 0.156 |
 
 
@@ -2761,12 +2773,12 @@ shape: (6, 11)
 | t0 | t1 | t2 | num_samples | walltime | metric_crps | metric_coverage_50 | metric_coverage_94 | train_metric_crps | train_metric_coverage_50 | train_metric_coverage_94 |
 |----|----|----|----|----|----|----|----|----|----|----|
 | i64 | i64 | i64 | i64 | f64 | f64 | f64 | f64 | f64 | f64 | f64 |
-| 0 | 72 | 84 | 1000 | 6.354 | 0.678 | 0.25 | 1.0 | 0.214 | 0.722 | 1.0 |
-| 0 | 84 | 96 | 1000 | 6.486 | 0.925 | 0.417 | 0.833 | 0.205 | 0.726 | 1.0 |
-| 0 | 96 | 108 | 1000 | 6.814 | 0.4 | 0.917 | 1.0 | 0.209 | 0.74 | 1.0 |
-| 0 | 108 | 120 | 1000 | 7.494 | 0.426 | 0.667 | 1.0 | 0.209 | 0.741 | 1.0 |
-| 0 | 120 | 132 | 1000 | 7.633 | 0.66 | 0.583 | 0.917 | 0.201 | 0.758 | 1.0 |
-| 0 | 132 | 144 | 1000 | 8.492 | 0.766 | 0.25 | 1.0 | 0.241 | 0.72 | 1.0 |
+| 0 | 72 | 84 | 1000 | 5.198 | 0.678 | 0.25 | 1.0 | 0.214 | 0.722 | 1.0 |
+| 0 | 84 | 96 | 1000 | 5.286 | 0.925 | 0.417 | 0.833 | 0.205 | 0.726 | 1.0 |
+| 0 | 96 | 108 | 1000 | 5.619 | 0.4 | 0.917 | 1.0 | 0.209 | 0.74 | 1.0 |
+| 0 | 108 | 120 | 1000 | 5.931 | 0.426 | 0.667 | 1.0 | 0.209 | 0.741 | 1.0 |
+| 0 | 120 | 132 | 1000 | 6.052 | 0.66 | 0.583 | 0.917 | 0.201 | 0.758 | 1.0 |
+| 0 | 132 | 144 | 1000 | 6.745 | 0.766 | 0.25 | 1.0 | 0.241 | 0.72 | 1.0 |
 
 
 Every fold reports its window, its out-of-sample scores and, with `eval_train=True`, its in-sample scores. Overlaying the out-of-sample forecast of every fold on the series gives the rolling-origin view. Each band starts where its training window ends, and the dashed lines mark the successive splits.

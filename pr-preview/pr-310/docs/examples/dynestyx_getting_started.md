@@ -87,17 +87,30 @@ plt.rcParams["figure.facecolor"] = "white"
 
 rng_key = random.PRNGKey(seed=42)
 
-print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__version__}")
-
 %load_ext autoreload
 %autoreload 2
 %load_ext jaxtyping
 %jaxtyping.typechecker beartype.beartype
 %config InlineBackend.figure_format = "retina"
+
+# the versions that produced the stored outputs
+pl.DataFrame(
+    {
+        "package": ["dynestyx", "numpyro", "jax"],
+        "version": [dsx.__version__, numpyro.__version__, jax.__version__],
+    }
+)
 ```
 
 
-    dynestyx 0.9.0, numpyro 0.22.0, jax 0.12.0.1
+shape: (3, 2)
+
+| package    | version    |
+|------------|------------|
+| str        | str        |
+| "dynestyx" | "0.9.0"    |
+| "numpyro"  | "0.22.0"   |
+| "jax"      | "0.12.0.1" |
 
 
 # How [state_space](../../reference/contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space) Works
@@ -350,8 +363,8 @@ shape: (2, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "dynestyx Kalman filter" | 55 | 5268 | 1.005 | 0 | 13.6 | 86.6 |
-| "innovations" | 472 | 1870 | 1.007 | 0 | 127.0 | 9.1 |
+| "dynestyx Kalman filter" | 55 | 5268 | 1.005 | 0 | 13.6 | 81.0 |
+| "innovations" | 472 | 1870 | 1.007 | 0 | 127.0 | 9.2 |
 
 
 Both fits converge over all their parameters:
@@ -1000,7 +1013,7 @@ Group: /
 │           sigma         (chain, draw) float32 16kB 0.07841 0.07886 ... 0.0738 0.07753
 │           weight        (chain, draw, weight_dim_0) float32 832kB -0.01736 ... -0.0...
 │       Attributes:
-│           created_at:                 2026-11-25T20:33:47.654473+00:00
+│           created_at:                 2026-11-25T22:03:38.137411+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1015,7 +1028,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 7MB 14.36 14.41 ... 13.97
 │       Attributes:
-│           created_at:                 2026-11-25T20:33:50.037480+00:00
+│           created_at:                 2026-11-25T22:03:40.527135+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1028,7 +1041,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 2kB 14.41 14.45 14.42 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-11-25T20:33:50.037743+00:00
+│           created_at:                 2026-11-25T22:03:40.527412+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1041,7 +1054,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 88kB 14.41 0.0 ... -0.2375
 │       Attributes:
-│           created_at:                 2026-11-25T20:33:50.037934+00:00
+│           created_at:                 2026-11-25T22:03:40.527602+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1056,7 +1069,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 832kB 14.41 14.6 ... 14.7 14.3
 │       Attributes:
-│           created_at:                 2026-11-25T20:33:51.093098+00:00
+│           created_at:                 2026-11-25T22:03:41.589382+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1069,7 +1082,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 11kB 14.27 -0.05158 ... 0.3139
         Attributes:
-            created_at:                 2026-11-25T20:33:51.093345+00:00
+            created_at:                 2026-11-25T22:03:41.589626+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1240,7 +1253,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-25T20:33:47.654473+00:00
+2026-11-25T22:03:38.137411+00:00
 
 creation_library :  
 ArviZ
@@ -1376,7 +1389,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-25T20:33:50.037480+00:00
+2026-11-25T22:03:40.527135+00:00
 
 creation_library :  
 ArviZ
@@ -1470,7 +1483,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-25T20:33:50.037743+00:00
+2026-11-25T22:03:40.527412+00:00
 
 creation_library :  
 ArviZ
@@ -1564,7 +1577,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-25T20:33:50.037934+00:00
+2026-11-25T22:03:40.527602+00:00
 
 creation_library :  
 ArviZ
@@ -1700,7 +1713,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-25T20:33:51.093098+00:00
+2026-11-25T22:03:41.589382+00:00
 
 creation_library :  
 ArviZ
@@ -1794,7 +1807,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-25T20:33:51.093345+00:00
+2026-11-25T22:03:41.589626+00:00
 
 creation_library :  
 ArviZ
@@ -2071,8 +2084,8 @@ shape: (2, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "dynestyx latent path" | 472 | 372 | 1.012 | 0 | 128.6 | 52.4 |
-| "innovations" | 473 | 888 | 1.006 | 0 | 261.0 | 69.9 |
+| "dynestyx latent path" | 472 | 372 | 1.012 | 0 | 128.6 | 52.3 |
+| "innovations" | 473 | 888 | 1.006 | 0 | 261.0 | 69.5 |
 
 
 With these chain lengths the explicit path nearly converges and the [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) fit converges:
@@ -2299,10 +2312,10 @@ shape: (1, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "gap fit" | 472 | 407 | 1.01 | 0 | 177.2 | 59.8 |
+| "gap fit" | 472 | 407 | 1.01 | 0 | 177.2 | 59.2 |
 
 
-The gap fit converges, but its largest \hat{R} is 1.01, which is the usual threshold. The smallest bulk ESS is 407, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
+The gap fit nearly converges: its largest \hat{R} is 1.01, at the usual threshold and not below it. The smallest bulk ESS is 407, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
 
 We draw the in-sample predictive of the gap fit, which covers the gap weeks, under the builder of that fit. As a reference we draw the in-sample predictive of the fit on all weeks from the previous section. That fit has seen the weeks of the gap, so we expect it to score better there.
 
@@ -2571,8 +2584,8 @@ shape: (2, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "dynestyx Kalman filter" | 4 | 3633 | 1.003 | 0 | 6.2 | 7.4 |
-| "ssoe" | 4 | 3476 | 1.0 | 0 | 6.0 | 1.1 |
+| "dynestyx Kalman filter" | 4 | 3633 | 1.003 | 0 | 6.2 | 7.2 |
+| "ssoe" | 4 | 3476 | 1.0 | 0 | 6.0 | 1.0 |
 
 
 Both fits converge (largest \hat{R} 1.003, smallest bulk ESS 3{,}476, no divergent transitions), with about six leapfrog steps per draw each: neither model samples a path.
@@ -2609,11 +2622,25 @@ The Kalman filter computes the mean m_T and the variance P_T in closed form, so 
 - [`end_state`](../../reference/contrib.dynestyx.end_state.md) takes the pair from the draws of a run under a filter and returns it as two posterior sites.
 - [`start_state`](../../reference/contrib.dynestyx.start_state.md) reads the two sites inside a model function.
 
+The filter of the history needs no new computation here. The fit of *Local Level with a Kalman Filter* ran under the Kalman filter, and `dynestyx` recorded the filtered mean and variance of every week for every draw, as the sites `f_filtered_states_mean` and `f_filtered_states_cov`. [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) takes their last week. We add the two sites that it returns to the parameter draws `kalman_parameters`.
+
+`dynestyx` records such a site by default only while it has at most 100{,}000 elements per draw. Here each site has 417. A larger site needs `record_filtered_states_mean=True` and `record_filtered_states_cov=True` in the filter configuration.
+
+
+``` python
+# the parameter draws plus the two start sites f_start_mean and f_start_cov
+posterior_resumed = kalman_parameters | end_state(mcmc_kalman.get_samples(), "f")
+
+assert posterior_resumed["f_start_mean"].shape == (4_000, 1)
+assert posterior_resumed["f_start_cov"].shape == (4_000, 1, 1)
+```
+
+
 `dynestyx` puts the initial condition of a model at its first observation time, which is week T + 1 for the new window. The model must therefore move the level one random walk step forward before it builds the initial condition. The step keeps the mean and adds the variance of one step, with s the `drift_scale` as in *Local Level with a Kalman Filter*:
 
  \ell\_{T+1} \mid y\_{1:T}, \theta \sim \text{Normal}(m_T, P_T + s^2) 
 
-In these two formulas the second argument of the Normal distribution is a variance, while s and \sigma in the model of that section are standard deviations.
+In this formula and in the one for \ell_T, the second argument of the Normal distribution is a variance, while s and \sigma in the model of that section are standard deviations.
 
 `resumed_ssm` is `gaussian_ssm` with this initial condition. The Fourier terms enter the observation model only, so the step into the new window reads no control.
 
@@ -2643,20 +2670,6 @@ def resumed_ssm(covariates: Array, data: Array | None = None) -> None:
         control_dim=controls.shape[-1],
     )
     state_space(h, "f", y, dynamics, controls=controls)
-```
-
-
-The filter of the history needs no new computation here. The fit of *Local Level with a Kalman Filter* ran under the Kalman filter, and `dynestyx` recorded the filtered mean and variance of every week for every draw, as the sites `f_filtered_states_mean` and `f_filtered_states_cov`. [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) takes their last week. We add the two sites that it returns to the parameter draws `kalman_parameters`.
-
-`dynestyx` records such a site by default only while it has at most 100{,}000 elements per draw. Here each site has 417. A larger site needs `record_filtered_states_mean=True` and `record_filtered_states_cov=True` in the filter configuration.
-
-
-``` python
-# the parameter draws plus the two start sites f_start_mean and f_start_cov
-posterior_resumed = kalman_parameters | end_state(mcmc_kalman.get_samples(), "f")
-
-assert posterior_resumed["f_start_mean"].shape == (4_000, 1)
-assert posterior_resumed["f_start_cov"].shape == (4_000, 1, 1)
 ```
 
 
@@ -2812,7 +2825,7 @@ Resuming from a filtered state has these limits:
 - **One model function, any handler.** [state_space](../../reference/contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space) turns a `DynamicalModel` into a `numpyro_forecast` model. The handler around each call selects the inference: a Kalman filter or smoother integrates the level out, a `LatentPathBuilder` samples it. [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) work unchanged with the handler around the call, and the block raises an error when the handler is missing.
 - **The Kalman filter integrates the level out.** For the Normal model it gives the same posteriors and the same in-sample and test CRPS as [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), with 55 parameters for NUTS instead of 472. A Kalman smoother exports the filter fit with [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), without a refit.
 - **New forecasts reuse the filtered history.** [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) and [start_state](../../reference/contrib.dynestyx.start_state.md#numpyro_forecast.contrib.dynestyx.start_state) resume the Kalman filter from the filtered state of the fit. The resumed forecast equals the whole-window forecast, and 32 forecasts in one compiled call were 1.5 times faster.
-- **The explicit path covers Student-T noise and gaps.** Its posteriors and forecast match [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), but it samples the states in centered form and needs longer chains. With 16{,}000 draws the fit on all weeks nearly converges: its largest \hat{R} is 1.012, just above the usual threshold of 1.01. With the same number of draws the fit through the gap converges, with a largest \hat{R} of 1.01.
+- **The explicit path covers Student-T noise and gaps.** Its posteriors and forecast match [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), but it samples the states in centered form and needs longer chains. With 16{,}000 draws neither fit of the explicit path is below the usual \hat{R} threshold of 1.01: the largest \hat{R} is 1.012 for the fit on all weeks and 1.01 for the fit through the gap.
 - **The Kalman filter gives the exact ARMA(1,1) likelihood**, up to a small jitter. Its posteriors are close to those of the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) model of the ARMA example.
 
 
