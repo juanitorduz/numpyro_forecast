@@ -26,6 +26,7 @@ from numpyro_forecast import (
     to_datatree,
 )
 from numpyro_forecast.contrib.dynestyx import (
+    _TESTED_DYNESTYX,
     StateSpaceResult,
     end_state,
     start_state,
@@ -646,8 +647,10 @@ def test_an_untested_dynestyx_version_warns(monkeypatch: pytest.MonkeyPatch) -> 
     """The extra is capped at the tested minor version; another installed version warns."""
     import dynestyx
 
-    monkeypatch.setattr(dynestyx, "__version__", "0.10.0")
-    with smoother, pytest.warns(UserWarning, match="tested with dynestyx 0.9"):
+    major, minor = _TESTED_DYNESTYX
+    monkeypatch.setattr(dynestyx, "__version__", f"{major}.{minor + 1}.0")
+    expected = rf"tested with dynestyx {major}\.{minor}, found"
+    with smoother, pytest.warns(UserWarning, match=expected):
         log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
 
 

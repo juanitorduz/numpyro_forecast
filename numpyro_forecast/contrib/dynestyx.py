@@ -74,9 +74,9 @@ handler-stack query above, the result types ``LatentStateResult``
 ``_marginal_loglik``, ``_state_path_params``, ``_predicted_observations``,
 ``_predicted_states``, ``_filtered_states_mean`` and ``_filtered_states_cov``,
 and ``DynamicalModel.observation_model(x, u, t)``. dynestyx is an optional
-dependency (``pip install numpyro_forecast[dynestyx]``, ``dynestyx>=0.9.0,<0.10``)
-imported lazily through `~~numpyro_forecast.optional.require()` at the first
-call, which warns when the installed minor version is not the tested one. The
+dependency (``pip install numpyro_forecast[dynestyx]``) imported lazily through
+`~~numpyro_forecast.optional.require()` at the first call, which warns when the
+installed minor version is not the tested one. The
 block models one series per model function: it has no batch dims (``dsx.plate``
 registers no state sites) and it owns the ``"obs"`` and ``"forecast"`` sites,
 which the drivers read by their bare names, so it cannot run under
@@ -236,7 +236,7 @@ def _in_sample_states(rng_key: Array, result: Any, kind: str, t_obs: int) -> Arr
         x = jnp.asarray(result.state_path)
     else:
         dists = getattr(result, "dists", None)
-        if not dists:  # pragma: no cover - defensive: no discrete-time smoother of dynestyx 0.9
+        if not dists:  # pragma: no cover - defensive: every tested smoother returns them
             msg = "the dynestyx Smoother returned no per-step marginals to draw from"
             raise ValueError(msg)
         treedef = jax.tree.structure(dists[0])
@@ -529,8 +529,6 @@ def end_state(
     - The function reads the covariance site, not the
       ``f"{name}_filtered_states_chol_cov"`` site: only the cuthbert backend
       records that one, and the diagonal of its factor can be negative.
-    - The function reads the whole ``(sample, time, ...)`` arrays to copy one
-      row, so those arrays must fit in memory.
     - The state at an earlier step comes from the same samples. A filter is
       causal: the first ``t`` rows are the filter of the first ``t``
       observations. Slice both sites to ``[..., :t, :]`` and ``[..., :t, :, :]``
@@ -645,12 +643,13 @@ def start_state(
     - dynestyx puts the ``initial_condition`` at the first observation time,
       which is one step after the end of the earlier window. The model must
       move the state one transition forward before it builds the initial
-      condition: ``A @ mean`` and ``A @ cov @ A.T + Q`` for a linear Gaussian
-      evolution with matrix ``A`` and noise covariance ``Q``. A nonlinear
-      evolution needs a linearization.
-    - An evolution that reads the control needs the control of the last step of
-      the earlier window for that transition. The covariates of the resumed
-      window do not hold it.
+      condition. For a ``LinearGaussianStateEvolution`` with matrix ``A``,
+      control matrix ``B``, bias ``b`` and noise covariance ``Q``, the mean is
+      ``A @ mean + B @ u + b`` and the covariance is ``A @ cov @ A.T + Q``. Leave
+      out the terms that the evolution does not have. A nonlinear evolution
+      needs a linearization.
+    - The control ``u`` of that transition is the control of the last step of
+      the earlier window. The covariates of the resumed window do not hold it.
     - The time grid of `state_space()` starts at 0 again in the resumed window,
       so the dynamics must not read the absolute time.
     - The function is for prediction only. Use the resumed model function with
