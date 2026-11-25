@@ -58,11 +58,22 @@ predict time, so the block asks for one extra step at the last observation and
 drops it: the first forecast step is a transition of the final state, not a copy
 of it.
 
+**Reusing a filtered history.** The block conditions on the whole observed
+window in every call, so a forecast costs one filter step per observed step and
+posterior draw. When many forecasts share a long history and differ in a few new
+observations (scenario updates, online updates between two refits, several
+forecast origins with one posterior), filter the history once and resume.
+`end_state()` reads the filtering distribution at the last observed step from
+the draws of a ``Filter`` run. `start_state()` declares it inside a second model
+function, which conditions on the new observations only. The recipe and its
+limits are in `start_state()`.
+
 The coupling to dynestyx is confined to this module: ``dynestyx.sample``, the
 handler-stack query above, the result types ``LatentStateResult``
 (``state_path``) and the ``dists`` of a smoother's result, the site suffixes
-``_marginal_loglik``, ``_state_path_params``, ``_predicted_observations`` and
-``_predicted_states``, and ``DynamicalModel.observation_model(x, u, t)``.
+``_marginal_loglik``, ``_state_path_params``, ``_predicted_observations``,
+``_predicted_states``, ``_filtered_states_mean`` and ``_filtered_states_cov``,
+and ``DynamicalModel.observation_model(x, u, t)``.
 dependency (``pip install numpyro_forecast[dynestyx]``, ``dynestyx>=0.9.0,<0.10``)
 imported lazily through `~~numpyro_forecast.optional.require()` at the first
 call, which warns when the installed minor version is not the tested one. The
@@ -416,6 +427,9 @@ def state_space(
       deterministic sites, but `~~numpyro_forecast.convert.to_datatree()` stores
       them in the posterior group; drop them for a smaller tree, and keep
       ``f"{name}_state_path_params"`` under a ``LatentPathBuilder``.
+    - The block conditions on the whole window in every call. For many forecasts
+      that share a long history, filter it once and resume from the filtered
+      state with `end_state()` and `start_state()`.
 
     Examples
     --------

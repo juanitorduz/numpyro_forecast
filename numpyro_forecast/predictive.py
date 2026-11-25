@@ -634,6 +634,13 @@ def forecast(
     hashable or not. A repeated call with the same model and shapes, for
     example in a scenario loop, therefore compiles again; so does
     `~~numpyro_forecast.convert.to_datatree()`, which runs the drivers itself.
+    To compile a loop over forecasts of the same shapes once, wrap the call in
+    one ``jax.jit`` and map it over the scenarios with ``jax.vmap``, with
+    ``batch_size`` and ``device`` at their defaults (a ``batch_size`` inside
+    ``jax.jit`` raises a tracer error).
+    ``jax.lax.map(f, xs, batch_size=n)`` over the scenarios is the memory limit
+    of that form. The program is then traced once, so it keeps the model as it
+    was at that trace.
     """
     require_covariates_extend_data(data, covariates)
     posterior = drop_empty_horizon_sites(posterior)
