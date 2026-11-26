@@ -170,15 +170,10 @@ def test_trend_inflation_prior_predictive_shapes(
         assert prior["common_shock"].shape == (5, 30, 1)
 
 
-def test_trend_inflation_stochastic_volatility_moves_over_the_horizon(
-    rng_key: Array, fast_mcmc: dict[str, int]
-) -> None:
+def test_trend_inflation_stochastic_volatility_moves_over_the_horizon(rng_key: Array) -> None:
     model = make_trend_inflation_model(4, common_transitory=True)
-    key_data, key_fit, key_scale = random.split(rng_key, 3)
-    data = Predictive(model, num_samples=1)(key_data, jnp.zeros((40, 0)))["obs"][0]
-    posterior = _nuts_posterior(key_fit, model, data, fast_mcmc)
-    future = Predictive(model, posterior, return_sites=["gap_vol", "common_vol"])(
-        key_scale, jnp.zeros((48, 0)), data
+    future = Predictive(model, num_samples=5, return_sites=["gap_vol", "common_vol"])(
+        rng_key, jnp.zeros((48, 0)), jnp.zeros((40, 4))
     )
     for site in ("gap_vol", "common_vol"):
         horizon_scale = future[site][:, 40:]
