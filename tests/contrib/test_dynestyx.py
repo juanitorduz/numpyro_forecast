@@ -1,8 +1,10 @@
 """Tests for the dynestyx state space building block (``numpyro_forecast.contrib.dynestyx``)."""
 
 import warnings
+from collections.abc import Callable
 from typing import Literal
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -23,14 +25,19 @@ from numpyro_forecast import (
     predict_in_sample,
     to_datatree,
 )
-from numpyro_forecast.contrib.dynestyx import StateSpaceResult, state_space
+from numpyro_forecast.contrib.dynestyx import (
+    _TESTED_DYNESTYX,
+    StateSpaceResult,
+    end_state,
+    start_state,
+    state_space,
+)
 from numpyro_forecast.optional import _api_canary
 from numpyro_forecast.typing import Array, ForecastModel
 
 pytest.importorskip("dynestyx")
 from dynestyx import DiscreteTimeSimulator, DynamicalModel, Filter, LatentPathBuilder, Smoother
-from dynestyx.inference.configs.smoother import KFSmootherConfig
-from dynestyx.inference.filters import KFConfig
+from dynestyx.configs import EKFConfig, KFConfig, KFSmootherConfig
 from dynestyx.models import LinearGaussianObservation, LinearGaussianStateEvolution
 
 T_OBS, FUTURE = 24, 6
@@ -105,6 +112,52 @@ def _smoothed_moments() -> tuple[Array, Array]:
             )
         ).get_trace(TRAIN, TRAIN)
     return tr["f_smoothed_states_mean"]["value"], tr["f_smoothed_states_cov_diag"]["value"]
+
+
+TREND_A = jnp.array([[1.0, 1.0], [0.0, 1.0]])
+TREND_DRAWS = {
+    "q": jnp.array([0.3, 0.05]) * jnp.linspace(0.8, 1.2, 8)[:, None],
+    "r": 0.2 * jnp.linspace(0.8, 1.2, 8),
+}
+
+
+def _trend(resume: bool) -> ForecastModel:
+    """Local linear trend, state ``(level, slope)``; ``resume`` starts it at ``start_state``."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0).expand([2]).to_event(1)))
+        r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
+        noise = jnp.diag(q**2)
+        if resume:
+            mean, cov = start_state("f", 2)
+            initial = dist.MultivariateNormal(TREND_A @ mean, TREND_A @ cov @ TREND_A.T + noise)
+        else:
+            initial = dist.MultivariateNormal(jnp.zeros(2), jnp.eye(2))
+        dynamics = DynamicalModel(
+            initial_condition=initial,
+            state_evolution=LinearGaussianStateEvolution(A=TREND_A, cov=noise),
+            observation_model=LinearGaussianObservation(
+                H=jnp.array([[1.0, 0.0]]), R=r**2 * jnp.eye(1)
+            ),
+        )
+        state_space(h, "f", covariates[..., : h.t_obs, :], dynamics)
+
+    return model
+
+
+def _filtered_end(
+    config: KFConfig | EKFConfig, model: ForecastModel, posterior: dict[str, Array], window: Array
+) -> dict[str, Array]:
+    """``end_state`` of one ``Predictive`` pass of ``model`` over ``window`` under a ``Filter``."""
+    with Filter(filter_config=config):
+        samples = Predictive(
+            model,
+            posterior_samples=posterior,
+            parallel=True,
+            return_sites=["f_filtered_states_mean", "f_filtered_states_cov"],
+        )(random.PRNGKey(0), window, window)
+    return {site: jnp.asarray(value) for site, value in end_state(samples, "f").items()}
 
 
 def test_training_registers_the_marginal_likelihood() -> None:
@@ -452,7 +505,7 @@ def test_model_relations_trace_a_latent_path_with_controls() -> None:
 def test_the_block_refuses_to_run_without_a_conditioning_handler(call: str) -> None:
     """Without a Filter, Smoother or LatentPathBuilder the block raises, in every mode.
 
-    dynestyx 0.8 would pick a default handler itself and only log the choice, so a
+    dynestyx would pick a default handler itself and only log the choice, so a
     forgotten handler would fit or forecast under an inference method nobody chose. A
     Simulator alone is not a conditioning handler.
     """
@@ -594,8 +647,10 @@ def test_an_untested_dynestyx_version_warns(monkeypatch: pytest.MonkeyPatch) -> 
     """The extra is capped at the tested minor version; another installed version warns."""
     import dynestyx
 
-    monkeypatch.setattr(dynestyx, "__version__", "0.9.0")
-    with smoother, pytest.warns(UserWarning, match="tested with dynestyx 0.8"):
+    major, minor = _TESTED_DYNESTYX
+    monkeypatch.setattr(dynestyx, "__version__", f"{major}.{minor + 1}.0")
+    expected = rf"tested with dynestyx {major}\.{minor}, found"
+    with smoother, pytest.warns(UserWarning, match=expected):
         log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
 
 
@@ -784,3 +839,126 @@ def test_two_observed_series_keep_their_columns(handler_name: str) -> None:
     assert ahead.shape == (n, FUTURE, 2)
     assert jnp.abs(in_sample.mean(axis=0) - train).max() < 1.0
     assert jnp.abs(ahead.mean(axis=0) - train[-1]).max() < 1.0
+
+
+@pytest.mark.parametrize("as_array", [jnp.asarray, np.asarray])
+def test_end_state_takes_the_last_filtered_step(
+    as_array: Callable[..., Array | np.ndarray],
+) -> None:
+    """The last row of the two filtered sites, under the start-site names, in the input's type."""
+    mean = as_array(np.arange(60, dtype=np.float32).reshape(2, 3, 5, 2))
+    cov = as_array(np.arange(120, dtype=np.float32).reshape(2, 3, 5, 2, 2))
+    samples = {"f_filtered_states_mean": mean, "f_filtered_states_cov": cov, "q": mean}
+    state = end_state(samples, "f")
+    assert set(state) == {"f_start_mean", "f_start_cov"}
+    assert type(state["f_start_mean"]) is type(mean)
+    np.testing.assert_array_equal(state["f_start_mean"], mean[:, :, -1])
+    np.testing.assert_array_equal(state["f_start_cov"], cov[:, :, -1])
+    assert not np.shares_memory(state["f_start_cov"], cov)
+
+
+def test_end_state_names_the_missing_site_and_the_record_flags() -> None:
+    """Without a recorded filtered site the error names the site and the two ``record_*`` flags."""
+    with pytest.raises(ValueError, match="record_filtered_states_cov=True") as info:
+        end_state({"f_filtered_states_mean": jnp.zeros((4, 5, 1))}, "f")
+    assert "f_filtered_states_cov" in str(info.value)
+    assert "record_filtered_states_mean=True" in str(info.value)
+
+
+def test_start_state_needs_the_end_state_in_the_posterior() -> None:
+    """A posterior without the two start sites raises an error that names ``end_state``."""
+    with (
+        DiscreteTimeSimulator(n_simulations=1),
+        Filter(filter_config=KFConfig(filter_source="cuthbert")),
+        pytest.raises(ValueError, match="end_state") as info,
+    ):
+        forecast(random.PRNGKey(0), _trend(resume=True), TREND_DRAWS, SERIES[18:24], SERIES[18:])
+    assert "f_start_mean" in str(info.value)
+    assert "f_start_cov" in str(info.value)
+
+
+def test_start_state_rejects_another_state_dimension() -> None:
+    """Start sites of another state dimension than ``state_dim`` raise, they do not broadcast."""
+    start = {
+        "f_start_mean": jnp.zeros((8, 3)),
+        "f_start_cov": jnp.broadcast_to(jnp.eye(3), (8, 3, 3)),
+    }
+    with (
+        DiscreteTimeSimulator(n_simulations=1),
+        Filter(filter_config=KFConfig(filter_source="cuthbert")),
+        pytest.raises(ValueError, match="state_dim"),
+    ):
+        forecast(
+            random.PRNGKey(0), _trend(resume=True), TREND_DRAWS | start, SERIES[18:24], SERIES[18:]
+        )
+
+
+@pytest.mark.parametrize(
+    "config",
+    [KFConfig(), KFConfig(filter_source="cuthbert"), EKFConfig()],
+    ids=["kf-cd-dynamax", "kf-cuthbert", "ekf"],
+)
+def test_a_resumed_filter_matches_the_whole_window(config: KFConfig | EKFConfig) -> None:
+    """Three chained windows give the filtered state and the forecast of one pass.
+
+    The model is linear and Gaussian with a state of dimension 2, so the Kalman filter is
+    exact and the two forms agree up to floating point. The forecasts use the same key: a
+    substituted start site consumes no key.
+    """
+    full, resumed = _trend(resume=False), _trend(resume=True)
+    whole = _filtered_end(config, full, TREND_DRAWS, SERIES[:24])
+    first = _filtered_end(config, full, TREND_DRAWS, SERIES[:12])
+    second = _filtered_end(config, resumed, TREND_DRAWS | first, SERIES[12:18])
+    third = _filtered_end(config, resumed, TREND_DRAWS | second, SERIES[18:24])
+    assert third["f_start_mean"].shape == (8, 2)
+    assert third["f_start_cov"].shape == (8, 2, 2)
+    assert jnp.allclose(third["f_start_mean"], whole["f_start_mean"], atol=1e-4)
+    assert jnp.allclose(third["f_start_cov"], whole["f_start_cov"], atol=1e-4)
+    with DiscreteTimeSimulator(n_simulations=1), Filter(filter_config=config):
+        ahead_whole = forecast(random.PRNGKey(1), full, TREND_DRAWS, SERIES[:24], SERIES)
+        ahead_resumed = forecast(
+            random.PRNGKey(1), resumed, TREND_DRAWS | second, SERIES[18:24], SERIES[18:]
+        )
+    assert ahead_resumed.shape == (8, FUTURE, 1)
+    assert jnp.allclose(ahead_resumed, ahead_whole, atol=1e-3)
+
+
+def test_a_resumed_model_exports_with_to_datatree() -> None:
+    """``to_datatree`` exports the resumed model and keeps the start sites in the posterior."""
+    first = _filtered_end(
+        KFConfig(filter_source="cuthbert"), _trend(resume=False), TREND_DRAWS, SERIES[:18]
+    )
+    with DiscreteTimeSimulator(n_simulations=1), smoother:
+        tree = to_datatree(
+            random.PRNGKey(1), _trend(resume=True), TREND_DRAWS | first, SERIES[18:24], SERIES[18:]
+        )
+    assert tree["posterior_predictive"]["obs"].shape == (1, 8, 6, 1)
+    assert tree["predictions"]["obs"].shape == (1, 8, FUTURE, 1)
+    assert {"f_start_mean", "f_start_cov"} <= set(tree["posterior"].data_vars)
+    assert np.isfinite(tree["predictions"]["obs"].to_numpy()).all()
+
+
+def test_resumed_forecasts_run_under_jit_with_vmap_and_lax_map() -> None:
+    """One ``jax.jit`` around ``forecast``, mapped over scenarios, gives the plain-call draws."""
+    posterior = TREND_DRAWS | _filtered_end(
+        KFConfig(filter_source="cuthbert"), _trend(resume=False), TREND_DRAWS, SERIES[:18]
+    )
+    resumed = _trend(resume=True)
+
+    def one(rng_key: Array, covariates: Array) -> Array:
+        with (
+            DiscreteTimeSimulator(n_simulations=1),
+            Filter(filter_config=KFConfig(filter_source="cuthbert")),
+        ):
+            return jnp.asarray(forecast(rng_key, resumed, posterior, covariates[:6], covariates))
+
+    scenarios = jnp.stack([SERIES[18:] + shift for shift in (0.0, 0.5, -0.5)])
+    keys = random.split(random.PRNGKey(2), 3)
+    looped = jnp.stack([one(key, rows) for key, rows in zip(keys, scenarios, strict=True)])
+    batched = jax.jit(jax.vmap(one))(keys, scenarios)
+    chunked = jax.jit(lambda k, c: jax.lax.map(lambda kc: one(*kc), (k, c), batch_size=2))(
+        keys, scenarios
+    )
+    assert batched.shape == (3, 8, FUTURE, 1)
+    assert jnp.allclose(batched, looped, atol=1e-5)
+    assert jnp.allclose(chunked, looped, atol=1e-5)
