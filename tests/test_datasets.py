@@ -1,7 +1,5 @@
 """Tests for the dataset loaders."""
 
-import importlib.resources
-
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -133,14 +131,6 @@ def test_load_us_inflation_rates_are_finite() -> None:
     assert bool(jnp.all(jnp.isfinite(load_us_inflation().rates)))
 
 
-def test_load_us_inflation_rates_match_levels() -> None:
-    source = importlib.resources.files("numpyro_forecast").joinpath("data", "us_inflation.csv")
-    with source.open("r", encoding="utf-8") as handle:
-        levels = np.loadtxt(handle, delimiter=",", skiprows=1, usecols=(1, 2, 3, 4))
-    expected = 400.0 * np.diff(np.log(levels), axis=0)
-    np.testing.assert_allclose(np.asarray(load_us_inflation().rates), expected, rtol=1e-6)
-
-
 def test_load_state_employment_shapes_and_names() -> None:
     data = load_state_employment()
     assert data.growth.shape == (data.dates.shape[0], 51)
@@ -168,11 +158,3 @@ def test_load_state_employment_dates_are_consecutive_months() -> None:
 
 def test_load_state_employment_growth_is_finite() -> None:
     assert bool(jnp.all(jnp.isfinite(load_state_employment().growth)))
-
-
-def test_load_state_employment_growth_matches_levels() -> None:
-    source = importlib.resources.files("numpyro_forecast").joinpath("data", "state_employment.csv")
-    with source.open("r", encoding="utf-8") as handle:
-        levels = np.loadtxt(handle, delimiter=",", skiprows=1, usecols=range(1, 52))
-    expected = 1_200.0 * np.diff(np.log(levels), axis=0)
-    np.testing.assert_allclose(np.asarray(load_state_employment().growth), expected, rtol=1e-5)

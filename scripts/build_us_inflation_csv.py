@@ -16,9 +16,9 @@ series share, and writes the quarterly average levels with six decimals. The
 last quarter of the file is the last quarter whose three months are published
 for every series. `numpyro_forecast.datasets.load_us_inflation()` reads that
 file and turns the levels into annualized quarterly log rates, so the
-transformation stays in tested package code. After a rebuild, update the
-vintage date and the list of filled months in the docstring of
-``load_us_inflation``.
+transformation stays in tested package code. The script prints every month it
+fills; after a rebuild, update the vintage date and the list of filled months in
+the docstring of ``load_us_inflation``.
 """
 
 import csv
@@ -66,15 +66,17 @@ def next_month(month: dt.date) -> dt.date:
     return dt.date(month.year + month.month // 12, month.month % 12 + 1, 1)
 
 
-def fill_interior_gaps(levels: dict[dt.date, float]) -> dict[dt.date, float]:
+def fill_interior_gaps(levels: dict[dt.date, float]) -> tuple[dict[dt.date, float], list[dt.date]]:
     """Fill each single missing month inside the published range of a series.
 
     The BLS published no CPI for October 2025 (the federal government shutdown
     of 2025), so ``CPIAUCSL`` and ``CPILFESL`` skip that month. The filled value
     is the geometric mean of the previous and the next published month, which
-    splits the two-month log change evenly, as the BLS did in its November 2025
-    release. A gap of two or more consecutive months raises, because a straight
-    line through a longer gap is not a published statistic any more.
+    splits the two-month log change evenly. The BLS uses the same approximation
+    for October 2025 in its seasonal adjustment (question 12 of its
+    [shutdown FAQ](https://www.bls.gov/cpi/additional-resources/2025-federal-government-shutdown-impact-cpi-faq.htm)).
+    A gap of two or more consecutive months raises, because a straight line
+    through a longer gap is not a published statistic any more.
 
     Parameters
     ----------
@@ -83,8 +85,8 @@ def fill_interior_gaps(levels: dict[dt.date, float]) -> dict[dt.date, float]:
 
     Returns
     -------
-    dict[datetime.date, float]
-        ``levels`` plus the filled months.
+    tuple[dict[datetime.date, float], list[datetime.date]]
+        ``levels`` plus the filled months, and the filled months in order.
 
     Raises
     ------
@@ -92,19 +94,26 @@ def fill_interior_gaps(levels: dict[dt.date, float]) -> dict[dt.date, float]:
         If two or more consecutive months are missing inside the range.
     """
     filled = dict(levels)
+    filled_months: list[dt.date] = []
     month = min(levels)
+    last = max(levels)
 
-    while month < max(levels):
+    while month < last:
         following = next_month(month)
+
         if following not in levels:
             after = next_month(following)
+
             if after not in levels:
                 msg = f"two or more consecutive months missing from {following}"
                 raise ValueError(msg)
+
             filled[following] = float(np.sqrt(levels[month] * levels[after]))
+            filled_months.append(following)
+
         month = following
 
-    return filled
+    return filled, filled_months
 
 
 def quarterly_average(levels: dict[dt.date, float]) -> dict[dt.date, float]:
@@ -124,10 +133,16 @@ def quarterly_average(levels: dict[dt.date, float]) -> dict[dt.date, float]:
 
 def main() -> None:
     """Download the four series, fill the gaps, align the quarters and write the CSV."""
-    tables = {
-        name: quarterly_average(fill_interior_gaps(fetch_monthly(series_id)))
-        for name, series_id in SERIES.items()
-    }
+    tables: dict[str, dict[dt.date, float]] = {}
+
+    for name, series_id in SERIES.items():
+        levels, filled_months = fill_interior_gaps(fetch_monthly(series_id))
+
+        for month in filled_months:
+            print(f"{series_id}: filled {month.isoformat()}")
+
+        tables[name] = quarterly_average(levels)
+
     quarters = sorted(set.intersection(*(set(table) for table in tables.values())))
     quarters = [quarter for quarter in quarters if quarter >= FIRST_QUARTER]
 
