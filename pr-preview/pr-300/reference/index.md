@@ -265,6 +265,12 @@ Condition, forecast or predict in-sample a dynestyx model over the horizon.
 [contrib.dynestyx.StateSpaceResult](contrib.dynestyx.StateSpaceResult.md#numpyro_forecast.contrib.dynestyx.StateSpaceResult)  
 Latent state draws of one `state_space()` call, `None` outside their mode.
 
+[contrib.dynestyx.end_state()](contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state)  
+Take the filtered state at the last step as the start of the next window.
+
+[contrib.dynestyx.start_state()](contrib.dynestyx.start_state.md#numpyro_forecast.contrib.dynestyx.start_state)  
+Read the filtered state at the end of the earlier window inside a model.
+
 
 ## Typing
 

@@ -84,7 +84,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../../site_libs/quarto-html/quarto-syntax-highlighting-63b5708e65d6cd79cd7618c58d0c21e7.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../../site_libs/bootstrap/bootstrap-9ec6d0bacfee18682fb645e4ac94e31e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-060bb7a8a8d4c53fdaf081ccad6b884f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -213,7 +213,7 @@ window.Quarto = {
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="40" data-forks="3"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="41" data-forks="3"></div>
     </span>
   </li>  
 </ul>
@@ -395,7 +395,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/trend_inflation.ipynb" data-notebook-title="Trend inflation from four US price measures with stochastic volatility" data-notebook-cellid="62b46b97">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/trend_inflation.ipynb" data-notebook-title="Trend inflation from four US price measures with stochastic volatility" data-notebook-cellid="8c47844f">
 <p>Trend inflation from four US price measures with stochastic volatility</p>
 <p>Inflation has a persistent part and a transitory part. The persistent part, <strong>trend inflation</strong>, is the rate that inflation returns to once the transitory shocks (an energy price spike, a pandemic quarter) have passed, and it is the number that a central bank and a bond investor care about. No price index measures it directly: each index measures the same underlying inflation with its own basket, formula and noise. In this notebook we estimate US trend inflation from four quarterly price measures, CPI, core CPI, PCE and core PCE, with one common random-walk trend, one transitory shock that moves all four measures at once, one transitory gap per measure, and <strong>stochastic volatility</strong>: the size of each of these shocks is itself a random walk, so the model can be quiet in the 1990s and loud in the 1970s and in 2021 to 2023.</p>
 <p>The model is a multi-measure version of the unobserved components stochastic volatility (UCSV) model of <a href="https://doi.org/10.1111/j.1538-4616.2007.00014.x">Stock and Watson (2007)</a>, close in spirit to <a href="https://doi.org/10.1162/REST_a_00608">Stock and Watson (2016)</a> and <a href="https://doi.org/10.1162/REST_a_00549">Mertens (2016)</a>. It fits in the building blocks of <code>numpyro_forecast</code> without new code: <a href="../../reference/models.innovations.html"><code>innovations</code></a> samples the standardized steps of every random walk, <a href="../../reference/models.predict.html"><code>predict</code></a> takes an observation noise whose scale changes over time, and <a href="../../reference/evaluate.backtest.html"><code>backtest</code></a> runs the rolling-origin evaluation. The data ship with the package as <a href="../../reference/datasets.load_us_inflation.html"><code>load_us_inflation</code></a>.</p>
@@ -408,7 +408,7 @@ window.Quarto = {
 <p>The <a href="var.html">VAR example</a> fits the same kind of quarterly US data with a vector autoregression; here the series share latent components instead of lagged cross effects.</p>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
-<div id="70bc55a4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:26:54.891562Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:26:54.891273Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:26:56.776672Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:26:56.776171Z&quot;}}" data-execution_count="1">
+<div id="76afbdb1" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:00:54.285975Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:00:54.285797Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:00:57.922231Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:00:57.921524Z&quot;}}" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> warnings</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># preliz warns at import time when PyMC is not installed; this example does not use PyMC.</span></span>
@@ -434,44 +434,45 @@ window.Quarto = {
 <span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.patches <span class="im">import</span> Patch</span>
 <span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.ticker <span class="im">import</span> MaxNLocator, PercentFormatter</span>
 <span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> MCMC, NUTS, Predictive</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    BacktestResult,</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    backtest,</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    eval_mae,</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    innovations,</span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    predict,</span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.datasets <span class="im">import</span> load_us_inflation</span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.metrics <span class="im">import</span> crps_empirical</span>
-<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastFn, ForecastModel, Metric, ModelFactory</span>
-<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>CI_PROB <span class="op">=</span> <span class="fl">0.94</span></span>
-<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
-<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>az.rcParams[<span class="st">"stats.ci_kind"</span>] <span class="op">=</span> <span class="st">"hdi"</span></span>
-<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>az.rcParams[<span class="st">"stats.ci_prob"</span>] <span class="op">=</span> CI_PROB</span>
-<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">12</span>, <span class="dv">6</span>]</span>
-<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
-<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
-<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a><span class="co"># arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.</span></span>
-<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a>warnings.filterwarnings(</span>
-<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ignore"</span>, message<span class="op">=</span><span class="st">"When multiple credible intervals are plotted"</span>, category<span class="op">=</span><span class="pp">UserWarning</span></span>
-<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
-<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
-<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
-<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy.stats <span class="im">import</span> binomtest</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    BacktestResult,</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    backtest,</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    eval_mae,</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    innovations,</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    predict,</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.datasets <span class="im">import</span> load_us_inflation</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.metrics <span class="im">import</span> crps_empirical</span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastFn, ForecastModel, Metric, ModelFactory</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>CI_PROB <span class="op">=</span> <span class="fl">0.94</span></span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>az.rcParams[<span class="st">"stats.ci_kind"</span>] <span class="op">=</span> <span class="st">"hdi"</span></span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>az.rcParams[<span class="st">"stats.ci_prob"</span>] <span class="op">=</span> CI_PROB</span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">12</span>, <span class="dv">6</span>]</span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a><span class="co"># arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.</span></span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a>warnings.filterwarnings(</span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ignore"</span>, message<span class="op">=</span><span class="st">"When multiple credible intervals are plotted"</span>, category<span class="op">=</span><span class="pp">UserWarning</span></span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
+<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
+<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
 </div>
 </section>
 <section id="read-data" class="level1">
@@ -487,7 +488,7 @@ window.Quarto = {
 <li>Core PCE is the last column. It is the measure the Federal Reserve targets, it is the reference measure of the model (its offset is zero, so the trend is on the core PCE scale) and it is the series we score in the evaluation.</li>
 <li>Time is at axis <span class="math inline">-2</span> and the measures at axis <span class="math inline">-1</span>, the package layout, so the <code>(quarters, measures)</code> array is the <code>data</code> of every model call.</li>
 </ul>
-<div id="d183a6c1" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:26:56.778229Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:26:56.778082Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:26:56.799697Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:26:56.799122Z&quot;}}" data-execution_count="2">
+<div id="013c270a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:00:57.925433Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:00:57.924940Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:00:57.951457Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:00:57.950900Z&quot;}}" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>inflation <span class="op">=</span> load_us_inflation()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>rates <span class="op">=</span> inflation.rates  <span class="co"># (quarters, measures), core PCE last</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>dates <span class="op">=</span> inflation.dates  <span class="co"># first day of each quarter</span></span>
@@ -497,7 +498,7 @@ window.Quarto = {
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> inflation.names <span class="op">==</span> (<span class="st">"cpi"</span>, <span class="st">"core_cpi"</span>, <span class="st">"pce"</span>, <span class="st">"core_pce"</span>)</span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> rates.shape <span class="op">==</span> (<span class="dv">270</span>, <span class="dv">4</span>)</span></code></pre></div>
 </div>
-<div id="5865da3e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:26:56.800835Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:26:56.800759Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:26:57.098989Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:26:57.098495Z&quot;}}" data-execution_count="3">
+<div id="8ba4c4e5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:00:57.954028Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:00:57.953880Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:00:58.465058Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:00:58.463874Z&quot;}}" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>TITLE <span class="op">=</span> {<span class="st">"fontsize"</span>: <span class="dv">18</span>, <span class="st">"fontweight"</span>: <span class="st">"bold"</span>}</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(nrows<span class="op">=</span>num_measures, sharex<span class="op">=</span><span class="va">True</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">10</span>), layout<span class="op">=</span><span class="st">"constrained"</span>)</span>
@@ -583,9 +584,9 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li><span class="math inline">h_0 = -1.5</span> is a trend shock with standard deviation <span class="math inline">\exp(-0.75) \approx 0.47</span> percentage points per quarter, and the prior standard deviation of <span class="math inline">1</span> on <span class="math inline">h_0</span> lets that scale range from about <span class="math inline">0.3</span> to <span class="math inline">0.8</span> within one standard deviation.</li>
 <li><span class="math inline">q_0 = 0</span> and <span class="math inline">g_{0, m} = 0</span> are a common shock and a gap with a standard deviation of <span class="math inline">1</span> percentage point (plus the floor for the gap), the right order for the core measures; the headline measures move up from there through <span class="math inline">g_{t, m}</span>.</li>
 <li><span class="math inline">\alpha_m \sim \text{Normal}(0, 1)</span> allows offsets of about <span class="math inline">\pm 2</span> percentage points, which is wide for the CPI to PCE wedge of a few tenths.</li>
-<li><span class="math inline">\gamma = 0.1</span> is fixed, as in Stock and Watson (2007). They write the variance of the log-variance steps as <span class="math inline">\gamma</span> and set it to <span class="math inline">0.2</span>, a standard deviation of about <span class="math inline">0.45</span>; here <span class="math inline">\gamma</span> is the standard deviation itself, and <span class="math inline">0.1</span> is smaller. After <span class="math inline">t</span> quarters the log-variance has prior standard deviation <span class="math inline">\gamma \sqrt{t}</span>, about <span class="math inline">1.6</span> for <span class="math inline">t = 270</span>, so a volatility can drift by a factor of <span class="math inline">\exp(0.82) \approx 2.3</span> in either direction over the sample within one standard deviation. The fourth panel of the prior figure plots this band for three values of <span class="math inline">\gamma</span>. The section <em>Sensitivity to the vol-of-vol</em> refits the model with larger values and with a learned <span class="math inline">\gamma</span>.</li>
+<li><span class="math inline">\gamma = 0.1</span> is fixed, as in Stock and Watson (2007), but at a smaller value. They write the variance of the log-variance steps as <span class="math inline">\gamma</span> and set it to <span class="math inline">0.2</span>, a standard deviation of about <span class="math inline">0.45</span>; here <span class="math inline">\gamma</span> is the standard deviation itself, and <span class="math inline">0.1</span> is a value chosen so that the sampler converges, not an estimate. After <span class="math inline">t</span> quarters the log-variance has prior standard deviation <span class="math inline">\gamma \sqrt{t}</span>, about <span class="math inline">1.6</span> for <span class="math inline">t = 270</span>, so a volatility can drift by a factor of <span class="math inline">\exp(0.82) \approx 2.3</span> in either direction over the sample within one standard deviation. The fourth panel of the prior figure plots this band for three values of <span class="math inline">\gamma</span>. The section <em>Sensitivity to the vol-of-vol</em> refits the model with larger values and with a learned <span class="math inline">\gamma</span>.</li>
 </ul>
-<div id="695d1bf8" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:26:57.100603Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:26:57.100539Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:26:58.043362Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:26:58.042873Z&quot;}}" data-execution_count="4">
+<div id="d2b17685" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:00:58.467303Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:00:58.467018Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:01:00.010054Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:01:00.007407Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">2</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">14</span>, <span class="dv">8</span>), layout<span class="op">=</span><span class="st">"constrained"</span>)</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>pz.Normal(<span class="dv">3</span>, <span class="dv">2</span>).plot_pdf(ax<span class="op">=</span>axes[<span class="dv">0</span>, <span class="dv">0</span>], color<span class="op">=</span><span class="st">"C0"</span>, legend<span class="op">=</span><span class="va">None</span>)</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">0</span>].<span class="bu">set</span>(title<span class="op">=</span><span class="vs">r"initial trend </span><span class="dv">$</span><span class="ch">\t</span><span class="vs">au_0</span><span class="dv">$</span><span class="vs">: Normal</span><span class="kw">(</span><span class="vs">3, 2</span><span class="kw">)</span><span class="vs">"</span>, xlabel<span class="op">=</span><span class="st">"percent"</span>)</span>
@@ -651,7 +652,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li><code>common_transitory=True</code> adds <span class="math inline">c_t</span>.</li>
 </ul>
 <p>The model reads no covariates. <a href="../../reference/models.Horizon.html"><code>Horizon.from_data</code></a> takes the duration from the <code>covariates</code> array, so the training call passes <code>jnp.zeros((num_quarters, 0))</code> and a forecast call passes an array with eight more rows. <a href="../../reference/models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations</a> samples the in-sample steps under the <code>time</code> plate and, when the covariates are longer than the data, the horizon steps at a separate <code>_future</code> site. The gap volatility <code>gap_vol</code> has a time axis, and <a href="../../reference/models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict</a> accepts a noise distribution whose scale varies over the full horizon, so the stochastic volatility propagates into the forecast without any extra code.</p>
-<div id="a9c8e9f8" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:26:58.044560Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:26:58.044456Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:26:58.217528Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:26:58.216943Z&quot;}}" data-execution_count="5">
+<div id="75e62bd6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:01:00.016463Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:01:00.014403Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:01:00.421614Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:01:00.420422Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>GAP_FLOOR <span class="op">=</span> <span class="fl">0.1</span>  <span class="co"># sigma_min, percentage points</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -747,7 +748,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <section id="prior-predictive-check" class="level1">
 <h1>Prior predictive check</h1>
 <p>Before the data, we draw core PCE inflation from the priors over the whole sample and compare its band with the observed series. The band should contain the data with room to spare, and it should not contain values that no price index has ever produced.</p>
-<div id="ede36c24" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:26:58.219003Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:26:58.218911Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:26:59.147982Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:26:59.147523Z&quot;}}" data-execution_count="6">
+<div id="71f150d8" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:01:00.424520Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:01:00.424277Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:01:02.086088Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:01:02.085002Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>HDI_PROBS <span class="op">=</span> (CI_PROB, <span class="fl">0.5</span>)</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>HDI_ALPHAS <span class="op">=</span> (<span class="fl">0.3</span>, <span class="fl">0.6</span>)</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -817,7 +818,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <h1>Inference with NUTS</h1>
 <p>We sample the posterior with four NUTS chains of <span class="math inline">1{,}000</span> warmup and <span class="math inline">2{,}000</span> draws each, with <code>target_accept_prob</code> at <span class="math inline">0.95</span> instead of its default of <span class="math inline">0.8</span>, which shortens the leapfrog steps. The model has about <span class="math inline">2{,}170</span> latent dimensions, all continuous: 270 standardized steps for each of seven random walks (the trend and the log-variances of the trend, of the common shock and of the four gaps), 270 unit normals for the common shock, the initial values and the offsets.</p>
 <p><code>fit_nuts</code> returns the <code>MCMC</code> object and the wall time. <code>fit_title</code> writes the wall time, the number of divergent transitions, the largest <span class="math inline">\hat{R}</span> and the smallest effective sample size (ESS) into the title of a figure. Its diagnostics cover the global parameters and every path the notebook plots (the trend, the trend volatility, the volatility of the common shock and the gap volatilities), not only the global parameters.</p>
-<div id="c4dca880" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:26:59.149264Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:26:59.149176Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:28:09.547676Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:28:09.547025Z&quot;}}" data-execution_count="7">
+<div id="58ebf8f7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:01:02.088198Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:01:02.088060Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:03:46.627247Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:03:46.625069Z&quot;}}" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>NUM_CHAINS <span class="op">=</span> <span class="dv">4</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>FULL_WARMUP <span class="op">=</span> <span class="dv">1_000</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>FULL_SAMPLES <span class="op">=</span> <span class="dv">2_000</span></span>
@@ -878,7 +879,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <span id="cb7-58"><a href="#cb7-58" aria-hidden="true" tabindex="-1"></a>mcmc, seconds <span class="op">=</span> fit_nuts(key_fit, model, rates, num_warmup<span class="op">=</span>FULL_WARMUP, num_samples<span class="op">=</span>FULL_SAMPLES)</span></code></pre></div>
 </div>
 <p><code>export</code> turns the posterior into an ArviZ <code>DataTree</code> with <a href="../../reference/convert.to_datatree.html"><code>to_datatree</code></a>: the four chains, the in-sample posterior predictive, the eight-quarter forecast (because <code>covariates_full</code> extends past the data) and the quarter dates as the <code>time</code> coordinate, with the measure names on every site that has a measure axis. The trace plot after it shows the global parameters and the diagnostics in its title.</p>
-<div id="cd9df804" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:28:09.548912Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:28:09.548827Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:28:11.271105Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:28:11.270716Z&quot;}}" data-execution_count="8">
+<div id="4ec23c5d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:03:46.632605Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:03:46.632380Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:03:49.148469Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:03:49.147385Z&quot;}}" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>HORIZON <span class="op">=</span> <span class="dv">8</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>covariates_full <span class="op">=</span> jnp.zeros((num_quarters <span class="op">+</span> HORIZON, <span class="dv">0</span>))  <span class="co"># (quarters + 8, 0): adds the horizon</span></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>future_dates <span class="op">=</span> (dates[<span class="op">-</span><span class="dv">1</span>].astype(<span class="st">"datetime64[M]"</span>) <span class="op">+</span> <span class="dv">3</span> <span class="op">*</span> np.arange(<span class="dv">1</span>, HORIZON <span class="op">+</span> <span class="dv">1</span>)).astype(</span>
@@ -939,7 +940,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <section id="trend-inflation" class="level1">
 <h1>Trend inflation</h1>
 <p>The trend is the persistent part of inflation that all four measures share. We plot its posterior with core PCE inflation, the reference measure, on top: the distance between the line and the band is the transitory part of core PCE, the common shock plus its own gap.</p>
-<div id="c4048457" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:28:11.274220Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:28:11.274123Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:28:11.295768Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:28:11.295346Z&quot;}}" data-execution_count="9">
+<div id="38be40ad" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:03:49.153691Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:03:49.153403Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:03:49.183806Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:03:49.182534Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> stack_draws(variable: xr.DataArray) <span class="op">-&gt;</span> np.ndarray:</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># (chain, draw, time, ...) -&gt; (sample, time, ...)</span></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> variable.stack(sample<span class="op">=</span>(<span class="st">"chain"</span>, <span class="st">"draw"</span>)).transpose(<span class="st">"sample"</span>, <span class="st">"time"</span>, ...).to_numpy()</span>
@@ -1007,7 +1008,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <span id="cb9-65"><a href="#cb9-65" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-66"><a href="#cb9-66" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> pc, handles</span></code></pre></div>
 </div>
-<div id="a6e1ca1c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:28:11.296971Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:28:11.296896Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:28:11.491991Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:28:11.491605Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="10">
+<div id="dfa42917" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:03:49.186719Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:03:49.186591Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:03:49.480541Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:03:49.479145Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>trend_draws <span class="op">=</span> stack_draws(posterior[<span class="st">"trend"</span>])  <span class="co"># (samples, quarters, 1)</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>pc, band_handles <span class="op">=</span> plot_bands(trend_draws, date_num, [<span class="st">"trend"</span>])</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
@@ -1035,7 +1036,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <section id="the-common-transitory-shock" class="level1">
 <h1>The common transitory shock</h1>
 <p>To see what <span class="math inline">c_t</span> does, we fit the same model without it, so that the transitory part of each measure is its own independent gap. We call the model without the common shock <strong>M2</strong> and the model of this notebook <strong>M3</strong>, the names they have in the backtest below.</p>
-<div id="6a87be62" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:28:11.493301Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:28:11.493184Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:29:30.938897Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:29:30.938516Z&quot;}}" data-execution_count="11">
+<div id="6b419b00" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:03:49.483332Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:03:49.482844Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:06:26.941254Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:06:26.932420Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_fit_m2 <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>model_m2 <span class="op">=</span> make_trend_inflation_model(num_measures)</span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>mcmc_m2, seconds_m2 <span class="op">=</span> fit_nuts(</span>
@@ -1099,7 +1100,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 \rho_1 = \frac{\text{Cov}(\Delta \pi_t, \Delta \pi_{t-1})}{\text{Var}(\Delta \pi_t)} = -\frac{\sigma^2_{\varepsilon}}{\sigma^2_{\tau} + 2 \sigma^2_{\varepsilon}},
 </span></p>
 <p>close to <span class="math inline">0</span> when the trend carries the quarterly moves and close to <span class="math inline">-0.5</span> when the transitory part does. With stochastic volatility the variances change every quarter, so instead of plugging them into the formula we simulate: for every posterior draw we draw one path of quarterly changes since 1985 from that draw’s volatilities (for M3 the transitory part of core PCE is the common shock plus its gap) and compute its lag-1 autocorrelation, the same statistic we compute for the data. The histograms are the distribution of that statistic under each model, and the vertical line is the observed value.</p>
-<div id="0c033547" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:29:30.940498Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:29:30.940415Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:29:31.294886Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:29:31.294493Z&quot;}}" data-execution_count="12">
+<div id="e82f9fc1" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:06:26.954913Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:06:26.952850Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:06:28.172447Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:06:28.142722Z&quot;}}" data-execution_count="12">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>since_1985 <span class="op">=</span> dates <span class="op">&gt;=</span> np.datetime64(<span class="st">"1985-01-01"</span>)  <span class="co"># (quarters,)</span></span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -1164,7 +1165,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <section id="volatilities" class="level1">
 <h1>Volatilities</h1>
 <p>The model has six volatility paths: one for the trend shock, one for the common transitory shock and one per measure for the gap. The trend volatility says how fast the persistent part of inflation can move in a quarter; the other two say how noisy inflation is around the trend at each date.</p>
-<div id="02742faa" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:29:31.296149Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:29:31.296063Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:29:31.616208Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:29:31.615641Z&quot;}}" data-execution_count="13">
+<div id="376f0911" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:06:28.179150Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:06:28.177975Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:06:29.478971Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:06:29.475090Z&quot;}}" data-execution_count="13">
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>scale_draws <span class="op">=</span> np.concatenate(</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    [stack_draws(posterior[<span class="st">"trend_vol"</span>]), stack_draws(posterior[<span class="st">"common_vol"</span>])], axis<span class="op">=-</span><span class="dv">1</span></span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>)  <span class="co"># (samples, quarters, 2): trend volatility, then common shock volatility</span></span>
@@ -1195,7 +1196,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li>The trend volatility, the standard deviation of the quarterly change of the trend, rises from <span class="math inline">0.44</span> percentage points in 1959 to its maximum of <span class="math inline">0.92</span> in 1975Q1, falls through the 1980s to <span class="math inline">0.30</span> in 1995Q1 and to its minimum of <span class="math inline">0.27</span> in 1999Q1, and climbs again over the next two decades to <span class="math inline">0.58</span> in 2021Q2. It ends at <span class="math inline">0.54</span> (<span class="math inline">94\%</span> HDI <span class="math inline">0.26</span> to <span class="math inline">0.84</span>).</li>
 <li>The volatility of the common transitory shock starts at <span class="math inline">0.37</span> in 1959, stays near <span class="math inline">0.3</span> until the late 1990s, with its minimum of <span class="math inline">0.24</span> in 1994Q4, and rises after 2000 to <span class="math inline">0.43</span> in 2008Q4 and to its maximum of <span class="math inline">0.58</span> in 2020Q2, the quarters with the largest falls of the sample. It ends at <span class="math inline">0.52</span>.</li>
 </ul>
-<div id="6f0dc557" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:29:31.617467Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:29:31.617355Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:29:32.170099Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:29:32.169626Z&quot;}}" data-execution_count="14">
+<div id="a43c7fe0" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:06:29.488713Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:06:29.488133Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:06:31.697632Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:06:31.695517Z&quot;}}" data-execution_count="14">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>gap_vol_draws <span class="op">=</span> stack_draws(posterior[<span class="st">"gap_vol"</span>])  <span class="co"># (samples, quarters, measures)</span></span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>pc, band_handles <span class="op">=</span> plot_bands(</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    gap_vol_draws, date_num, <span class="bu">list</span>(measure_labels), color<span class="op">=</span><span class="st">"C2"</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">12</span>)</span>
@@ -1230,7 +1231,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <section id="measure-offsets" class="level1">
 <h1>Measure offsets</h1>
 <p>The offsets are the average wedge of each measure over core PCE in percentage points, the level difference that the trend does not carry.</p>
-<div id="f014c0ae" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:29:32.171415Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:29:32.171330Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:29:32.257503Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:29:32.257147Z&quot;}}" data-execution_count="15">
+<div id="19620a7d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:06:31.702131Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:06:31.701931Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:06:32.083946Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:06:32.080520Z&quot;}}" data-execution_count="15">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(tree, var_names<span class="op">=</span>[<span class="st">"alpha"</span>], combined<span class="op">=</span><span class="va">True</span>, figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">10</span>, <span class="dv">4</span>)})</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>pc.viz[<span class="st">"figure"</span>].item().suptitle(<span class="st">"Measure offsets over core PCE"</span>, y<span class="op">=</span><span class="fl">1.05</span>, <span class="op">**</span>TITLE)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
@@ -1252,7 +1253,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <section id="forecast" class="level1">
 <h1>Forecast</h1>
 <p>The forecast draws the eight future steps of every random walk from the prior of the steps (unit normals) and pushes them through the posterior of the paths at the last observation. The trend continues from its last level, and every log-variance, of the trend, of the common shock and of each gap, keeps moving as a random walk from its last value, so the forecast bands widen with the horizon for two reasons: the trend steps accumulate and the volatilities themselves can drift. <code>export</code> already drew the forecast, because <code>covariates_full</code> has eight rows more than the data; the <code>predictions</code> group of the tree holds it. We plot the last forty quarters of core PCE: the in-sample band is the <strong>smoothed fit</strong>, the posterior predictive given the whole sample, and the forecast band is the predictive from the last observation onward, with its posterior mean.</p>
-<div id="9ff32fb0" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:29:32.258797Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:29:32.258704Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:29:32.443316Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:29:32.442756Z&quot;}}" data-execution_count="16">
+<div id="037ace5e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:06:32.091382Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:06:32.090956Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:06:32.729003Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:06:32.711055Z&quot;}}" data-execution_count="16">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>in_sample_draws <span class="op">=</span> stack_draws(tree[<span class="st">"posterior_predictive"</span>][<span class="st">"obs"</span>].sel(measure<span class="op">=</span><span class="st">"core PCE"</span>))</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>forecast_draws <span class="op">=</span> stack_draws(tree[<span class="st">"predictions"</span>][<span class="st">"obs"</span>].sel(measure<span class="op">=</span><span class="st">"core PCE"</span>))</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -1296,7 +1297,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 </div>
 <p>The in-sample band is the smoothed fit: given the whole sample, the model knows the trend and the common shock at each date up to their posterior uncertainty, and the <span class="math inline">94\%</span> band is about <span class="math inline">1.2</span> percentage points wide in 2026Q3. The forecast band is <span class="math inline">3.4</span> points wide one quarter ahead, in 2026Q4 (<span class="math inline">94\%</span> HDI <span class="math inline">1.0</span> to <span class="math inline">4.4</span>), and <span class="math inline">6.6</span> points wide eight quarters ahead, in 2028Q3 (<span class="math inline">-0.6</span> to <span class="math inline">6.0</span>). The posterior mean stays at <span class="math inline">2.7\%</span>, the last level of the trend: a random walk forecasts its last value, and the transitory parts have mean zero. The 4-quarter average over 2026Q4 to 2027Q3, in the title, has a mean of <span class="math inline">2.7\%</span> and a <span class="math inline">94\%</span> HDI of <span class="math inline">1.0</span> to <span class="math inline">4.5</span>.</p>
 <p>The forecast of core PCE is the forecast of the trend plus the transitory noise. A <code>Predictive</code> call with its own key returns the <code>trend</code> site over the full horizon, and its band says how much of the forecast width is the trend itself; the vertical line marks the last observation.</p>
-<div id="72613417" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:29:32.444696Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:29:32.444602Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:29:32.819296Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:29:32.818842Z&quot;}}" data-execution_count="17">
+<div id="3b589f09" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:06:32.744258Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:06:32.736756Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:06:33.748157Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:06:33.736240Z&quot;}}" data-execution_count="17">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_trend <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>trend_horizon <span class="op">=</span> np.asarray(</span>
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    Predictive(model, mcmc.get_samples(), return_sites<span class="op">=</span>[<span class="st">"trend"</span>])(</span>
@@ -1343,110 +1344,113 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li><strong>M3</strong>: all four measures with the common transitory shock, the model of this notebook.</li>
 </ul>
 <p>M2 is not in the backtest: the section <em>The common transitory shock</em> showed that its trend follows core PCE, and leaving it out keeps the notebook short. The step from M1 to M3 therefore adds two things at once, the three other measures and the common shock, and the backtest cannot tell their contributions apart.</p>
-<p>Every window fits the model with four NUTS chains of <span class="math inline">500</span> warmup and <span class="math inline">250</span> draws, so that a window takes a fraction of the full fit while the metrics still see <span class="math inline">1{,}000</span> forecast draws. <code>forecast_fn</code> records the divergences of every window, so that the scores can be checked against the fits that produced them. The CRPS and the MAE of <em>Evaluation metrics and the benchmark</em> are scored per window, on the core PCE column: <code>on_core_pce</code> and <code>four_quarter_average</code> turn a package metric into one on that column and on the 4-quarter average, and <code>atkeson_ohanian</code> is a per-window metric that reads the last four quarters of the training window through the <code>per_window_metrics</code> hook of <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a>. The coverage comes later, per horizon step, from the stored forecast draws.</p>
-<div id="ba906c96" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:29:32.820535Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:29:32.820442Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:29:32.842859Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:29:32.842328Z&quot;}}" data-execution_count="18">
+<p>Every window fits the model with four NUTS chains of <span class="math inline">500</span> warmup and <span class="math inline">250</span> draws, so that a window takes a fraction of the full fit while the metrics still see <span class="math inline">1{,}000</span> forecast draws. <code>forecast_fn</code> records the divergences, the largest <span class="math inline">\hat{R}</span> and the smallest ESS of every window, the diagnostics of <code>fit_title</code>, so that the scores can be checked against the fits that produced them. The CRPS and the MAE of <em>Evaluation metrics and the benchmark</em> are scored per window, on the core PCE column: <code>on_core_pce</code> and <code>four_quarter_average</code> turn a package metric into one on that column and on the 4-quarter average, and <code>atkeson_ohanian</code> is a per-window metric that reads the last four quarters of the training window through the <code>per_window_metrics</code> hook of <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a>. The coverage comes later, per horizon step, from the stored forecast draws.</p>
+<div id="65e2c5ae" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:06:33.757363Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:06:33.755263Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:06:33.800517Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:06:33.797994Z&quot;}}" data-execution_count="18">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>BACKTEST_WARMUP <span class="op">=</span> <span class="dv">500</span></span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>BACKTEST_SAMPLES <span class="op">=</span> <span class="dv">1_000</span>  <span class="co"># 4 chains x 250 draws</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>backtest_divergences: <span class="bu">list</span>[<span class="bu">tuple</span>[<span class="bu">str</span>, np.datetime64, <span class="bu">int</span>]] <span class="op">=</span> []  <span class="co"># (rung, origin, divergences)</span></span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="co"># (rung, origin, divergences, largest R-hat, smallest ESS) of every backtest fit</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>backtest_diagnostics: <span class="bu">list</span>[<span class="bu">tuple</span>[<span class="bu">str</span>, np.datetime64, <span class="bu">int</span>, <span class="bu">float</span>, <span class="bu">float</span>]] <span class="op">=</span> []</span>
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> make_forecast_fn(label: <span class="bu">str</span>) <span class="op">-&gt;</span> ForecastFn:</span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forecast_fn(</span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>        rng_key: Array,</span>
-<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>        model: ForecastModel,</span>
-<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>        train_data: Array,</span>
-<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>        train_covariates: Array,</span>
-<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>        full_covariates: Array,</span>
-<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>        num_samples: <span class="bu">int</span>,</span>
-<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>        <span class="op">*</span>,</span>
-<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>        batch_size: <span class="bu">int</span> <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
-<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>    ) <span class="op">-&gt;</span> Array:</span>
-<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>        key_fit, key_forecast <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>        mcmc, _ <span class="op">=</span> fit_nuts(</span>
-<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>            key_fit,</span>
-<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>            model,</span>
-<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>            train_data,</span>
-<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>            num_warmup<span class="op">=</span>BACKTEST_WARMUP,</span>
-<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>            num_samples<span class="op">=</span>num_samples <span class="op">//</span> NUM_CHAINS,</span>
-<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>        backtest_divergences.append((label, dates[train_data.shape[<span class="dv">0</span>]], num_divergences(mcmc)))</span>
-<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> forecast(</span>
-<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>            key_forecast,</span>
-<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>            model,</span>
-<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a>            mcmc.get_samples(),</span>
-<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>            train_data,</span>
-<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>            full_covariates,</span>
-<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>            batch_size<span class="op">=</span>batch_size,</span>
-<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> forecast_fn</span>
-<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> make_forecast_fn(label: <span class="bu">str</span>) <span class="op">-&gt;</span> ForecastFn:</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forecast_fn(</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>        rng_key: Array,</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>        model: ForecastModel,</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>        train_data: Array,</span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>        train_covariates: Array,</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>        full_covariates: Array,</span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>        num_samples: <span class="bu">int</span>,</span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>        <span class="op">*</span>,</span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>        batch_size: <span class="bu">int</span> <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>    ) <span class="op">-&gt;</span> Array:</span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>        key_fit, key_forecast <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>        mcmc, _ <span class="op">=</span> fit_nuts(</span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>            key_fit,</span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>            model,</span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>            train_data,</span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>            num_warmup<span class="op">=</span>BACKTEST_WARMUP,</span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>            num_samples<span class="op">=</span>num_samples <span class="op">//</span> NUM_CHAINS,</span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>        backtest_diagnostics.append(</span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>            (label, dates[train_data.shape[<span class="dv">0</span>]], num_divergences(mcmc), <span class="op">*</span>diagnostics(mcmc))</span>
+<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> forecast(</span>
+<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>            key_forecast,</span>
+<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>            model,</span>
+<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>            mcmc.get_samples(),</span>
+<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>            train_data,</span>
+<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>            full_covariates,</span>
+<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>            batch_size<span class="op">=</span>batch_size,</span>
+<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a>        )</span>
 <span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> on_core_pce(metric: Metric) <span class="op">-&gt;</span> Metric:</span>
-<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> scored(pred: Array, truth: Array) <span class="op">-&gt;</span> Array:</span>
-<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> metric(pred[..., <span class="op">-</span><span class="dv">1</span>:], truth[..., <span class="op">-</span><span class="dv">1</span>:])</span>
-<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> scored</span>
-<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> forecast_fn</span>
+<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> on_core_pce(metric: Metric) <span class="op">-&gt;</span> Metric:</span>
+<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> scored(pred: Array, truth: Array) <span class="op">-&gt;</span> Array:</span>
+<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> metric(pred[..., <span class="op">-</span><span class="dv">1</span>:], truth[..., <span class="op">-</span><span class="dv">1</span>:])</span>
 <span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> four_quarter_average(metric: Metric) <span class="op">-&gt;</span> Metric:</span>
-<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> scored(pred: Array, truth: Array) <span class="op">-&gt;</span> Array:</span>
-<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> metric(pred[:, :<span class="dv">4</span>, <span class="op">-</span><span class="dv">1</span>].mean(axis<span class="op">=-</span><span class="dv">1</span>), truth[:<span class="dv">4</span>, <span class="op">-</span><span class="dv">1</span>].mean())</span>
-<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> scored</span>
-<span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> scored</span>
+<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> four_quarter_average(metric: Metric) <span class="op">-&gt;</span> Metric:</span>
+<span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> scored(pred: Array, truth: Array) <span class="op">-&gt;</span> Array:</span>
+<span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> metric(pred[:, :<span class="dv">4</span>, <span class="op">-</span><span class="dv">1</span>].mean(axis<span class="op">=-</span><span class="dv">1</span>), truth[:<span class="dv">4</span>, <span class="op">-</span><span class="dv">1</span>].mean())</span>
 <span id="cb18-51"><a href="#cb18-51" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-52"><a href="#cb18-52" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> atkeson_ohanian(train: Array) <span class="op">-&gt;</span> <span class="bu">tuple</span>[Metric, Metric]:</span>
-<span id="cb18-53"><a href="#cb18-53" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The forecast is the mean core PCE inflation of the last four quarters of `train`, held</span></span>
-<span id="cb18-54"><a href="#cb18-54" aria-hidden="true" tabindex="-1"></a>    <span class="co"># flat over the horizon; `pred` is ignored.</span></span>
-<span id="cb18-55"><a href="#cb18-55" aria-hidden="true" tabindex="-1"></a>    point <span class="op">=</span> train[<span class="op">-</span><span class="dv">4</span>:, <span class="op">-</span><span class="dv">1</span>].mean()</span>
-<span id="cb18-56"><a href="#cb18-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-57"><a href="#cb18-57" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> quarterly(pred: Array, truth: Array) <span class="op">-&gt;</span> Array:</span>
-<span id="cb18-58"><a href="#cb18-58" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.<span class="bu">abs</span>(truth[:, <span class="op">-</span><span class="dv">1</span>] <span class="op">-</span> point).mean()</span>
+<span id="cb18-52"><a href="#cb18-52" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> scored</span>
+<span id="cb18-53"><a href="#cb18-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-54"><a href="#cb18-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-55"><a href="#cb18-55" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> atkeson_ohanian(train: Array) <span class="op">-&gt;</span> <span class="bu">tuple</span>[Metric, Metric]:</span>
+<span id="cb18-56"><a href="#cb18-56" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The forecast is the mean core PCE inflation of the last four quarters of `train`, held</span></span>
+<span id="cb18-57"><a href="#cb18-57" aria-hidden="true" tabindex="-1"></a>    <span class="co"># flat over the horizon; `pred` is ignored.</span></span>
+<span id="cb18-58"><a href="#cb18-58" aria-hidden="true" tabindex="-1"></a>    point <span class="op">=</span> train[<span class="op">-</span><span class="dv">4</span>:, <span class="op">-</span><span class="dv">1</span>].mean()</span>
 <span id="cb18-59"><a href="#cb18-59" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-60"><a href="#cb18-60" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> annual(pred: Array, truth: Array) <span class="op">-&gt;</span> Array:</span>
-<span id="cb18-61"><a href="#cb18-61" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.<span class="bu">abs</span>(truth[:<span class="dv">4</span>, <span class="op">-</span><span class="dv">1</span>].mean() <span class="op">-</span> point)</span>
+<span id="cb18-60"><a href="#cb18-60" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> quarterly(pred: Array, truth: Array) <span class="op">-&gt;</span> Array:</span>
+<span id="cb18-61"><a href="#cb18-61" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.<span class="bu">abs</span>(truth[:, <span class="op">-</span><span class="dv">1</span>] <span class="op">-</span> point).mean()</span>
 <span id="cb18-62"><a href="#cb18-62" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-63"><a href="#cb18-63" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> quarterly, annual</span>
-<span id="cb18-64"><a href="#cb18-64" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-63"><a href="#cb18-63" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> annual(pred: Array, truth: Array) <span class="op">-&gt;</span> Array:</span>
+<span id="cb18-64"><a href="#cb18-64" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.<span class="bu">abs</span>(truth[:<span class="dv">4</span>, <span class="op">-</span><span class="dv">1</span>].mean() <span class="op">-</span> point)</span>
 <span id="cb18-65"><a href="#cb18-65" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-66"><a href="#cb18-66" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> benchmark_metrics(t0: <span class="bu">int</span>, t1: <span class="bu">int</span>, t2: <span class="bu">int</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>[<span class="bu">str</span>, Metric]:</span>
-<span id="cb18-67"><a href="#cb18-67" aria-hidden="true" tabindex="-1"></a>    quarterly, annual <span class="op">=</span> atkeson_ohanian(rates[t0:t1])</span>
-<span id="cb18-68"><a href="#cb18-68" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">"mae_ao"</span>: quarterly, <span class="st">"mae_4q_ao"</span>: annual}</span>
-<span id="cb18-69"><a href="#cb18-69" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-70"><a href="#cb18-70" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-71"><a href="#cb18-71" aria-hidden="true" tabindex="-1"></a>METRICS <span class="op">=</span> {</span>
-<span id="cb18-72"><a href="#cb18-72" aria-hidden="true" tabindex="-1"></a>    <span class="st">"crps"</span>: on_core_pce(eval_crps),</span>
-<span id="cb18-73"><a href="#cb18-73" aria-hidden="true" tabindex="-1"></a>    <span class="st">"mae"</span>: on_core_pce(eval_mae),</span>
-<span id="cb18-74"><a href="#cb18-74" aria-hidden="true" tabindex="-1"></a>    <span class="st">"crps_4q"</span>: four_quarter_average(eval_crps),</span>
-<span id="cb18-75"><a href="#cb18-75" aria-hidden="true" tabindex="-1"></a>    <span class="st">"mae_4q"</span>: four_quarter_average(eval_mae),</span>
-<span id="cb18-76"><a href="#cb18-76" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb18-77"><a href="#cb18-77" aria-hidden="true" tabindex="-1"></a>BACKTEST_OPTIONS <span class="op">=</span> {</span>
-<span id="cb18-78"><a href="#cb18-78" aria-hidden="true" tabindex="-1"></a>    <span class="st">"min_train_window"</span>: <span class="dv">103</span>,  <span class="co"># first origin 1985Q1</span></span>
-<span id="cb18-79"><a href="#cb18-79" aria-hidden="true" tabindex="-1"></a>    <span class="st">"test_window"</span>: HORIZON,</span>
-<span id="cb18-80"><a href="#cb18-80" aria-hidden="true" tabindex="-1"></a>    <span class="st">"stride"</span>: HORIZON,  <span class="co"># windows do not overlap</span></span>
-<span id="cb18-81"><a href="#cb18-81" aria-hidden="true" tabindex="-1"></a>    <span class="st">"num_samples"</span>: BACKTEST_SAMPLES,</span>
-<span id="cb18-82"><a href="#cb18-82" aria-hidden="true" tabindex="-1"></a>    <span class="st">"metrics"</span>: METRICS,</span>
-<span id="cb18-83"><a href="#cb18-83" aria-hidden="true" tabindex="-1"></a>    <span class="st">"per_window_metrics"</span>: benchmark_metrics,</span>
-<span id="cb18-84"><a href="#cb18-84" aria-hidden="true" tabindex="-1"></a>    <span class="st">"keep_predictions"</span>: <span class="va">True</span>,</span>
-<span id="cb18-85"><a href="#cb18-85" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb18-86"><a href="#cb18-86" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-87"><a href="#cb18-87" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> dates[BACKTEST_OPTIONS[<span class="st">"min_train_window"</span>]] <span class="op">==</span> np.datetime64(<span class="st">"1985-01-01"</span>)</span>
-<span id="cb18-88"><a href="#cb18-88" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-66"><a href="#cb18-66" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> quarterly, annual</span>
+<span id="cb18-67"><a href="#cb18-67" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-68"><a href="#cb18-68" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-69"><a href="#cb18-69" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> benchmark_metrics(t0: <span class="bu">int</span>, t1: <span class="bu">int</span>, t2: <span class="bu">int</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>[<span class="bu">str</span>, Metric]:</span>
+<span id="cb18-70"><a href="#cb18-70" aria-hidden="true" tabindex="-1"></a>    quarterly, annual <span class="op">=</span> atkeson_ohanian(rates[t0:t1])</span>
+<span id="cb18-71"><a href="#cb18-71" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">"mae_ao"</span>: quarterly, <span class="st">"mae_4q_ao"</span>: annual}</span>
+<span id="cb18-72"><a href="#cb18-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-73"><a href="#cb18-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-74"><a href="#cb18-74" aria-hidden="true" tabindex="-1"></a>METRICS <span class="op">=</span> {</span>
+<span id="cb18-75"><a href="#cb18-75" aria-hidden="true" tabindex="-1"></a>    <span class="st">"crps"</span>: on_core_pce(eval_crps),</span>
+<span id="cb18-76"><a href="#cb18-76" aria-hidden="true" tabindex="-1"></a>    <span class="st">"mae"</span>: on_core_pce(eval_mae),</span>
+<span id="cb18-77"><a href="#cb18-77" aria-hidden="true" tabindex="-1"></a>    <span class="st">"crps_4q"</span>: four_quarter_average(eval_crps),</span>
+<span id="cb18-78"><a href="#cb18-78" aria-hidden="true" tabindex="-1"></a>    <span class="st">"mae_4q"</span>: four_quarter_average(eval_mae),</span>
+<span id="cb18-79"><a href="#cb18-79" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb18-80"><a href="#cb18-80" aria-hidden="true" tabindex="-1"></a>BACKTEST_OPTIONS <span class="op">=</span> {</span>
+<span id="cb18-81"><a href="#cb18-81" aria-hidden="true" tabindex="-1"></a>    <span class="st">"min_train_window"</span>: <span class="dv">103</span>,  <span class="co"># first origin 1985Q1</span></span>
+<span id="cb18-82"><a href="#cb18-82" aria-hidden="true" tabindex="-1"></a>    <span class="st">"test_window"</span>: HORIZON,</span>
+<span id="cb18-83"><a href="#cb18-83" aria-hidden="true" tabindex="-1"></a>    <span class="st">"stride"</span>: HORIZON,  <span class="co"># windows do not overlap</span></span>
+<span id="cb18-84"><a href="#cb18-84" aria-hidden="true" tabindex="-1"></a>    <span class="st">"num_samples"</span>: BACKTEST_SAMPLES,</span>
+<span id="cb18-85"><a href="#cb18-85" aria-hidden="true" tabindex="-1"></a>    <span class="st">"metrics"</span>: METRICS,</span>
+<span id="cb18-86"><a href="#cb18-86" aria-hidden="true" tabindex="-1"></a>    <span class="st">"per_window_metrics"</span>: benchmark_metrics,</span>
+<span id="cb18-87"><a href="#cb18-87" aria-hidden="true" tabindex="-1"></a>    <span class="st">"keep_predictions"</span>: <span class="va">True</span>,</span>
+<span id="cb18-88"><a href="#cb18-88" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb18-89"><a href="#cb18-89" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-90"><a href="#cb18-90" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run_backtest(</span>
-<span id="cb18-91"><a href="#cb18-91" aria-hidden="true" tabindex="-1"></a>    rng_key: Array, label: <span class="bu">str</span>, model_fn: ModelFactory, data: Array</span>
-<span id="cb18-92"><a href="#cb18-92" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="bu">list</span>[BacktestResult]:</span>
-<span id="cb18-93"><a href="#cb18-93" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> backtest(</span>
-<span id="cb18-94"><a href="#cb18-94" aria-hidden="true" tabindex="-1"></a>        rng_key,</span>
-<span id="cb18-95"><a href="#cb18-95" aria-hidden="true" tabindex="-1"></a>        model_fn,</span>
-<span id="cb18-96"><a href="#cb18-96" aria-hidden="true" tabindex="-1"></a>        data,</span>
-<span id="cb18-97"><a href="#cb18-97" aria-hidden="true" tabindex="-1"></a>        jnp.zeros((data.shape[<span class="dv">0</span>], <span class="dv">0</span>)),</span>
-<span id="cb18-98"><a href="#cb18-98" aria-hidden="true" tabindex="-1"></a>        forecast_fn<span class="op">=</span>make_forecast_fn(label),</span>
-<span id="cb18-99"><a href="#cb18-99" aria-hidden="true" tabindex="-1"></a>        <span class="op">**</span>BACKTEST_OPTIONS,</span>
-<span id="cb18-100"><a href="#cb18-100" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div>
+<span id="cb18-90"><a href="#cb18-90" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> dates[BACKTEST_OPTIONS[<span class="st">"min_train_window"</span>]] <span class="op">==</span> np.datetime64(<span class="st">"1985-01-01"</span>)</span>
+<span id="cb18-91"><a href="#cb18-91" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-92"><a href="#cb18-92" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-93"><a href="#cb18-93" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run_backtest(</span>
+<span id="cb18-94"><a href="#cb18-94" aria-hidden="true" tabindex="-1"></a>    rng_key: Array, label: <span class="bu">str</span>, model_fn: ModelFactory, data: Array</span>
+<span id="cb18-95"><a href="#cb18-95" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="bu">list</span>[BacktestResult]:</span>
+<span id="cb18-96"><a href="#cb18-96" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> backtest(</span>
+<span id="cb18-97"><a href="#cb18-97" aria-hidden="true" tabindex="-1"></a>        rng_key,</span>
+<span id="cb18-98"><a href="#cb18-98" aria-hidden="true" tabindex="-1"></a>        model_fn,</span>
+<span id="cb18-99"><a href="#cb18-99" aria-hidden="true" tabindex="-1"></a>        data,</span>
+<span id="cb18-100"><a href="#cb18-100" aria-hidden="true" tabindex="-1"></a>        jnp.zeros((data.shape[<span class="dv">0</span>], <span class="dv">0</span>)),</span>
+<span id="cb18-101"><a href="#cb18-101" aria-hidden="true" tabindex="-1"></a>        forecast_fn<span class="op">=</span>make_forecast_fn(label),</span>
+<span id="cb18-102"><a href="#cb18-102" aria-hidden="true" tabindex="-1"></a>        <span class="op">**</span>BACKTEST_OPTIONS,</span>
+<span id="cb18-103"><a href="#cb18-103" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div>
 </div>
-<div id="db5d48d0" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:29:32.844290Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:29:32.844201Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:35:44.020970Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:35:44.020416Z&quot;}}" data-execution_count="19">
+<div id="04051bd9" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:06:33.803816Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:06:33.802758Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:23:44.291161Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:23:44.278353Z&quot;}}" data-execution_count="19">
 <div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>core_pce <span class="op">=</span> rates[:, <span class="op">-</span><span class="dv">1</span>:]  <span class="co"># (quarters, 1): the univariate rungs see core PCE only</span></span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>LADDER: <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">tuple</span>[ModelFactory, Array]] <span class="op">=</span> {</span>
 <span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"M0"</span>: (partial(make_trend_inflation_model, <span class="dv">1</span>, stochastic_volatility<span class="op">=</span><span class="va">False</span>), core_pce),</span>
@@ -1465,7 +1469,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(origins) <span class="op">==</span> <span class="dv">20</span></span></code></pre></div>
 </div>
 <p>The first figure is the summary: every metric averaged over the 20 windows, one bar per model, with the Atkeson and Ohanian benchmark as a line in the MAE panels.</p>
-<div id="855f1479" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:35:44.023469Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:35:44.023366Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:35:44.280009Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:35:44.279633Z&quot;}}" data-execution_count="20">
+<div id="d9f0f0fc" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:23:44.425295Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:23:44.417739Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:23:45.436149Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:23:45.435061Z&quot;}}" data-execution_count="20">
 <div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> metric_values(results: <span class="bu">list</span>[BacktestResult], metric: <span class="bu">str</span>) <span class="op">-&gt;</span> np.ndarray:</span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Per-window values of `metric`: (windows,)</span></span>
 <span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.array([result.metrics[metric] <span class="cf">for</span> result <span class="kw">in</span> results])</span>
@@ -1511,10 +1515,10 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li>M1, core PCE with stochastic volatility, has the lowest score in all four panels: CRPS <span class="math inline">0.563</span> on the quarterly rates and <span class="math inline">0.400</span> on the 4-quarter average, MAE <span class="math inline">0.726</span> and <span class="math inline">0.506</span>.</li>
 <li>M0, with constant variances, is behind it on every score: CRPS <span class="math inline">0.601</span> and <span class="math inline">0.445</span>, MAE <span class="math inline">0.734</span> and <span class="math inline">0.526</span>.</li>
 <li>M3, the four-measure model, is last on every score: CRPS <span class="math inline">0.610</span> and <span class="math inline">0.452</span>, MAE <span class="math inline">0.809</span> and <span class="math inline">0.600</span>.</li>
-<li>The Atkeson and Ohanian benchmark has an MAE of <span class="math inline">0.777</span> on the quarterly rates and <span class="math inline">0.514</span> on the 4-quarter average. M1 beats it on both, M0 on the quarterly rates only, and M3 on neither.</li>
+<li>The Atkeson and Ohanian benchmark has an MAE of <span class="math inline">0.777</span> on the quarterly rates and <span class="math inline">0.514</span> on the 4-quarter average. M1 has a lower mean MAE than the benchmark on both, M0 on the quarterly rates only, and M3 on neither. The paired comparison below tests these differences.</li>
 </ul>
 <p>The next figure shows the CRPS of every window against its origin date, one line per model, so that the periods where one component helps stand out.</p>
-<div id="7b808f55" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:35:44.281950Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:35:44.281861Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:35:44.412371Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:35:44.412015Z&quot;}}" data-execution_count="21">
+<div id="121d9a74" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:23:45.449107Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:23:45.448803Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:23:45.705155Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:23:45.704378Z&quot;}}" data-execution_count="21">
 <div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">6</span>))</span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> label, results <span class="kw">in</span> backtest_results.items():</span>
@@ -1542,8 +1546,13 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li>The 2021Q1 origin dominates every average: M0 scores <span class="math inline">2.40</span>, M3 <span class="math inline">2.79</span> and M1 <span class="math inline">2.83</span>. That single window contributes <span class="math inline">0.12</span> to <span class="math inline">0.14</span> to each 20-window mean.</li>
 <li>The 2023Q1 origin, the disinflation, scores between <span class="math inline">1.13</span> and <span class="math inline">1.23</span> for every model.</li>
 </ul>
-<p>A difference of means over 20 windows can be noise. For each comparison we take the paired per-window difference, the score of a model minus the score of the model or benchmark it is compared with, on the same windows, and show its mean with one and two standard errors, <span class="math inline">s / \sqrt{20}</span> for the standard deviation <span class="math inline">s</span> of the 20 differences, in <code>az.plot_forest</code> (thick and thin bars); the label of each row repeats the mean and the two standard errors and counts the windows in which the first model scores lower. The windows do not overlap, so we treat the differences as approximately independent. A mean whose two standard errors reach zero is a difference the backtest cannot establish.</p>
-<div id="e687ccac" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:35:44.413632Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:35:44.413548Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:35:44.557083Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:35:44.556574Z&quot;}}" data-execution_count="22">
+<p>A difference of means over 20 windows can be noise. For each comparison we take the paired per-window difference, the score of a model minus the score of the model or benchmark it is compared with, on the same windows. The windows do not overlap, so we treat the differences as approximately independent. We read each difference in two ways:</p>
+<ul>
+<li>The <strong>size</strong> is the mean difference with one and two standard errors, <span class="math inline">s / \sqrt{20}</span> for the standard deviation <span class="math inline">s</span> of the 20 differences, drawn with <code>az.plot_forest</code> (thick and thin bars). One window with a large difference, such as 2021Q1, moves the mean as much as several ordinary windows together.</li>
+<li>The <strong>sign test</strong> counts the windows in which the first model scores lower. If the two forecasts are equally good, that count is <span class="math inline">\text{Binomial}(20, 0.5)</span>, and the two-sided exact p-value is the probability of a count at least as far from <span class="math inline">10</span> as the observed one. Every window counts once, so the 2021Q1 window cannot dominate it.</li>
+</ul>
+<p>The sign test ranks the models. The figure makes six comparisons, so we call a difference established only when its p-value is below <span class="math inline">0.05 / 6 \approx 0.008</span> (the Bonferroni correction). The label of each row gives the mean, the two standard errors, the count and the p-value.</p>
+<div id="516653cf" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:23:45.711180Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:23:45.710978Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:23:46.340927Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:23:46.332036Z&quot;}}" data-execution_count="22">
 <div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>PAIRS <span class="op">=</span> {</span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"CRPS: M1 - M0"</span>: (<span class="st">"crps"</span>, <span class="st">"M1"</span>, <span class="st">"M0"</span>),</span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"CRPS: M3 - M1"</span>: (<span class="st">"crps"</span>, <span class="st">"M3"</span>, <span class="st">"M1"</span>),</span>
@@ -1569,58 +1578,61 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>standard_errors <span class="op">=</span> {</span>
 <span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>    name: values.std(ddof<span class="op">=</span><span class="dv">1</span>) <span class="op">/</span> np.sqrt(<span class="bu">len</span>(values)) <span class="cf">for</span> name, values <span class="kw">in</span> differences.items()</span>
 <span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a><span class="co"># Row labels carry the mean, two standard errors and the number of windows where the first</span></span>
-<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a><span class="co"># model scores lower</span></span>
-<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>row_labels <span class="op">=</span> {</span>
-<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a>    name: (</span>
-<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>means[name]<span class="sc">:+.3f}</span><span class="ss"> ± </span><span class="sc">{</span><span class="dv">2</span> <span class="op">*</span> standard_errors[name]<span class="sc">:.3f}</span><span class="ss">, "</span></span>
-<span id="cb22-31"><a href="#cb22-31" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"lower in </span><span class="sc">{</span>(differences[name] <span class="op">&lt;</span> <span class="dv">0</span>)<span class="sc">.</span><span class="bu">sum</span>()<span class="sc">}</span><span class="ss"> of </span><span class="sc">{</span><span class="bu">len</span>(differences[name])<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb22-32"><a href="#cb22-32" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb22-33"><a href="#cb22-33" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name <span class="kw">in</span> differences</span>
-<span id="cb22-34"><a href="#cb22-34" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb22-35"><a href="#cb22-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-36"><a href="#cb22-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-37"><a href="#cb22-37" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mean_interval(width: <span class="bu">float</span>) <span class="op">-&gt;</span> xr.Dataset:</span>
-<span id="cb22-38"><a href="#cb22-38" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Mean plus and minus `width` standard errors, in the layout of az.hdi: (ci_bound,) per row</span></span>
-<span id="cb22-39"><a href="#cb22-39" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> xr.Dataset(</span>
-<span id="cb22-40"><a href="#cb22-40" aria-hidden="true" tabindex="-1"></a>        {</span>
-<span id="cb22-41"><a href="#cb22-41" aria-hidden="true" tabindex="-1"></a>            row_labels[name]: (</span>
-<span id="cb22-42"><a href="#cb22-42" aria-hidden="true" tabindex="-1"></a>                <span class="st">"ci_bound"</span>,</span>
-<span id="cb22-43"><a href="#cb22-43" aria-hidden="true" tabindex="-1"></a>                [</span>
-<span id="cb22-44"><a href="#cb22-44" aria-hidden="true" tabindex="-1"></a>                    means[name] <span class="op">-</span> width <span class="op">*</span> standard_errors[name],</span>
-<span id="cb22-45"><a href="#cb22-45" aria-hidden="true" tabindex="-1"></a>                    means[name] <span class="op">+</span> width <span class="op">*</span> standard_errors[name],</span>
-<span id="cb22-46"><a href="#cb22-46" aria-hidden="true" tabindex="-1"></a>                ],</span>
-<span id="cb22-47"><a href="#cb22-47" aria-hidden="true" tabindex="-1"></a>            )</span>
-<span id="cb22-48"><a href="#cb22-48" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> name <span class="kw">in</span> differences</span>
-<span id="cb22-49"><a href="#cb22-49" aria-hidden="true" tabindex="-1"></a>        },</span>
-<span id="cb22-50"><a href="#cb22-50" aria-hidden="true" tabindex="-1"></a>        coords<span class="op">=</span>{<span class="st">"ci_bound"</span>: [<span class="st">"lower"</span>, <span class="st">"upper"</span>]},</span>
-<span id="cb22-51"><a href="#cb22-51" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb22-52"><a href="#cb22-52" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-53"><a href="#cb22-53" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-54"><a href="#cb22-54" aria-hidden="true" tabindex="-1"></a>difference_tree <span class="op">=</span> xr.DataTree.from_dict(</span>
-<span id="cb22-55"><a href="#cb22-55" aria-hidden="true" tabindex="-1"></a>    {</span>
-<span id="cb22-56"><a href="#cb22-56" aria-hidden="true" tabindex="-1"></a>        <span class="st">"posterior"</span>: xr.Dataset(</span>
-<span id="cb22-57"><a href="#cb22-57" aria-hidden="true" tabindex="-1"></a>            {</span>
-<span id="cb22-58"><a href="#cb22-58" aria-hidden="true" tabindex="-1"></a>                row_labels[name]: ((<span class="st">"chain"</span>, <span class="st">"draw"</span>), values[<span class="va">None</span>, :])</span>
-<span id="cb22-59"><a href="#cb22-59" aria-hidden="true" tabindex="-1"></a>                <span class="cf">for</span> name, values <span class="kw">in</span> differences.items()</span>
-<span id="cb22-60"><a href="#cb22-60" aria-hidden="true" tabindex="-1"></a>            }</span>
-<span id="cb22-61"><a href="#cb22-61" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb22-62"><a href="#cb22-62" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb22-63"><a href="#cb22-63" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb22-64"><a href="#cb22-64" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
-<span id="cb22-65"><a href="#cb22-65" aria-hidden="true" tabindex="-1"></a>    difference_tree,</span>
-<span id="cb22-66"><a href="#cb22-66" aria-hidden="true" tabindex="-1"></a>    combined<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb22-67"><a href="#cb22-67" aria-hidden="true" tabindex="-1"></a>    stats<span class="op">=</span>{</span>
-<span id="cb22-68"><a href="#cb22-68" aria-hidden="true" tabindex="-1"></a>        <span class="st">"trunk"</span>: mean_interval(<span class="fl">1.0</span>),</span>
-<span id="cb22-69"><a href="#cb22-69" aria-hidden="true" tabindex="-1"></a>        <span class="st">"twig"</span>: mean_interval(<span class="fl">2.0</span>),</span>
-<span id="cb22-70"><a href="#cb22-70" aria-hidden="true" tabindex="-1"></a>        <span class="st">"point_estimate"</span>: xr.Dataset({row_labels[name]: means[name] <span class="cf">for</span> name <span class="kw">in</span> differences}),</span>
-<span id="cb22-71"><a href="#cb22-71" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb22-72"><a href="#cb22-72" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">14</span>, <span class="dv">6</span>)},</span>
-<span id="cb22-73"><a href="#cb22-73" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb22-74"><a href="#cb22-74" aria-hidden="true" tabindex="-1"></a>pc.viz[<span class="st">"plot"</span>].sel(column<span class="op">=</span><span class="st">"forest"</span>).item().axvline(<span class="fl">0.0</span>, color<span class="op">=</span><span class="st">"black"</span>)</span>
-<span id="cb22-75"><a href="#cb22-75" aria-hidden="true" tabindex="-1"></a>pc.viz[<span class="st">"figure"</span>].item().suptitle(</span>
-<span id="cb22-76"><a href="#cb22-76" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Paired differences per window: mean, one and two standard errors"</span>, y<span class="op">=</span><span class="fl">1.05</span>, <span class="op">**</span>TITLE</span>
-<span id="cb22-77"><a href="#cb22-77" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a><span class="co"># Sign test: windows where the first model scores lower, out of the windows with a difference</span></span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a>wins <span class="op">=</span> {name: <span class="bu">int</span>((values <span class="op">&lt;</span> <span class="dv">0</span>).<span class="bu">sum</span>()) <span class="cf">for</span> name, values <span class="kw">in</span> differences.items()}</span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>num_nonzero <span class="op">=</span> {name: <span class="bu">int</span>((values <span class="op">!=</span> <span class="dv">0</span>).<span class="bu">sum</span>()) <span class="cf">for</span> name, values <span class="kw">in</span> differences.items()}</span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a>sign_p <span class="op">=</span> {name: binomtest(wins[name], num_nonzero[name]).pvalue <span class="cf">for</span> name <span class="kw">in</span> differences}</span>
+<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a><span class="co"># Row labels carry the mean, two standard errors, the sign-test count and its p-value</span></span>
+<span id="cb22-31"><a href="#cb22-31" aria-hidden="true" tabindex="-1"></a>row_labels <span class="op">=</span> {</span>
+<span id="cb22-32"><a href="#cb22-32" aria-hidden="true" tabindex="-1"></a>    name: (</span>
+<span id="cb22-33"><a href="#cb22-33" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>means[name]<span class="sc">:+.3f}</span><span class="ss"> ± </span><span class="sc">{</span><span class="dv">2</span> <span class="op">*</span> standard_errors[name]<span class="sc">:.3f}</span><span class="ch">\n</span><span class="ss">"</span></span>
+<span id="cb22-34"><a href="#cb22-34" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"lower in </span><span class="sc">{</span>wins[name]<span class="sc">}</span><span class="ss"> of </span><span class="sc">{</span>num_nonzero[name]<span class="sc">}</span><span class="ss">, sign test p = </span><span class="sc">{</span>sign_p[name]<span class="sc">:.3f}</span><span class="ss">"</span></span>
+<span id="cb22-35"><a href="#cb22-35" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb22-36"><a href="#cb22-36" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name <span class="kw">in</span> differences</span>
+<span id="cb22-37"><a href="#cb22-37" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb22-38"><a href="#cb22-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-39"><a href="#cb22-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-40"><a href="#cb22-40" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mean_interval(width: <span class="bu">float</span>) <span class="op">-&gt;</span> xr.Dataset:</span>
+<span id="cb22-41"><a href="#cb22-41" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Mean plus and minus `width` standard errors, in the layout of az.hdi: (ci_bound,) per row</span></span>
+<span id="cb22-42"><a href="#cb22-42" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> xr.Dataset(</span>
+<span id="cb22-43"><a href="#cb22-43" aria-hidden="true" tabindex="-1"></a>        {</span>
+<span id="cb22-44"><a href="#cb22-44" aria-hidden="true" tabindex="-1"></a>            row_labels[name]: (</span>
+<span id="cb22-45"><a href="#cb22-45" aria-hidden="true" tabindex="-1"></a>                <span class="st">"ci_bound"</span>,</span>
+<span id="cb22-46"><a href="#cb22-46" aria-hidden="true" tabindex="-1"></a>                [</span>
+<span id="cb22-47"><a href="#cb22-47" aria-hidden="true" tabindex="-1"></a>                    means[name] <span class="op">-</span> width <span class="op">*</span> standard_errors[name],</span>
+<span id="cb22-48"><a href="#cb22-48" aria-hidden="true" tabindex="-1"></a>                    means[name] <span class="op">+</span> width <span class="op">*</span> standard_errors[name],</span>
+<span id="cb22-49"><a href="#cb22-49" aria-hidden="true" tabindex="-1"></a>                ],</span>
+<span id="cb22-50"><a href="#cb22-50" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb22-51"><a href="#cb22-51" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> name <span class="kw">in</span> differences</span>
+<span id="cb22-52"><a href="#cb22-52" aria-hidden="true" tabindex="-1"></a>        },</span>
+<span id="cb22-53"><a href="#cb22-53" aria-hidden="true" tabindex="-1"></a>        coords<span class="op">=</span>{<span class="st">"ci_bound"</span>: [<span class="st">"lower"</span>, <span class="st">"upper"</span>]},</span>
+<span id="cb22-54"><a href="#cb22-54" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb22-55"><a href="#cb22-55" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-56"><a href="#cb22-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-57"><a href="#cb22-57" aria-hidden="true" tabindex="-1"></a>difference_tree <span class="op">=</span> xr.DataTree.from_dict(</span>
+<span id="cb22-58"><a href="#cb22-58" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb22-59"><a href="#cb22-59" aria-hidden="true" tabindex="-1"></a>        <span class="st">"posterior"</span>: xr.Dataset(</span>
+<span id="cb22-60"><a href="#cb22-60" aria-hidden="true" tabindex="-1"></a>            {</span>
+<span id="cb22-61"><a href="#cb22-61" aria-hidden="true" tabindex="-1"></a>                row_labels[name]: ((<span class="st">"chain"</span>, <span class="st">"draw"</span>), values[<span class="va">None</span>, :])</span>
+<span id="cb22-62"><a href="#cb22-62" aria-hidden="true" tabindex="-1"></a>                <span class="cf">for</span> name, values <span class="kw">in</span> differences.items()</span>
+<span id="cb22-63"><a href="#cb22-63" aria-hidden="true" tabindex="-1"></a>            }</span>
+<span id="cb22-64"><a href="#cb22-64" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb22-65"><a href="#cb22-65" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb22-66"><a href="#cb22-66" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-67"><a href="#cb22-67" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
+<span id="cb22-68"><a href="#cb22-68" aria-hidden="true" tabindex="-1"></a>    difference_tree,</span>
+<span id="cb22-69"><a href="#cb22-69" aria-hidden="true" tabindex="-1"></a>    combined<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb22-70"><a href="#cb22-70" aria-hidden="true" tabindex="-1"></a>    stats<span class="op">=</span>{</span>
+<span id="cb22-71"><a href="#cb22-71" aria-hidden="true" tabindex="-1"></a>        <span class="st">"trunk"</span>: mean_interval(<span class="fl">1.0</span>),</span>
+<span id="cb22-72"><a href="#cb22-72" aria-hidden="true" tabindex="-1"></a>        <span class="st">"twig"</span>: mean_interval(<span class="fl">2.0</span>),</span>
+<span id="cb22-73"><a href="#cb22-73" aria-hidden="true" tabindex="-1"></a>        <span class="st">"point_estimate"</span>: xr.Dataset({row_labels[name]: means[name] <span class="cf">for</span> name <span class="kw">in</span> differences}),</span>
+<span id="cb22-74"><a href="#cb22-74" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb22-75"><a href="#cb22-75" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">14</span>, <span class="dv">6</span>)},</span>
+<span id="cb22-76"><a href="#cb22-76" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-77"><a href="#cb22-77" aria-hidden="true" tabindex="-1"></a>pc.viz[<span class="st">"plot"</span>].sel(column<span class="op">=</span><span class="st">"forest"</span>).item().axvline(<span class="fl">0.0</span>, color<span class="op">=</span><span class="st">"black"</span>)</span>
+<span id="cb22-78"><a href="#cb22-78" aria-hidden="true" tabindex="-1"></a>pc.viz[<span class="st">"figure"</span>].item().suptitle(</span>
+<span id="cb22-79"><a href="#cb22-79" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Paired differences per window: mean, one and two standard errors"</span>, y<span class="op">=</span><span class="fl">1.05</span>, <span class="op">**</span>TITLE</span>
+<span id="cb22-80"><a href="#cb22-80" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -1629,16 +1641,16 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 </div>
 </div>
 </div>
-<p>One of the six differences is larger than its two standard errors:</p>
+<p>No row passes the threshold of <span class="math inline">0.008</span>:</p>
 <ul>
-<li>M1 <span class="math inline">-</span> M0, CRPS: <span class="math inline">-0.038 \pm 0.057</span>. Stochastic volatility lowers the CRPS in 16 of the 20 windows, and the 2021Q1 window, where M0 is better by <span class="math inline">0.43</span>, keeps the mean from clearing two standard errors.</li>
-<li>M3 <span class="math inline">-</span> M1, CRPS: <span class="math inline">+0.047 \pm 0.045</span>. Adding the three other measures and the common shock makes the core PCE forecast worse: M3 has the lower CRPS in only 5 of the 20 windows, and the mean just clears two standard errors.</li>
-<li>M1 <span class="math inline">-</span> AO and M3 <span class="math inline">-</span> AO, MAE on the quarterly rates: <span class="math inline">-0.051 \pm 0.061</span> and <span class="math inline">+0.031 \pm 0.073</span>.</li>
-<li>M1 <span class="math inline">-</span> AO and M3 <span class="math inline">-</span> AO, MAE on the 4-quarter average: <span class="math inline">-0.008 \pm 0.107</span> and <span class="math inline">+0.085 \pm 0.119</span>.</li>
+<li>M1 <span class="math inline">-</span> M0, CRPS: <span class="math inline">-0.038 \pm 0.057</span>. M1 is lower in 16 of the 20 windows (<span class="math inline">p = 0.012</span>). The 2021Q1 window, where M0 is better by <span class="math inline">0.43</span>, pulls the mean toward zero, but the sign test counts it once.</li>
+<li>M3 <span class="math inline">-</span> M1, CRPS: <span class="math inline">+0.047 \pm 0.045</span>. M3 is lower in only 5 of the 20 windows (<span class="math inline">p = 0.041</span>).</li>
+<li>M1 <span class="math inline">-</span> AO and M3 <span class="math inline">-</span> AO, MAE on the quarterly rates: <span class="math inline">-0.051 \pm 0.061</span> and <span class="math inline">+0.031 \pm 0.073</span>, lower in 11 and 9 of the 20 windows (<span class="math inline">p = 0.82</span> for both).</li>
+<li>M1 <span class="math inline">-</span> AO and M3 <span class="math inline">-</span> AO, MAE on the 4-quarter average: <span class="math inline">-0.008 \pm 0.107</span> and <span class="math inline">+0.085 \pm 0.119</span>, lower in 11 and 10 of the 20 windows (<span class="math inline">p = 0.82</span> and <span class="math inline">1.00</span>).</li>
 </ul>
-<p>Twenty windows of eight quarters are enough to see that M3 forecasts core PCE worse than M1, and too few to rank M1, M0 and the benchmark.</p>
+<p>The two CRPS rows point the same way, M1 ahead of M0 and of M3. Their p-values of <span class="math inline">0.012</span> and <span class="math inline">0.041</span> would count at the <span class="math inline">5\%</span> level for a single comparison, but not after the correction for six. Twenty windows of eight quarters do not rank the three models firmly, and no model separates from the benchmark.</p>
 <p>The scores so far average over the eight horizon steps. The stored forecast draws let us score each step <span class="math inline">j</span> on its own: the CRPS <span class="math inline">j</span> quarters ahead and the coverage of the two central intervals <span class="math inline">j</span> quarters ahead, averaged over the windows. Twenty windows give one realized value per step, so the coverage of a calibrated forecast scatters around the nominal level with a binomial standard deviation of <span class="math inline">\sqrt{0.94 \times 0.06 / 20} \approx 5.3</span> percentage points at the <span class="math inline">94\%</span> level and <span class="math inline">11.2</span> at the <span class="math inline">50\%</span> level; the shaded band is two of those standard deviations around the nominal level. The legend gives each model’s coverage pooled over the eight steps with two standard errors. The eight steps of a window share one forecast path, so we take the coverage of each window over its eight steps and compute the standard error across the 20 windows.</p>
-<div id="1800c561" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:35:44.558388Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:35:44.558289Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:35:45.104504Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:35:45.104051Z&quot;}}" data-execution_count="23">
+<div id="561fe849" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:23:46.347218Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:23:46.346095Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:23:48.450465Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:23:48.449794Z&quot;}}" data-execution_count="23">
 <div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> per_horizon_scores(results: <span class="bu">list</span>[BacktestResult]) <span class="op">-&gt;</span> <span class="bu">dict</span>[<span class="bu">str</span>, np.ndarray]:</span>
 <span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    draws <span class="op">=</span> jnp.stack([jnp.asarray(result.prediction)[..., <span class="op">-</span><span class="dv">1</span>] <span class="cf">for</span> result <span class="kw">in</span> results])  <span class="co"># (w, s, j)</span></span>
 <span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    truth <span class="op">=</span> jnp.stack([rates[result.t1 : result.t2, <span class="op">-</span><span class="dv">1</span>] <span class="cf">for</span> result <span class="kw">in</span> results])  <span class="co"># (windows, j)</span></span>
@@ -1716,7 +1728,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li>The <span class="math inline">50\%</span> intervals of M3 are on target, with a pooled coverage of <span class="math inline">57\% \pm 14\%</span>. Those of M1 cover <span class="math inline">63\% \pm 12\%</span>, slightly too wide, and those of M0 cover <span class="math inline">76\% \pm 13\%</span> and sit above the binomial band at six of the eight steps: its constant variances are too large for the quiet decades, which also explains its CRPS.</li>
 </ul>
 <p>The stored draws also let us look at one origin in detail. 2021Q1 is the origin just before the surge: the last observed quarter is 2020Q4, and the next eight quarters are the fastest core inflation since the early 1980s. We plot the forecast of every model from that origin against the realized path.</p>
-<div id="5aef170b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:35:45.106025Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:35:45.105930Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:35:45.538371Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:35:45.537943Z&quot;}}" data-execution_count="24">
+<div id="b96ab461" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:23:48.455341Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:23:48.455147Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:23:48.784977Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:23:48.784373Z&quot;}}" data-execution_count="24">
 <div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>origin_2021 <span class="op">=</span> <span class="bu">int</span>(np.flatnonzero(origins <span class="op">==</span> np.datetime64(<span class="st">"2021-01-01"</span>))[<span class="dv">0</span>])</span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>window <span class="op">=</span> backtest_results[<span class="st">"M3"</span>][origin_2021]</span>
 <span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>window_dates <span class="op">=</span> date_num[window.t1 : window.t2]</span>
@@ -1762,36 +1774,61 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li>The upper edges of their <span class="math inline">94\%</span> bands reach <span class="math inline">4.85\%</span>, <span class="math inline">3.3\%</span> and <span class="math inline">3.65\%</span>. M0 covers three of the eight quarters, 2021Q1, 2022Q2 and 2022Q4; M3 covers only the first, <span class="math inline">3.1\%</span> in 2021Q1; M1 covers none. No model puts a single realized quarter inside its <span class="math inline">50\%</span> interval.</li>
 </ul>
 <p>M0 scores best here (<span class="math inline">2.40</span> against <span class="math inline">2.83</span> for M1 and <span class="math inline">2.79</span> for M3) because its constant variances, fitted on a sample that includes the 1970s, give it the widest band.</p>
-<p>The last check on the backtest is the fits themselves: the divergences of every window, per model.</p>
-<div id="bf914e61" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:35:45.539629Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:35:45.539532Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:35:45.667916Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:35:45.667479Z&quot;}}" data-execution_count="25">
-<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">5</span>))</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> label <span class="kw">in</span> backtest_results:</span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    rung_origins <span class="op">=</span> [origin <span class="cf">for</span> rung, origin, _ <span class="kw">in</span> backtest_divergences <span class="cf">if</span> rung <span class="op">==</span> label]</span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    counts <span class="op">=</span> [count <span class="cf">for</span> rung, _, count <span class="kw">in</span> backtest_divergences <span class="cf">if</span> rung <span class="op">==</span> label]</span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    ax.plot(rung_origins, counts, marker<span class="op">=</span><span class="st">"o"</span>, color<span class="op">=</span>RUNG_COLORS[label], label<span class="op">=</span>label)</span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>locator <span class="op">=</span> mdates.AutoDateLocator()</span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>ax.xaxis.set_major_locator(locator)</span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))</span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>ax.yaxis.set_major_locator(MaxNLocator(integer<span class="op">=</span><span class="va">True</span>))</span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>ax.legend(loc<span class="op">=</span><span class="st">"upper right"</span>)</span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(xlabel<span class="op">=</span><span class="st">"forecast origin"</span>, ylabel<span class="op">=</span><span class="st">"divergences"</span>)</span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="vs">r"Divergent transitions per backtest window </span><span class="kw">(</span><span class="vs">4 chains </span><span class="dv">$</span><span class="ch">\t</span><span class="vs">imes</span><span class="dv">$</span><span class="vs"> 250 draws</span><span class="kw">)</span><span class="vs">"</span>, <span class="op">**</span>TITLE)<span class="op">;</span></span></code></pre></div>
+<p>The last check on the backtest is the fits themselves. The figure shows three diagnostics of every window, per model, over the sites of <code>fit_title</code> (the global parameters and the plotted paths): the divergent transitions, the largest <span class="math inline">\hat{R}</span> and the smallest ESS. The legend gives the totals per model and counts the windows above the <span class="math inline">\hat{R}</span> guideline of <span class="math inline">1.01</span>.</p>
+<div id="12699d8a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:23:48.787095Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:23:48.786981Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:23:49.133839Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:23:49.133460Z&quot;}}" data-execution_count="25">
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">3</span>, sharex<span class="op">=</span><span class="va">True</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">10</span>), layout<span class="op">=</span><span class="st">"constrained"</span>)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>rung_handles <span class="op">=</span> []</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> label <span class="kw">in</span> backtest_results:</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="co"># (origin, divergences, largest R-hat, smallest ESS) per window, as four tuples</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    rows <span class="op">=</span> [row[<span class="dv">1</span>:] <span class="cf">for</span> row <span class="kw">in</span> backtest_diagnostics <span class="cf">if</span> row[<span class="dv">0</span>] <span class="op">==</span> label]</span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    rung_origins, divergences, r_hats, esses <span class="op">=</span> <span class="bu">zip</span>(<span class="op">*</span>rows, strict<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    style <span class="op">=</span> {<span class="st">"marker"</span>: <span class="st">"o"</span>, <span class="st">"color"</span>: RUNG_COLORS[label]}</span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    axes[<span class="dv">0</span>].plot(rung_origins, divergences, <span class="op">**</span>style)</span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    axes[<span class="dv">1</span>].plot(rung_origins, r_hats, <span class="op">**</span>style)</span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>    num_above <span class="op">=</span> <span class="bu">sum</span>(r_hat <span class="op">&gt;</span> <span class="fl">1.01</span> <span class="cf">for</span> r_hat <span class="kw">in</span> r_hats)</span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>    (line,) <span class="op">=</span> axes[<span class="dv">2</span>].plot(</span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>        rung_origins,</span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>        esses,</span>
+<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a>        label<span class="op">=</span>(</span>
+<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a>            <span class="vs">rf"</span><span class="sc">{</span>label<span class="sc">}</span><span class="vs">: </span><span class="sc">{</span><span class="bu">sum</span>(divergences)<span class="sc">}</span><span class="vs"> divergences, largest </span><span class="dv">$</span><span class="er">\</span><span class="vs">hat</span><span class="ch">{{</span><span class="vs">R</span><span class="ch">}}</span><span class="dv">$</span><span class="vs"> </span><span class="sc">{</span><span class="bu">max</span>(r_hats)<span class="sc">:.3f}</span><span class="vs"> "</span></span>
+<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a>            <span class="vs">rf"</span><span class="kw">(</span><span class="sc">{</span>num_above<span class="sc">}</span><span class="vs"> of </span><span class="sc">{</span><span class="bu">len</span>(r_hats)<span class="sc">}</span><span class="vs"> windows above </span><span class="dv">$</span><span class="vs">1</span><span class="dv">.</span><span class="vs">01</span><span class="dv">$</span><span class="kw">)</span><span class="vs">, "</span></span>
+<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"smallest ESS </span><span class="sc">{</span><span class="bu">min</span>(esses)<span class="sc">:,.0f}</span><span class="ss">"</span></span>
+<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>        ),</span>
+<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a>        <span class="op">**</span>style,</span>
+<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb25-22"><a href="#cb25-22" aria-hidden="true" tabindex="-1"></a>    rung_handles.append(line)</span>
+<span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a>guideline <span class="op">=</span> axes[<span class="dv">1</span>].axhline(<span class="fl">1.01</span>, color<span class="op">=</span><span class="st">"black"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="vs">r"</span><span class="dv">$</span><span class="er">\</span><span class="vs">hat{R} = 1</span><span class="dv">.</span><span class="vs">01</span><span class="dv">$</span><span class="vs">"</span>)</span>
+<span id="cb25-25"><a href="#cb25-25" aria-hidden="true" tabindex="-1"></a>locator <span class="op">=</span> mdates.AutoDateLocator()</span>
+<span id="cb25-26"><a href="#cb25-26" aria-hidden="true" tabindex="-1"></a>axes[<span class="op">-</span><span class="dv">1</span>].xaxis.set_major_locator(locator)</span>
+<span id="cb25-27"><a href="#cb25-27" aria-hidden="true" tabindex="-1"></a>axes[<span class="op">-</span><span class="dv">1</span>].xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))</span>
+<span id="cb25-28"><a href="#cb25-28" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].yaxis.set_major_locator(MaxNLocator(integer<span class="op">=</span><span class="va">True</span>))</span>
+<span id="cb25-29"><a href="#cb25-29" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].<span class="bu">set</span>(title<span class="op">=</span><span class="st">"divergent transitions"</span>, ylabel<span class="op">=</span><span class="st">"count"</span>)</span>
+<span id="cb25-30"><a href="#cb25-30" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].<span class="bu">set</span>(title<span class="op">=</span><span class="vs">r"largest </span><span class="dv">$</span><span class="er">\</span><span class="vs">hat{R}</span><span class="dv">$</span><span class="vs">"</span>, ylabel<span class="op">=</span><span class="vs">r"</span><span class="dv">$</span><span class="er">\</span><span class="vs">hat{R}</span><span class="dv">$</span><span class="vs">"</span>)</span>
+<span id="cb25-31"><a href="#cb25-31" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">2</span>].<span class="bu">set</span>(title<span class="op">=</span><span class="st">"smallest effective sample size"</span>, xlabel<span class="op">=</span><span class="st">"forecast origin"</span>, ylabel<span class="op">=</span><span class="st">"ESS"</span>)</span>
+<span id="cb25-32"><a href="#cb25-32" aria-hidden="true" tabindex="-1"></a>fig.legend(handles<span class="op">=</span>[<span class="op">*</span>rung_handles, guideline], loc<span class="op">=</span><span class="st">"outside lower center"</span>, ncols<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb25-33"><a href="#cb25-33" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="vs">r"Fit diagnostics per backtest window </span><span class="kw">(</span><span class="vs">4 chains </span><span class="dv">$</span><span class="ch">\t</span><span class="vs">imes</span><span class="dv">$</span><span class="vs"> 250 draws</span><span class="kw">)</span><span class="vs">"</span>, <span class="op">**</span>TITLE)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-26-output-1.png" width="1211" height="511" class="figure-img"></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-26-output-1.png" width="1211" height="1006" class="figure-img"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>M3 has <span class="math inline">2</span> divergent transitions in the first window, with origin 1985Q1, and none after it, and M0 has <span class="math inline">2</span> in each of the 1985Q1 and 1989Q1 windows. M1 has the most: <span class="math inline">36</span> at the 1997Q1 origin, <span class="math inline">12</span> at 1999Q1, <span class="math inline">6</span> at 2003Q1, <span class="math inline">3</span> at 2013Q1 and a few in the early windows. With one series and a volatility random walk, M1 has the least information to separate the trend from the gap. The counts are at most <span class="math inline">3.6\%</span> of the <span class="math inline">1{,}000</span> draws, so the scores of M1 at the 1997Q1 and 1999Q1 origins rest on fits that are slightly off.</p>
+<p>The backtest fits are much shorter than the full fits, and the three diagnostics show it:</p>
+<ul>
+<li>M0 has <span class="math inline">4</span> divergent transitions, <span class="math inline">2</span> in each of the 1985Q1 and 1989Q1 windows. Its largest <span class="math inline">\hat{R}</span> is <span class="math inline">1.056</span>, above <span class="math inline">1.01</span> in 17 of the 20 windows, and its smallest ESS is <span class="math inline">48</span>.</li>
+<li>M1 has <span class="math inline">63</span> divergent transitions, <span class="math inline">36</span> of them at the 1997Q1 origin and <span class="math inline">12</span> at 1999Q1. Its largest <span class="math inline">\hat{R}</span> is <span class="math inline">1.178</span>, at 1997Q1. It is above <span class="math inline">1.01</span> in all 20 windows and above <span class="math inline">1.1</span> in four: 1985Q1, 1997Q1, 1999Q1 and 2001Q1. Its smallest ESS is <span class="math inline">23</span>.</li>
+<li>M3 has <span class="math inline">2</span> divergent transitions, both in the 1985Q1 window. Its largest <span class="math inline">\hat{R}</span> is <span class="math inline">1.098</span>, at 2013Q1. It is above <span class="math inline">1.01</span> in all 20 windows and above <span class="math inline">1.1</span> in none. Its smallest ESS is <span class="math inline">45</span>.</li>
+</ul>
+<p>No backtest fit meets the <span class="math inline">1.01</span> guideline that the full fit meets: each window has <span class="math inline">1{,}000</span> draws after <span class="math inline">500</span> warmup steps, and the largest <span class="math inline">\hat{R}</span> is a maximum over the global parameters and up to about <span class="math inline">1{,}800</span> path values. M3 has the fewest divergent transitions, but its largest <span class="math inline">\hat{R}</span> is between about <span class="math inline">1.03</span> and <span class="math inline">1.10</span> in every window from 2009 on: a fit with no divergent transitions can still have chains that disagree. M1, the model with the lowest mean scores, has the weakest fits. With one series and a volatility random walk it has the least information to separate the trend from the gap, and its scores at the four origins above <span class="math inline">1.1</span> rest on chains that disagree. The rankings of the paired comparison above carry this caveat.</p>
 </section>
 <section id="sensitivity-to-the-vol-of-vol" class="level1">
 <h1>Sensitivity to the vol-of-vol</h1>
 <p><span class="math inline">\gamma</span> is the one number we fixed. We refit M3 with <span class="math inline">\gamma = 0.2</span> and <span class="math inline">\gamma = 0.4</span> and compare the trend volatility of the three fits; <span class="math inline">0.4</span> is about where a learned <span class="math inline">\gamma</span> goes, as the figure after this one shows.</p>
-<div id="9d31431e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:35:45.669137Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:35:45.669051Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:38:08.081702Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:38:08.081103Z&quot;}}" data-execution_count="26">
+<div id="6108ff9f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:23:49.136524Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:23:49.136439Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:29:25.007112Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:29:25.003528Z&quot;}}" data-execution_count="26">
 <div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>VOL_OF_VOL_GRID <span class="op">=</span> (<span class="fl">0.1</span>, <span class="fl">0.2</span>, <span class="fl">0.4</span>)</span>
 <span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>grid_fits: <span class="bu">dict</span>[<span class="bu">float</span>, <span class="bu">tuple</span>[MCMC, <span class="bu">float</span>]] <span class="op">=</span> {<span class="fl">0.1</span>: (mcmc, seconds)}</span>
 <span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -1848,7 +1885,7 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li>The same with a tighter prior, <span class="math inline">\gamma \sim \text{LogNormal}(\log 0.1, 0.1)</span>.</li>
 <li>The same with centered log-variance steps, <span class="math inline">h_t - h_{t-1} \sim \text{Normal}(0, \gamma)</span> sampled directly instead of <span class="math inline">\gamma u_t</span>.</li>
 </ul>
-<div id="b1d2a1f5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:38:08.083293Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:38:08.083168Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:38:08.266534Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:38:08.265940Z&quot;}}" data-execution_count="27">
+<div id="159593d5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:29:25.035504Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:29:25.035278Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:29:25.439269Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:29:25.438154Z&quot;}}" data-execution_count="27">
 <div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># label: (divergences, max R-hat, min ESS, posterior mean of gamma or None); separate runs,</span></span>
 <span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="co"># not re-run here, with the diagnostics of `fit_title`.</span></span>
 <span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>VARIANT_RUNS <span class="op">=</span> {</span>
@@ -1897,12 +1934,12 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 <li>Free loadings on the common shock give no divergent transitions, but the chains disagree (largest <span class="math inline">\hat{R}</span> <span class="math inline">1.27</span>, ESS <span class="math inline">7</span>), so every loading is fixed at one.</li>
 <li>A learned <span class="math inline">\gamma</span> goes to about <span class="math inline">0.4</span> and does not converge (largest <span class="math inline">\hat{R}</span> <span class="math inline">1.40</span>, ESS <span class="math inline">6</span>). <code>time_reparam(model, "dct")</code> brings the largest <span class="math inline">\hat{R}</span> down to <span class="math inline">1.12</span>, but the ESS rises only to <span class="math inline">31</span> and the fit takes about two and a half minutes. Centered log-variance steps do not help (<span class="math inline">1.33</span>). The tighter prior gives the best diagnostics, <span class="math inline">1.04</span>, because the prior holds <span class="math inline">\gamma</span> down at <span class="math inline">0.18</span>, between its center of <span class="math inline">0.1</span> and the <span class="math inline">0.4</span> the data push toward.</li>
 </ul>
-<p>The data push a shared <span class="math inline">\gamma</span> toward <span class="math inline">0.4</span>, where the fit with <span class="math inline">\gamma</span> fixed at <span class="math inline">0.4</span> does not converge either. The difficulty is the posterior of the volatility paths at large <span class="math inline">\gamma</span>, and none of the three changes removes it.</p>
+<p>The data push a shared <span class="math inline">\gamma</span> toward <span class="math inline">0.4</span>, where the fit with <span class="math inline">\gamma</span> fixed at <span class="math inline">0.4</span> does not converge either. The difficulty is the posterior of the volatility paths at large <span class="math inline">\gamma</span>, and none of the three changes removes it. The three learned-<span class="math inline">\gamma</span> fits, none of which converged, put <span class="math inline">\gamma</span> at <span class="math inline">0.39</span> to <span class="math inline">0.40</span>, near the step standard deviation of about <span class="math inline">0.45</span> in Stock and Watson (2007). The <span class="math inline">\gamma = 0.1</span> of this notebook is therefore a value chosen so that the sampler converges, not an estimate.</p>
 </section>
 <section id="cost" class="level1">
 <h1>Cost</h1>
 <p>The full fits and the backtests are the expensive parts of the notebook. The figure collects their wall times.</p>
-<div id="4ab22cff" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-09T22:38:08.267720Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-09T22:38:08.267627Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-09T22:38:08.424119Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-09T22:38:08.423734Z&quot;}}" data-execution_count="28">
+<div id="d24fa709" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-26T09:29:25.445945Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-11-26T09:29:25.445583Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-11-26T09:29:25.714360Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-26T09:29:25.713007Z&quot;}}" data-execution_count="28">
 <div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>full_fit_seconds <span class="op">=</span> {</span>
 <span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    <span class="vs">r"M3, </span><span class="dv">$</span><span class="er">\</span><span class="vs">gamma = 0</span><span class="dv">.</span><span class="vs">1</span><span class="dv">$</span><span class="vs">"</span>: seconds,</span>
 <span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"M2"</span>: seconds_m2,</span>
@@ -1938,20 +1975,20 @@ g_{0, m} &amp;\sim \text{Normal}(0, 1), \\
 </div>
 </div>
 </div>
-<p>A full fit, four chains with <span class="math inline">1{,}000</span> warmup and <span class="math inline">2{,}000</span> draws, takes <span class="math inline">70</span> to <span class="math inline">79</span> seconds; M2 is the slowest. The backtests take <span class="math inline">0.8</span> minutes (M0), <span class="math inline">1.8</span> (M1) and <span class="math inline">3.6</span> (M3) for 20 windows each, so the fits and backtests take about <span class="math inline">11</span> minutes in total.</p>
+<p>A full fit, four chains with <span class="math inline">1{,}000</span> warmup and <span class="math inline">2{,}000</span> draws, takes <span class="math inline">113</span> to <span class="math inline">218</span> seconds; the fit with <span class="math inline">\gamma = 0.4</span> is the slowest. The backtests take <span class="math inline">3.3</span> minutes (M0), <span class="math inline">6.3</span> (M1) and <span class="math inline">7.4</span> (M3) for 20 windows each, so the fits and backtests take about <span class="math inline">28</span> minutes in total.</p>
 </section>
 <section id="discussion" class="level1">
 <h1>Discussion</h1>
 <p>What the results say about modeling these four measures:</p>
 <ul>
 <li>With independent gaps (M2), the trend of a four-measure model follows core PCE quarter by quarter: since 1995 its quarterly changes have a correlation of <span class="math inline">0.96</span> with those of core PCE, it falls below zero in 2020Q2, and the model implies a lag-1 autocorrelation of quarterly core PCE changes of <span class="math inline">-0.18</span> against <span class="math inline">-0.39</span> in the data. One white-noise shock with the same loading on every measure lets the four measures share a transitory quarter: the trend of M3 changes by <span class="math inline">0.27</span> points per quarter since 1995 instead of <span class="math inline">0.67</span>, and the implied autocorrelation is <span class="math inline">-0.37</span>.</li>
-<li>The floor under the gap volatilities removes the divergent transitions: the fits without it had <span class="math inline">10</span> (M2) and <span class="math inline">4</span> (M3), the fits with it have none.</li>
-<li>The better trend does not give a better forecast of core PCE in this backtest. M1, core PCE alone with stochastic volatility, has the best average score on every metric and beats M0 on the CRPS in 16 of the 20 windows. M3 is <span class="math inline">0.047 \pm 0.045</span> CRPS behind M1, the one difference larger than two standard errors, and it does worst at the 1985, 1987 and 1991 origins.</li>
+<li>The floor under the gap volatilities removes the divergent transitions: the fits without it had <span class="math inline">10</span> (M2) and <span class="math inline">4</span> (M3), the full fits with it have none.</li>
+<li>The better trend does not give a better forecast of core PCE in this backtest. M1, core PCE alone with stochastic volatility, has the lowest mean score on every metric. It has a lower CRPS than M0 in 16 of the 20 windows and than M3 in 15, with sign-test p-values of <span class="math inline">0.012</span> and <span class="math inline">0.041</span>: a direction, not a result that holds after the correction for six comparisons. M1 also has the weakest backtest fits, with a largest <span class="math inline">\hat{R}</span> above <span class="math inline">1.1</span> at four origins, and M3 does worst at the 1985, 1987 and 1991 origins.</li>
 <li>The <span class="math inline">94\%</span> intervals of all three models are calibrated. The <span class="math inline">50\%</span> intervals of M3 are on target, those of M1 slightly too wide and those of M0 too wide.</li>
 </ul>
 <p>Open weaknesses of the model:</p>
 <ul>
-<li><span class="math inline">\gamma</span> is fixed. A learned <span class="math inline">\gamma</span> goes to about <span class="math inline">0.4</span>, where the sampler does not converge with or without a reparameterization, and <span class="math inline">0.1</span> is the only value of the three we fit that meets the <span class="math inline">\hat{R}</span> guideline. The volatility at the end of the sample is about the same under <span class="math inline">0.1</span>, <span class="math inline">0.2</span> and <span class="math inline">0.4</span>.</li>
+<li><span class="math inline">\gamma</span> is fixed at a value chosen for the sampler, not estimated. The three learned-<span class="math inline">\gamma</span> fits, none of which converged, put it at <span class="math inline">0.39</span> to <span class="math inline">0.40</span>, near the <span class="math inline">0.45</span> of Stock and Watson (2007), and <span class="math inline">0.1</span> is the only value of the three we fit whose full fit meets the <span class="math inline">1.01</span> guideline for <span class="math inline">\hat{R}</span>. The evidence that <span class="math inline">0.1</span> still gives calibrated forecast bands is the backtest: pooled over the steps, the <span class="math inline">94\%</span> intervals of M3 cover <span class="math inline">94\%</span> of the outcomes. The volatility at the end of the sample is about the same under <span class="math inline">0.1</span>, <span class="math inline">0.2</span> and <span class="math inline">0.4</span>.</li>
 <li>There is one common shock with unit loadings. The 2008Q4 energy collapse moved the headline measures far more than the core measures, so it stays in two independent headline gaps. Time-varying loadings on the common transitory shock, as in Stock and Watson (2016), would let the energy part change over time; free loadings on one shock did not converge here.</li>
 <li>The offsets are constant. The CPI to PCE wedge has moved with the index methodologies (rental equivalence entered the CPI in 1983), so the constant offset puts the high CPI readings of the years before 1983 partly into the trend. This is one candidate reason, not tested here, for the poor scores of M3 at the 1985, 1987 and 1991 origins, whose training samples are mostly years before 1983.</li>
 <li>The October 2025 prices are filled in and the rents of that month were carried forward. The CPI and PCE series carry the geometric-mean month in 2025Q4, and their rent components count no change for October until the April 2026 index, so the rates of 2025Q4 to 2026Q2 do not follow the monthly path a full collection would have produced.</li>

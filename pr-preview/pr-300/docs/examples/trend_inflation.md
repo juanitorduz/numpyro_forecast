@@ -45,6 +45,7 @@ from matplotlib.artist import Artist
 from matplotlib.patches import Patch
 from matplotlib.ticker import MaxNLocator, PercentFormatter
 from numpyro.infer import MCMC, NUTS, Predictive
+from scipy.stats import binomtest
 
 from numpyro_forecast import (
     BacktestResult,
@@ -191,7 +192,7 @@ On the scale of the data, where a typical quarter of core inflation sits between
 - h_0 = -1.5 is a trend shock with standard deviation \exp(-0.75) \approx 0.47 percentage points per quarter, and the prior standard deviation of 1 on h_0 lets that scale range from about 0.3 to 0.8 within one standard deviation.
 - q_0 = 0 and g\_{0, m} = 0 are a common shock and a gap with a standard deviation of 1 percentage point (plus the floor for the gap), the right order for the core measures; the headline measures move up from there through g\_{t, m}.
 - \alpha_m \sim \text{Normal}(0, 1) allows offsets of about \pm 2 percentage points, which is wide for the CPI to PCE wedge of a few tenths.
-- \gamma = 0.1 is fixed, as in Stock and Watson (2007). They write the variance of the log-variance steps as \gamma and set it to 0.2, a standard deviation of about 0.45; here \gamma is the standard deviation itself, and 0.1 is smaller. After t quarters the log-variance has prior standard deviation \gamma \sqrt{t}, about 1.6 for t = 270, so a volatility can drift by a factor of \exp(0.82) \approx 2.3 in either direction over the sample within one standard deviation. The fourth panel of the prior figure plots this band for three values of \gamma. The section *Sensitivity to the vol-of-vol* refits the model with larger values and with a learned \gamma.
+- \gamma = 0.1 is fixed, as in Stock and Watson (2007), but at a smaller value. They write the variance of the log-variance steps as \gamma and set it to 0.2, a standard deviation of about 0.45; here \gamma is the standard deviation itself, and 0.1 is a value chosen so that the sampler converges, not an estimate. After t quarters the log-variance has prior standard deviation \gamma \sqrt{t}, about 1.6 for t = 270, so a volatility can drift by a factor of \exp(0.82) \approx 2.3 in either direction over the sample within one standard deviation. The fourth panel of the prior figure plots this band for three values of \gamma. The section *Sensitivity to the vol-of-vol* refits the model with larger values and with a learned \gamma.
 
 
 ``` python
@@ -990,13 +991,14 @@ The ladder has three models and the benchmark:
 
 M2 is not in the backtest: the section *The common transitory shock* showed that its trend follows core PCE, and leaving it out keeps the notebook short. The step from M1 to M3 therefore adds two things at once, the three other measures and the common shock, and the backtest cannot tell their contributions apart.
 
-Every window fits the model with four NUTS chains of 500 warmup and 250 draws, so that a window takes a fraction of the full fit while the metrics still see 1{,}000 forecast draws. `forecast_fn` records the divergences of every window, so that the scores can be checked against the fits that produced them. The CRPS and the MAE of *Evaluation metrics and the benchmark* are scored per window, on the core PCE column: `on_core_pce` and `four_quarter_average` turn a package metric into one on that column and on the 4-quarter average, and `atkeson_ohanian` is a per-window metric that reads the last four quarters of the training window through the `per_window_metrics` hook of [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). The coverage comes later, per horizon step, from the stored forecast draws.
+Every window fits the model with four NUTS chains of 500 warmup and 250 draws, so that a window takes a fraction of the full fit while the metrics still see 1{,}000 forecast draws. `forecast_fn` records the divergences, the largest \hat{R} and the smallest ESS of every window, the diagnostics of `fit_title`, so that the scores can be checked against the fits that produced them. The CRPS and the MAE of *Evaluation metrics and the benchmark* are scored per window, on the core PCE column: `on_core_pce` and `four_quarter_average` turn a package metric into one on that column and on the 4-quarter average, and `atkeson_ohanian` is a per-window metric that reads the last four quarters of the training window through the `per_window_metrics` hook of [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). The coverage comes later, per horizon step, from the stored forecast draws.
 
 
 ``` python
 BACKTEST_WARMUP = 500
 BACKTEST_SAMPLES = 1_000  # 4 chains x 250 draws
-backtest_divergences: list[tuple[str, np.datetime64, int]] = []  # (rung, origin, divergences)
+# (rung, origin, divergences, largest R-hat, smallest ESS) of every backtest fit
+backtest_diagnostics: list[tuple[str, np.datetime64, int, float, float]] = []
 
 
 def make_forecast_fn(label: str) -> ForecastFn:
@@ -1018,7 +1020,9 @@ def make_forecast_fn(label: str) -> ForecastFn:
             num_warmup=BACKTEST_WARMUP,
             num_samples=num_samples // NUM_CHAINS,
         )
-        backtest_divergences.append((label, dates[train_data.shape[0]], num_divergences(mcmc)))
+        backtest_diagnostics.append(
+            (label, dates[train_data.shape[0]], num_divergences(mcmc), *diagnostics(mcmc))
+        )
         return forecast(
             key_forecast,
             model,
@@ -1166,7 +1170,7 @@ Averaged over the 20 windows:
 - M1, core PCE with stochastic volatility, has the lowest score in all four panels: CRPS 0.563 on the quarterly rates and 0.400 on the 4-quarter average, MAE 0.726 and 0.506.
 - M0, with constant variances, is behind it on every score: CRPS 0.601 and 0.445, MAE 0.734 and 0.526.
 - M3, the four-measure model, is last on every score: CRPS 0.610 and 0.452, MAE 0.809 and 0.600.
-- The Atkeson and Ohanian benchmark has an MAE of 0.777 on the quarterly rates and 0.514 on the 4-quarter average. M1 beats it on both, M0 on the quarterly rates only, and M3 on neither.
+- The Atkeson and Ohanian benchmark has an MAE of 0.777 on the quarterly rates and 0.514 on the 4-quarter average. M1 has a lower mean MAE than the benchmark on both, M0 on the quarterly rates only, and M3 on neither. The paired comparison below tests these differences.
 
 The next figure shows the CRPS of every window against its origin date, one line per model, so that the periods where one component helps stand out.
 
@@ -1199,7 +1203,12 @@ The per-window scores separate three periods:
 - The 2021Q1 origin dominates every average: M0 scores 2.40, M3 2.79 and M1 2.83. That single window contributes 0.12 to 0.14 to each 20-window mean.
 - The 2023Q1 origin, the disinflation, scores between 1.13 and 1.23 for every model.
 
-A difference of means over 20 windows can be noise. For each comparison we take the paired per-window difference, the score of a model minus the score of the model or benchmark it is compared with, on the same windows, and show its mean with one and two standard errors, s / \sqrt{20} for the standard deviation s of the 20 differences, in `az.plot_forest` (thick and thin bars); the label of each row repeats the mean and the two standard errors and counts the windows in which the first model scores lower. The windows do not overlap, so we treat the differences as approximately independent. A mean whose two standard errors reach zero is a difference the backtest cannot establish.
+A difference of means over 20 windows can be noise. For each comparison we take the paired per-window difference, the score of a model minus the score of the model or benchmark it is compared with, on the same windows. The windows do not overlap, so we treat the differences as approximately independent. We read each difference in two ways:
+
+- The **size** is the mean difference with one and two standard errors, s / \sqrt{20} for the standard deviation s of the 20 differences, drawn with `az.plot_forest` (thick and thin bars). One window with a large difference, such as 2021Q1, moves the mean as much as several ordinary windows together.
+- The **sign test** counts the windows in which the first model scores lower. If the two forecasts are equally good, that count is \text{Binomial}(20, 0.5), and the two-sided exact p-value is the probability of a count at least as far from 10 as the observed one. Every window counts once, so the 2021Q1 window cannot dominate it.
+
+The sign test ranks the models. The figure makes six comparisons, so we call a difference established only when its p-value is below 0.05 / 6 \approx 0.008 (the Bonferroni correction). The label of each row gives the mean, the two standard errors, the count and the p-value.
 
 
 ``` python
@@ -1228,12 +1237,15 @@ means = {name: values.mean() for name, values in differences.items()}
 standard_errors = {
     name: values.std(ddof=1) / np.sqrt(len(values)) for name, values in differences.items()
 }
-# Row labels carry the mean, two standard errors and the number of windows where the first
-# model scores lower
+# Sign test: windows where the first model scores lower, out of the windows with a difference
+wins = {name: int((values < 0).sum()) for name, values in differences.items()}
+num_nonzero = {name: int((values != 0).sum()) for name, values in differences.items()}
+sign_p = {name: binomtest(wins[name], num_nonzero[name]).pvalue for name in differences}
+# Row labels carry the mean, two standard errors, the sign-test count and its p-value
 row_labels = {
     name: (
-        f"{name}: {means[name]:+.3f} ± {2 * standard_errors[name]:.3f}, "
-        f"lower in {(differences[name] < 0).sum()} of {len(differences[name])}"
+        f"{name}: {means[name]:+.3f} ± {2 * standard_errors[name]:.3f}\n"
+        f"lower in {wins[name]} of {num_nonzero[name]}, sign test p = {sign_p[name]:.3f}"
     )
     for name in differences
 }
@@ -1288,14 +1300,14 @@ pc.viz["figure"].item().suptitle(
 </figure>
 
 
-One of the six differences is larger than its two standard errors:
+No row passes the threshold of 0.008:
 
-- M1 - M0, CRPS: -0.038 \pm 0.057. Stochastic volatility lowers the CRPS in 16 of the 20 windows, and the 2021Q1 window, where M0 is better by 0.43, keeps the mean from clearing two standard errors.
-- M3 - M1, CRPS: +0.047 \pm 0.045. Adding the three other measures and the common shock makes the core PCE forecast worse: M3 has the lower CRPS in only 5 of the 20 windows, and the mean just clears two standard errors.
-- M1 - AO and M3 - AO, MAE on the quarterly rates: -0.051 \pm 0.061 and +0.031 \pm 0.073.
-- M1 - AO and M3 - AO, MAE on the 4-quarter average: -0.008 \pm 0.107 and +0.085 \pm 0.119.
+- M1 - M0, CRPS: -0.038 \pm 0.057. M1 is lower in 16 of the 20 windows (p = 0.012). The 2021Q1 window, where M0 is better by 0.43, pulls the mean toward zero, but the sign test counts it once.
+- M3 - M1, CRPS: +0.047 \pm 0.045. M3 is lower in only 5 of the 20 windows (p = 0.041).
+- M1 - AO and M3 - AO, MAE on the quarterly rates: -0.051 \pm 0.061 and +0.031 \pm 0.073, lower in 11 and 9 of the 20 windows (p = 0.82 for both).
+- M1 - AO and M3 - AO, MAE on the 4-quarter average: -0.008 \pm 0.107 and +0.085 \pm 0.119, lower in 11 and 10 of the 20 windows (p = 0.82 and 1.00).
 
-Twenty windows of eight quarters are enough to see that M3 forecasts core PCE worse than M1, and too few to rank M1, M0 and the benchmark.
+The two CRPS rows point the same way, M1 ahead of M0 and of M3. Their p-values of 0.012 and 0.041 would count at the 5\\ level for a single comparison, but not after the correction for six. Twenty windows of eight quarters do not rank the three models firmly, and no model separates from the benchmark.
 
 The scores so far average over the eight horizon steps. The stored forecast draws let us score each step j on its own: the CRPS j quarters ahead and the coverage of the two central intervals j quarters ahead, averaged over the windows. Twenty windows give one realized value per step, so the coverage of a calibrated forecast scatters around the nominal level with a binomial standard deviation of \sqrt{0.94 \times 0.06 / 20} \approx 5.3 percentage points at the 94\\ level and 11.2 at the 50\\ level; the shaded band is two of those standard deviations around the nominal level. The legend gives each model's coverage pooled over the eight steps with two standard errors. The eight steps of a window share one forecast path, so we take the coverage of each window over its eight steps and compute the standard error across the 20 windows.
 
@@ -1427,33 +1439,58 @@ All three models fail in the surge. After the first quarter, the realized core P
 
 M0 scores best here (2.40 against 2.83 for M1 and 2.79 for M3) because its constant variances, fitted on a sample that includes the 1970s, give it the widest band.
 
-The last check on the backtest is the fits themselves: the divergences of every window, per model.
+The last check on the backtest is the fits themselves. The figure shows three diagnostics of every window, per model, over the sites of `fit_title` (the global parameters and the plotted paths): the divergent transitions, the largest \hat{R} and the smallest ESS. The legend gives the totals per model and counts the windows above the \hat{R} guideline of 1.01.
 
 
 ``` python
-fig, ax = plt.subplots(figsize=(12, 5))
+fig, axes = plt.subplots(nrows=3, sharex=True, figsize=(12, 10), layout="constrained")
+rung_handles = []
 
 for label in backtest_results:
-    rung_origins = [origin for rung, origin, _ in backtest_divergences if rung == label]
-    counts = [count for rung, _, count in backtest_divergences if rung == label]
-    ax.plot(rung_origins, counts, marker="o", color=RUNG_COLORS[label], label=label)
+    # (origin, divergences, largest R-hat, smallest ESS) per window, as four tuples
+    rows = [row[1:] for row in backtest_diagnostics if row[0] == label]
+    rung_origins, divergences, r_hats, esses = zip(*rows, strict=True)
+    style = {"marker": "o", "color": RUNG_COLORS[label]}
+    axes[0].plot(rung_origins, divergences, **style)
+    axes[1].plot(rung_origins, r_hats, **style)
+    num_above = sum(r_hat > 1.01 for r_hat in r_hats)
+    (line,) = axes[2].plot(
+        rung_origins,
+        esses,
+        label=(
+            rf"{label}: {sum(divergences)} divergences, largest $\hat{{R}}$ {max(r_hats):.3f} "
+            rf"({num_above} of {len(r_hats)} windows above $1.01$), "
+            f"smallest ESS {min(esses):,.0f}"
+        ),
+        **style,
+    )
+    rung_handles.append(line)
 
+guideline = axes[1].axhline(1.01, color="black", linestyle="--", label=r"$\hat{R} = 1.01$")
 locator = mdates.AutoDateLocator()
-ax.xaxis.set_major_locator(locator)
-ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
-ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-ax.legend(loc="upper right")
-ax.set(xlabel="forecast origin", ylabel="divergences")
-ax.set_title(r"Divergent transitions per backtest window (4 chains $\times$ 250 draws)", **TITLE);
+axes[-1].xaxis.set_major_locator(locator)
+axes[-1].xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+axes[0].yaxis.set_major_locator(MaxNLocator(integer=True))
+axes[0].set(title="divergent transitions", ylabel="count")
+axes[1].set(title=r"largest $\hat{R}$", ylabel=r"$\hat{R}$")
+axes[2].set(title="smallest effective sample size", xlabel="forecast origin", ylabel="ESS")
+fig.legend(handles=[*rung_handles, guideline], loc="outside lower center", ncols=1)
+fig.suptitle(r"Fit diagnostics per backtest window (4 chains $\times$ 250 draws)", **TITLE);
 ```
 
 
 <figure class="figure">
-<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-26-output-1.png" class="figure-img" width="1211" height="511" /></p>
+<p><img src="trend_inflation_files/figure-html/_src-trend_inflation-cell-26-output-1.png" class="figure-img" width="1211" height="1006" /></p>
 </figure>
 
 
-M3 has 2 divergent transitions in the first window, with origin 1985Q1, and none after it, and M0 has 2 in each of the 1985Q1 and 1989Q1 windows. M1 has the most: 36 at the 1997Q1 origin, 12 at 1999Q1, 6 at 2003Q1, 3 at 2013Q1 and a few in the early windows. With one series and a volatility random walk, M1 has the least information to separate the trend from the gap. The counts are at most 3.6\\ of the 1{,}000 draws, so the scores of M1 at the 1997Q1 and 1999Q1 origins rest on fits that are slightly off.
+The backtest fits are much shorter than the full fits, and the three diagnostics show it:
+
+- M0 has 4 divergent transitions, 2 in each of the 1985Q1 and 1989Q1 windows. Its largest \hat{R} is 1.056, above 1.01 in 17 of the 20 windows, and its smallest ESS is 48.
+- M1 has 63 divergent transitions, 36 of them at the 1997Q1 origin and 12 at 1999Q1. Its largest \hat{R} is 1.178, at 1997Q1. It is above 1.01 in all 20 windows and above 1.1 in four: 1985Q1, 1997Q1, 1999Q1 and 2001Q1. Its smallest ESS is 23.
+- M3 has 2 divergent transitions, both in the 1985Q1 window. Its largest \hat{R} is 1.098, at 2013Q1. It is above 1.01 in all 20 windows and above 1.1 in none. Its smallest ESS is 45.
+
+No backtest fit meets the 1.01 guideline that the full fit meets: each window has 1{,}000 draws after 500 warmup steps, and the largest \hat{R} is a maximum over the global parameters and up to about 1{,}800 path values. M3 has the fewest divergent transitions, but its largest \hat{R} is between about 1.03 and 1.10 in every window from 2009 on: a fit with no divergent transitions can still have chains that disagree. M1, the model with the lowest mean scores, has the weakest fits. With one series and a volatility random walk it has the least information to separate the trend from the gap, and its scores at the four origins above 1.1 rest on chains that disagree. The rankings of the paired comparison above carry this caveat.
 
 
 # Sensitivity to the vol-of-vol
@@ -1569,7 +1606,7 @@ The figure backs the two design choices and answers whether \gamma can be learne
 - Free loadings on the common shock give no divergent transitions, but the chains disagree (largest \hat{R} 1.27, ESS 7), so every loading is fixed at one.
 - A learned \gamma goes to about 0.4 and does not converge (largest \hat{R} 1.40, ESS 6). `time_reparam(model, "dct")` brings the largest \hat{R} down to 1.12, but the ESS rises only to 31 and the fit takes about two and a half minutes. Centered log-variance steps do not help (1.33). The tighter prior gives the best diagnostics, 1.04, because the prior holds \gamma down at 0.18, between its center of 0.1 and the 0.4 the data push toward.
 
-The data push a shared \gamma toward 0.4, where the fit with \gamma fixed at 0.4 does not converge either. The difficulty is the posterior of the volatility paths at large \gamma, and none of the three changes removes it.
+The data push a shared \gamma toward 0.4, where the fit with \gamma fixed at 0.4 does not converge either. The difficulty is the posterior of the volatility paths at large \gamma, and none of the three changes removes it. The three learned-\gamma fits, none of which converged, put \gamma at 0.39 to 0.40, near the step standard deviation of about 0.45 in Stock and Watson (2007). The \gamma = 0.1 of this notebook is therefore a value chosen so that the sampler converges, not an estimate.
 
 
 # Cost
@@ -1613,7 +1650,7 @@ fig.suptitle("Wall time", **TITLE);
 </figure>
 
 
-A full fit, four chains with 1{,}000 warmup and 2{,}000 draws, takes 70 to 79 seconds; M2 is the slowest. The backtests take 0.8 minutes (M0), 1.8 (M1) and 3.6 (M3) for 20 windows each, so the fits and backtests take about 11 minutes in total.
+A full fit, four chains with 1{,}000 warmup and 2{,}000 draws, takes 113 to 218 seconds; the fit with \gamma = 0.4 is the slowest. The backtests take 3.3 minutes (M0), 6.3 (M1) and 7.4 (M3) for 20 windows each, so the fits and backtests take about 28 minutes in total.
 
 
 # Discussion
@@ -1621,13 +1658,13 @@ A full fit, four chains with 1{,}000 warmup and 2{,}000 draws, takes 70 to 79 se
 What the results say about modeling these four measures:
 
 - With independent gaps (M2), the trend of a four-measure model follows core PCE quarter by quarter: since 1995 its quarterly changes have a correlation of 0.96 with those of core PCE, it falls below zero in 2020Q2, and the model implies a lag-1 autocorrelation of quarterly core PCE changes of -0.18 against -0.39 in the data. One white-noise shock with the same loading on every measure lets the four measures share a transitory quarter: the trend of M3 changes by 0.27 points per quarter since 1995 instead of 0.67, and the implied autocorrelation is -0.37.
-- The floor under the gap volatilities removes the divergent transitions: the fits without it had 10 (M2) and 4 (M3), the fits with it have none.
-- The better trend does not give a better forecast of core PCE in this backtest. M1, core PCE alone with stochastic volatility, has the best average score on every metric and beats M0 on the CRPS in 16 of the 20 windows. M3 is 0.047 \pm 0.045 CRPS behind M1, the one difference larger than two standard errors, and it does worst at the 1985, 1987 and 1991 origins.
+- The floor under the gap volatilities removes the divergent transitions: the fits without it had 10 (M2) and 4 (M3), the full fits with it have none.
+- The better trend does not give a better forecast of core PCE in this backtest. M1, core PCE alone with stochastic volatility, has the lowest mean score on every metric. It has a lower CRPS than M0 in 16 of the 20 windows and than M3 in 15, with sign-test p-values of 0.012 and 0.041: a direction, not a result that holds after the correction for six comparisons. M1 also has the weakest backtest fits, with a largest \hat{R} above 1.1 at four origins, and M3 does worst at the 1985, 1987 and 1991 origins.
 - The 94\\ intervals of all three models are calibrated. The 50\\ intervals of M3 are on target, those of M1 slightly too wide and those of M0 too wide.
 
 Open weaknesses of the model:
 
-- \gamma is fixed. A learned \gamma goes to about 0.4, where the sampler does not converge with or without a reparameterization, and 0.1 is the only value of the three we fit that meets the \hat{R} guideline. The volatility at the end of the sample is about the same under 0.1, 0.2 and 0.4.
+- \gamma is fixed at a value chosen for the sampler, not estimated. The three learned-\gamma fits, none of which converged, put it at 0.39 to 0.40, near the 0.45 of Stock and Watson (2007), and 0.1 is the only value of the three we fit whose full fit meets the 1.01 guideline for \hat{R}. The evidence that 0.1 still gives calibrated forecast bands is the backtest: pooled over the steps, the 94\\ intervals of M3 cover 94\\ of the outcomes. The volatility at the end of the sample is about the same under 0.1, 0.2 and 0.4.
 - There is one common shock with unit loadings. The 2008Q4 energy collapse moved the headline measures far more than the core measures, so it stays in two independent headline gaps. Time-varying loadings on the common transitory shock, as in Stock and Watson (2016), would let the energy part change over time; free loadings on one shock did not converge here.
 - The offsets are constant. The CPI to PCE wedge has moved with the index methodologies (rental equivalence entered the CPI in 1983), so the constant offset puts the high CPI readings of the years before 1983 partly into the trend. This is one candidate reason, not tested here, for the poor scores of M3 at the 1985, 1987 and 1991 origins, whose training samples are mostly years before 1983.
 - The October 2025 prices are filled in and the rents of that month were carried forward. The CPI and PCE series carry the geometric-mean month in 2025Q4, and their rent components count no change for October until the April 2026 index, so the rates of 2025Q4 to 2026Q2 do not follow the monthly path a full collection would have produced.
