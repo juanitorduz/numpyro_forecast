@@ -263,9 +263,16 @@ def low_frequency_basis(num_periods: int, num_terms: int) -> Float[Array, " peri
     $\bar\Sigma_{RW} = \sum_l \varphi_l \varphi_l'$ with
     $\varphi_l = \lambda_l^{1/2} e_l$, and keep the $q$ columns with the largest
     eigenvalues: the demeaned walk is approximately $\sum_{l \le q} \varphi_l \xi_l$
-    with iid $\xi_l$ of the innovation variance. Column $l$ is close to a cosine
-    of $l$ half-periods over the sample and has amplitude of order
-    $\sqrt{2T}/(l\pi)$. The sign of each column is fixed by a positive first row.
+    with iid $\xi_l$ of the innovation variance. The eigenvectors are cosines of
+    $l$ half-periods over the sample, so the columns have the closed form
+
+    $$
+    \varphi_l(t) = \sqrt{2 / T} \, \cos\!\left(\pi l (t - \tfrac{1}{2}) / T\right)
+    \big/ \left(2 \sin(\pi l / 2T)\right), \qquad t = 1, \dots, T,
+    $$
+
+    with eigenvalues $\lambda_l = 1 / (4 \sin^2(\pi l / 2T))$, an amplitude of about
+    $\sqrt{2T}/(l\pi)$ and a positive first row.
 
     Parameters
     ----------
@@ -279,13 +286,11 @@ def low_frequency_basis(num_periods: int, num_terms: int) -> Float[Array, " peri
     Float[Array, " periods terms"]
         The basis $(\varphi_1, \dots, \varphi_q)$ as a ``(num_periods, num_terms)`` array.
     """
-    cumsum = np.tril(np.ones((num_periods, num_periods)))
-    demean = np.eye(num_periods) - np.ones((num_periods, num_periods)) / num_periods
-    covariance = demean @ cumsum @ cumsum.T @ demean.T
-    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
-    order = np.argsort(eigenvalues)[::-1][:num_terms]
-    basis = eigenvectors[:, order] * np.sqrt(eigenvalues[order])
-    return jnp.asarray(basis * np.sign(basis[0])[None, :], dtype=jnp.float32)
+    t = np.arange(1, num_periods + 1)[:, None] - 0.5  # (periods, 1)
+    terms = np.arange(1, num_terms + 1)[None, :]  # (1, terms)
+    root_eigenvalues = 1.0 / (2.0 * np.sin(np.pi * terms / (2.0 * num_periods)))
+    cosines = np.sqrt(2.0 / num_periods) * np.cos(np.pi * terms * t / num_periods)
+    return jnp.asarray(cosines * root_eigenvalues, dtype=jnp.float32)
 
 
 MAX_LOG_NU = 8.0

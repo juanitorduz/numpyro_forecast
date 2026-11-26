@@ -203,16 +203,19 @@ def test_trend_inflation_us_smoke(rng_key: Array, fast_mcmc: dict[str, int]) -> 
     assert bool(jnp.all(jnp.isfinite(pred)))
 
 
-def test_low_frequency_basis_is_the_random_walk_spectrum() -> None:
-    basis = np.asarray(low_frequency_basis(107, 3))
-    assert basis.shape == (107, 3)
-    cumsum = np.tril(np.ones((107, 107)))
-    demean = np.eye(107) - 1.0 / 107
-    covariance = demean @ cumsum @ cumsum.T @ demean.T
-    eigenvalues = np.sort(np.linalg.eigvalsh(covariance))[::-1]
-    np.testing.assert_allclose(np.sum(basis**2, axis=0), eigenvalues[:3], rtol=1e-4)
-    assert np.all(basis[0] > 0.0)
-    assert np.abs(basis[:, 0]).max() > np.abs(basis[:, 1]).max() > np.abs(basis[:, 2]).max()
+@pytest.mark.parametrize(("num_periods", "num_terms"), [(107, 3), (347, 9)])
+def test_low_frequency_basis_matches_the_random_walk_eigenvectors(
+    num_periods: int, num_terms: int
+) -> None:
+    cumsum = np.tril(np.ones((num_periods, num_periods)))
+    demean = np.eye(num_periods) - 1.0 / num_periods
+    eigenvalues, eigenvectors = np.linalg.eigh(demean @ cumsum @ cumsum.T @ demean.T)
+    order = np.argsort(eigenvalues)[::-1][:num_terms]
+    expected = eigenvectors[:, order] * np.sqrt(eigenvalues[order])
+    expected = expected * np.sign(expected[0])
+    basis = np.asarray(low_frequency_basis(num_periods, num_terms))
+    assert basis.shape == (num_periods, num_terms)
+    np.testing.assert_allclose(basis, expected, atol=1e-5 * np.sqrt(eigenvalues[order[0]]))
 
 
 @pytest.mark.parametrize("outliers", [False, True])
@@ -266,9 +269,7 @@ def test_rts_outlier_leaves_the_lag_window(rng_key: Array) -> None:
     )
 
 
-def test_rts_forecast_is_the_cumulative_growth_path(
-    rng_key: Array, fast_mcmc: dict[str, int]
-) -> None:
+def test_rts_state_employment_smoke(rng_key: Array, fast_mcmc: dict[str, int]) -> None:
     growth = load_state_employment().growth[:120, :4]
     y_init, history = growth[:12], growth[12:]
     model = make_rts_model(y_init, hierarchical=False)
@@ -285,10 +286,6 @@ def test_rts_forecast_is_the_cumulative_growth_path(
     pred = forecast(key_forecast, model, mcmc.get_samples(), history, covariates)
     assert pred.shape == (fast_mcmc["num_samples"], 6, 4)
     assert bool(jnp.all(jnp.isfinite(pred)))
-    growth_3 = jnp.cumsum(pred, axis=1)[:, 2] / 3.0
-    np.testing.assert_allclose(
-        np.asarray(growth_3), np.asarray(pred[:, :3].mean(axis=1)), rtol=1e-5
-    )
 
 
 def test_rts_ols_plug_in_forecast_mean_is_the_one_step_prediction(rng_key: Array) -> None:
