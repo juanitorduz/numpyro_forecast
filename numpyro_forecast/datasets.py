@@ -1,10 +1,11 @@
 """Dataset helpers for the example notebooks.
 
 The BART loaders are thin wrappers around
-`numpyro.examples.datasets.load_bart_od()`; `load_victoria_electricity()`
-and `load_us_inflation()` read small bundled CSVs; `load_m5()` downloads the
-M5 competition files once into a cache directory and reads them into dense
-arrays. All return arrays in the package convention (time at axis ``-2``).
+`numpyro.examples.datasets.load_bart_od()`; `load_victoria_electricity()`,
+`load_us_inflation()` and `load_state_employment()` read small bundled CSVs;
+`load_m5()` downloads the M5 competition files once into a cache directory and
+reads them into dense arrays. All return arrays in the package convention (time
+at axis ``-2``).
 """
 
 import contextlib
@@ -164,6 +165,24 @@ def load_victoria_electricity() -> tuple[Float[Array, " time 1"], Float[Array, "
     return demand, temperature
 
 
+def _load_log_growth(
+    filename: str, factor: float
+) -> tuple[Float[Array, " time series"], np.ndarray, tuple[str, ...]]:
+    """Read a bundled CSV of levels and return ``factor`` times the log differences.
+
+    The CSV has a header row, the dates in the first column and one level series per
+    further column. Returns the growth rates as ``float32``, the dates of rows 1 on
+    as ``datetime64[D]`` and the column names after the date column.
+    """
+    source = importlib.resources.files("numpyro_forecast").joinpath("data", filename)
+    with source.open("r", encoding="utf-8") as handle:
+        header = handle.readline().strip().split(",")
+        table = np.loadtxt(handle, delimiter=",", dtype=str)
+    growth = factor * np.diff(np.log(table[:, 1:].astype(np.float64)), axis=0)
+    dates = table[1:, 0].astype("datetime64[D]")
+    return jnp.asarray(growth, dtype=jnp.float32), dates, tuple(header[1:])
+
+
 class USInflation(NamedTuple):
     r"""Quarterly US inflation for four price measures.
 
@@ -215,16 +234,55 @@ def load_us_inflation() -> USInflation:
         The rates ``(quarters, measures)`` as ``float32``, the quarter dates and
         the measure names, core PCE last.
     """
-    source = importlib.resources.files("numpyro_forecast").joinpath("data", "us_inflation.csv")
-    with source.open("r", encoding="utf-8") as handle:
-        header = handle.readline().strip().split(",")
-        table = np.loadtxt(handle, delimiter=",", dtype=str)
-    levels = table[:, 1:].astype(np.float64)
-    rates = 400.0 * np.diff(np.log(levels), axis=0)
-    dates = table[1:, 0].astype("datetime64[D]")
-    return USInflation(
-        rates=jnp.asarray(rates, dtype=jnp.float32), dates=dates, names=tuple(header[1:])
-    )
+    rates, dates, names = _load_log_growth("us_inflation.csv", 400.0)
+    return USInflation(rates=rates, dates=dates, names=names)
+
+
+class StateEmployment(NamedTuple):
+    r"""Monthly employment growth for the 50 US states and the District of Columbia.
+
+    Attributes
+    ----------
+    growth
+        Annualized month-on-month log growth of total nonfarm employment in
+        percentage points, $1200 \, (\log E_t - \log E_{t-1})$, shape
+        ``(months, states)`` with time at axis ``-2``.
+    dates
+        First day of the month of each growth rate as ``datetime64[D]``, starting
+        at 1990-02-01.
+    states
+        Two-letter postal codes of the columns of ``growth``, in alphabetical
+        order (``"AK"``, ``"AL"``, ..., ``"WY"``), the District of Columbia as ``"DC"``.
+    """
+
+    growth: Float[Array, " months states"]
+    dates: np.ndarray
+    states: tuple[str, ...]
+
+
+def load_state_employment() -> StateEmployment:
+    r"""Load monthly employment growth for the 50 US states and the District of Columbia.
+
+    The bundled CSV holds the monthly, seasonally adjusted level of total
+    nonfarm employment (thousands of persons) in each state from the BLS Current
+    Employment Statistics, state and area, downloaded from FRED (series
+    ``<postal code>NA``, for example ``CANA``) on 2026-11-09 by
+    ``scripts/build_state_employment_csv.py``. The levels run from 1990-01 to
+    2026-09, the last month published for every state, as revised data at that
+    date, not real-time vintages. The loader turns the levels into annualized
+    monthly log growth rates in percentage points,
+    $1200 \, (\log E_t - \log E_{t-1})$, the transformation of Müller and Watson
+    (2026), so the growth rates start in 1990-02. The series are public domain
+    (FRED tag *Public Domain: Citation Requested*; source BLS).
+
+    Returns
+    -------
+    StateEmployment
+        The growth rates ``(months, states)`` as ``float32``, the month dates and
+        the postal codes of the columns.
+    """
+    growth, dates, states = _load_log_growth("state_employment.csv", 1_200.0)
+    return StateEmployment(growth=growth, dates=dates, states=states)
 
 
 M5_URL = (
