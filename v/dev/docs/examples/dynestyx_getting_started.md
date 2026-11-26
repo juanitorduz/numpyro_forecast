@@ -27,6 +27,7 @@ We proceed as follows:
 4.  **Student-T noise with an explicit path.** No Kalman filter is exact here, so `dynestyx` samples the level.
 5.  **Missing data.** We fit the explicit-path model through a gap of 20 weeks.
 6.  **A two-dimensional state.** We write ARMA(1,1) as a state space model.
+7.  **Reusing a filtered history.** We forecast from new weeks without a second filter pass over the training window.
 
 
 # Prepare Notebook
@@ -51,8 +52,7 @@ import numpyro.distributions as dist
 import polars as pl
 import xarray as xr
 from dynestyx import DiscreteTimeSimulator, DynamicalModel, Filter, LatentPathBuilder, Smoother
-from dynestyx.inference.configs.smoother import KFSmootherConfig
-from dynestyx.inference.filters import KFConfig
+from dynestyx.configs import KFConfig, KFSmootherConfig
 from dynestyx.models import LinearGaussianObservation, LinearGaussianStateEvolution
 from jax import random
 from jaxtyping import Float
@@ -70,7 +70,7 @@ from numpyro_forecast import (
     ssoe,
     to_datatree,
 )
-from numpyro_forecast.contrib.dynestyx import state_space
+from numpyro_forecast.contrib.dynestyx import end_state, start_state, state_space
 from numpyro_forecast.datasets import load_bart_weekly
 from numpyro_forecast.features import fourier_features
 from numpyro_forecast.typing import Array, ForecastModel
@@ -87,17 +87,30 @@ plt.rcParams["figure.facecolor"] = "white"
 
 rng_key = random.PRNGKey(seed=42)
 
-print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__version__}")
-
 %load_ext autoreload
 %autoreload 2
 %load_ext jaxtyping
 %jaxtyping.typechecker beartype.beartype
 %config InlineBackend.figure_format = "retina"
+
+# the versions that produced the stored outputs
+pl.DataFrame(
+    {
+        "package": ["dynestyx", "numpyro", "jax"],
+        "version": [dsx.__version__, numpyro.__version__, jax.__version__],
+    }
+)
 ```
 
 
-    dynestyx 0.8.0, numpyro 0.22.0, jax 0.11.2
+shape: (3, 2)
+
+| package    | version    |
+|------------|------------|
+| str        | str        |
+| "dynestyx" | "0.9.0"    |
+| "numpyro"  | "0.22.0"   |
+| "jax"      | "0.12.0.1" |
 
 
 # How [state_space](../../reference/contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space) Works
@@ -350,15 +363,15 @@ shape: (2, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "dynestyx Kalman filter" | 55 | 4245 | 1.004 | 0 | 11.5 | 72.5 |
-| "innovations" | 472 | 1684 | 1.008 | 0 | 127.0 | 11.9 |
+| "dynestyx Kalman filter" | 55 | 5268 | 1.005 | 0 | 13.6 | 81.0 |
+| "innovations" | 472 | 1870 | 1.007 | 0 | 127.0 | 9.2 |
 
 
 Both fits converge over all their parameters:
 
-- The largest \hat{R} is 1.008 and the smallest bulk ESS is 1{,}684. There are no divergent transitions.
+- The largest \hat{R} is 1.007 and the smallest bulk ESS is 1{,}870. There are no divergent transitions.
 - NUTS explores 55 parameters with the Kalman filter and 472 with [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), the 417 weekly steps of the level included.
-- The filter takes 11.5 leapfrog steps per draw, against 127.0 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Each of those steps runs the filter as a sequential scan over the 417 weeks. That costs much more than the cumulative sum of [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), so on the CPU that executed this notebook the Kalman fit took longer in wall time.
+- The filter takes 13.6 leapfrog steps per draw, against 127.0 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Each of those steps runs the filter as a sequential scan over the 417 weeks. That costs much more than the cumulative sum of [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), so on the CPU that executed this notebook the Kalman fit took longer in wall time.
 
 We overlay the posteriors of the three scalar parameters that both models share, one parameter per panel.
 
@@ -995,12 +1008,12 @@ Group: /
 │         * draw          (draw) int64 8kB 0 1 2 3 4 5 6 ... 993 994 995 996 997 998 999
 │         * weight_dim_0  (weight_dim_0) int64 416B 0 1 2 3 4 5 6 ... 46 47 48 49 50 51
 │       Data variables:
-│           bias          (chain, draw) float32 16kB 14.51 14.5 14.5 ... 14.52 14.52
-│           drift_scale   (chain, draw) float32 16kB 0.004764 0.008118 ... 0.008298
-│           sigma         (chain, draw) float32 16kB 0.07794 0.07916 ... 0.07391 0.07532
-│           weight        (chain, draw, weight_dim_0) float32 832kB -0.01708 ... -0.0102
+│           bias          (chain, draw) float32 16kB 14.51 14.5 14.5 ... 14.52 14.51
+│           drift_scale   (chain, draw) float32 16kB 0.004726 0.00821 ... 0.007556
+│           sigma         (chain, draw) float32 16kB 0.07841 0.07886 ... 0.0738 0.07753
+│           weight        (chain, draw, weight_dim_0) float32 832kB -0.01736 ... -0.0...
 │       Attributes:
-│           created_at:                 2026-11-06T09:49:05.462838+00:00
+│           created_at:                 2026-11-25T22:03:38.137411+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1013,9 +1026,9 @@ Group: /
 │         * time     (time) int64 3kB 0 1 2 3 4 5 6 7 ... 410 411 412 413 414 415 416
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 7MB 14.36 14.41 ... 13.96
+│           obs      (chain, draw, time, obs_dim) float32 7MB 14.36 14.41 ... 13.97
 │       Attributes:
-│           created_at:                 2026-11-06T09:49:08.284511+00:00
+│           created_at:                 2026-11-25T22:03:40.527135+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1028,7 +1041,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 2kB 14.41 14.45 14.42 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-11-06T09:49:08.284769+00:00
+│           created_at:                 2026-11-25T22:03:40.527412+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1041,7 +1054,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 88kB 14.41 0.0 ... -0.2375
 │       Attributes:
-│           created_at:                 2026-11-06T09:49:08.284956+00:00
+│           created_at:                 2026-11-25T22:03:40.527602+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1054,9 +1067,9 @@ Group: /
 │         * time     (time) int64 416B 417 418 419 420 421 422 ... 464 465 466 467 468
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 832kB 14.41 14.6 ... 14.29
+│           obs      (chain, draw, time, obs_dim) float32 832kB 14.41 14.6 ... 14.7 14.3
 │       Attributes:
-│           created_at:                 2026-11-06T09:49:09.363806+00:00
+│           created_at:                 2026-11-25T22:03:41.589382+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1069,7 +1082,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 11kB 14.27 -0.05158 ... 0.3139
         Attributes:
-            created_at:                 2026-11-06T09:49:09.364051+00:00
+            created_at:                 2026-11-25T22:03:41.589626+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1165,7 +1178,7 @@ bias
 float32
 
 
-14.51 14.5 14.5 ... 14.52 14.52
+14.51 14.5 14.5 ... 14.52 14.51
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1173,7 +1186,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[14.511663 , 14.496328 , 14.501753 , ..., 14.485701 , 14.506138 ,14.490269 ],[14.522337 , 14.507599 , 14.512726 , ..., 14.513311 , 14.499488 ,14.5277605],[14.516909 , 14.519018 , 14.525178 , ..., 14.49705  , 14.518607 ,14.543873 ],[14.484605 , 14.525157 , 14.487849 , ..., 14.504019 , 14.522483 ,14.521395 ]], shape=(4, 1000), dtype=float32)
+    array([[14.51325  , 14.496571 , 14.500757 , ..., 14.488217 , 14.506786 ,14.49062  ],[14.517092 , 14.500598 , 14.513791 , ..., 14.519422 , 14.496621 ,14.5242605],[14.563289 , 14.525236 , 14.505895 , ..., 14.500653 , 14.50991  ,14.552671 ],[14.551686 , 14.480451 , 14.509668 , ..., 14.503634 , 14.522429 ,14.506742 ]], shape=(4, 1000), dtype=float32)
 
 
 drift_scale
@@ -1185,7 +1198,7 @@ drift_scale
 float32
 
 
-0.004764 0.008118 ... 0.008298
+0.004726 0.00821 ... 0.007556
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1193,7 +1206,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.00476403, 0.0081178 , 0.00607936, ..., 0.00597177, 0.00802004,0.00583311],[0.00572998, 0.00482184, 0.00569915, ..., 0.00686037, 0.00486369,0.00548739],[0.00684307, 0.01067492, 0.00402754, ..., 0.00746749, 0.00421162,0.0064944 ],[0.0093593 , 0.00420232, 0.00746909, ..., 0.00842299, 0.00483023,0.0082981 ]], shape=(4, 1000), dtype=float32)
+    array([[0.00472574, 0.00821038, 0.00627228, ..., 0.00575402, 0.00778546,0.00585143],[0.00600302, 0.00487772, 0.00699058, ..., 0.00718063, 0.0092594 ,0.00503238],[0.0070326 , 0.01182093, 0.00348751, ..., 0.00544998, 0.00471292,0.00552508],[0.00594941, 0.00592584, 0.00646334, ..., 0.00827641, 0.00472978,0.00755565]], shape=(4, 1000), dtype=float32)
 
 
 sigma
@@ -1205,7 +1218,7 @@ sigma
 float32
 
 
-0.07794 0.07916 ... 0.07391 0.07532
+0.07841 0.07886 ... 0.0738 0.07753
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1213,7 +1226,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.07794318, 0.07915986, 0.08285472, ..., 0.07946339, 0.07861351,0.07384983],[0.0719737 , 0.07739149, 0.07493311, ..., 0.07870835, 0.07493472,0.08225714],[0.07794587, 0.07797195, 0.07565617, ..., 0.07426681, 0.0840572 ,0.07901019],[0.07419652, 0.07747736, 0.0770191 , ..., 0.07289953, 0.07390758,0.07532408]], shape=(4, 1000), dtype=float32)
+    array([[0.07840638, 0.07886042, 0.08284794, ..., 0.07790546, 0.07768471,0.07348783],[0.07556581, 0.08146802, 0.07786708, ..., 0.07745885, 0.07619439,0.07981718],[0.0780354 , 0.07807573, 0.07620809, ..., 0.07419238, 0.08403311,0.07783786],[0.07599479, 0.07624798, 0.07802195, ..., 0.07281648, 0.07380091,0.07752902]], shape=(4, 1000), dtype=float32)
 
 
 weight
@@ -1225,7 +1238,7 @@ weight
 float32
 
 
--0.01708 0.01173 ... -0.0102
+-0.01736 0.01326 ... -0.005573
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1233,14 +1246,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[-1.70792006e-02,  1.17295915e-02,  1.09228669e-02, ...,2.99552293e-03, -1.57177541e-02, -1.59237646e-02],[ 5.33571607e-03,  1.88299213e-02,  1.30581241e-02, ...,-1.11647174e-02,  1.25638032e-02,  4.25685383e-03],[-9.41296760e-03,  1.96120404e-02,  1.02538234e-02, ...,-1.08037954e-02, -6.64213207e-03,  5.67571005e-05],...,[-1.74430255e-02,  1.25159798e-02,  5.52712940e-03, ...,-9.00391489e-03,  3.60206142e-03, -1.89831178e-03],[-9.30078980e-03,  1.75893828e-02,  2.10291110e-02, ...,-1.36014549e-02, -2.15209229e-03, -9.87699907e-03],[ 5.99312643e-03,  8.50297417e-03,  1.43908095e-02, ...,-1.24223512e-02,  6.61426457e-05, -8.78377445e-03]],[[ 1.30025269e-02,  1.41966557e-02,  1.88691448e-02, ...,-7.61931809e-03,  5.93922660e-03, -4.31574741e-03],[ 1.44832884e-03,  1.84091367e-02,  1.78093370e-02, ...,-1.16584767e-02,  9.72373970e-03, -1.95182627e-03],[-2.43998412e-03,  6.97969832e-03,  7.10012065e-03, ...,-9.10386723e-03,  5.75704454e-03, -9.36545152e-03],...-6.90387515e-03, -4.25489014e-03, -1.46892830e-03],[-8.00314732e-03,  1.60404369e-02,  9.65169072e-03, ...,-5.67891262e-03,  9.58627788e-04, -1.79984327e-02],[-5.95459947e-03,  1.23650879e-02,  1.31863859e-02, ...,-1.02719003e-02,  2.05270550e-03, -1.12079561e-03]],[[-3.27120558e-03,  1.06119243e-02,  1.33349448e-02, ...,-8.98781791e-03, -2.57896842e-03, -7.26590445e-03],[ 2.08539283e-03,  2.12756507e-02,  1.73892453e-02, ...,-3.61431856e-03,  7.50784879e-04, -8.74056946e-03],[-6.73347106e-03,  1.31008811e-02,  1.31547106e-02, ...,-1.32679678e-02, -4.24881745e-03, -6.21252833e-03],...,[ 1.32482182e-02,  2.02995557e-02,  1.38544301e-02, ...,-4.65570856e-03, -2.81463191e-03, -5.91926277e-03],[-1.06875645e-03,  2.00882144e-02,  1.93031821e-02, ...,3.18677933e-03, -1.24367718e-02, -1.15447100e-02],[-1.31893614e-02,  1.33326966e-02,  1.81114320e-02, ...,-4.52471897e-03, -1.08022038e-02, -1.01980157e-02]]],shape=(4, 1000, 52), dtype=float32)
+    array([[[-1.73618849e-02,  1.32646412e-02,  1.07884845e-02, ...,2.94772373e-03, -1.57449637e-02, -1.54059874e-02],[ 5.57414908e-03,  1.80592611e-02,  1.53072290e-02, ...,-1.25026442e-02,  1.27683785e-02,  2.88921921e-03],[-9.32747126e-03,  1.97908115e-02,  1.00216195e-02, ...,-1.10817151e-02, -6.09394722e-03,  1.64533150e-03],...,[-1.74090005e-02,  1.17448661e-02,  8.31314921e-03, ...,-6.81386748e-03,  4.30344371e-03,  1.29253452e-03],[-9.07925330e-03,  1.69784687e-02,  2.15858128e-02, ...,-1.22634461e-02, -1.71422795e-03, -7.61844963e-03],[ 6.00126013e-03,  8.55708029e-03,  1.49964960e-02, ...,-1.23800235e-02,  7.60230469e-05, -8.83628335e-03]],[[ 7.49800354e-03,  1.98826808e-02,  1.85982343e-02, ...,-1.95372826e-03,  4.50334465e-03, -4.71643545e-03],[-1.41890403e-02,  1.68383084e-02,  1.32821351e-02, ...,-1.41145233e-02,  6.01238920e-04, -5.40984329e-03],[ 4.09626029e-03,  2.43002307e-02,  2.36802399e-02, ...,-3.48075852e-03, -9.00015328e-03, -3.34264315e-03],...4.03936341e-04, -2.31856969e-03, -6.94129476e-03],[-7.56813865e-03,  7.43227545e-03,  1.04455967e-02, ...,-7.46514974e-03,  1.34189858e-03, -1.53792324e-02],[-7.34553952e-03,  1.62489023e-02,  9.56790149e-03, ...,-9.71644465e-03,  5.01982262e-03, -2.50129122e-03]],[[-1.12222135e-02,  7.74421403e-03,  1.14418520e-02, ...,-1.04364278e-02, -4.11937898e-03, -1.43722743e-02],[ 6.46366598e-03,  2.32083946e-02,  1.86469108e-02, ...,-2.51584873e-03,  1.90873235e-03, -3.09185870e-03],[-8.31114408e-03,  1.29612368e-02,  1.25042312e-02, ...,-1.43380361e-02, -5.36817266e-03, -1.05273146e-02],...,[ 1.31252082e-02,  2.03733537e-02,  1.41429249e-02, ...,-4.46986128e-03, -3.04257148e-03, -5.89711592e-03],[-1.08664494e-03,  2.02494748e-02,  1.93038899e-02, ...,3.19263060e-03, -1.25076408e-02, -1.14839301e-02],[-8.84233415e-03,  1.23416046e-02,  9.55662411e-03, ...,-1.63127519e-02,  1.00592542e-02, -5.57316048e-03]]],shape=(4, 1000, 52), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:49:05.462838+00:00
+2026-11-25T22:03:38.137411+00:00
 
 creation_library :  
 ArviZ
@@ -1361,7 +1374,7 @@ obs
 float32
 
 
-14.36 14.41 14.34 ... 14.73 13.96
+14.36 14.41 14.34 ... 14.71 13.97
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1369,14 +1382,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[14.363709 ],[14.413323 ],[14.335875 ],...,[14.559734 ],[14.670741 ],[14.262251 ]],[[14.279418 ],[14.419488 ],[14.434615 ],...,[14.503041 ],[14.667353 ],[14.130747 ]],[[14.319824 ],[14.449744 ],[14.420914 ],...,......,[14.690656 ],[14.778281 ],[14.171055 ]],[[14.431041 ],[14.484094 ],[14.4392395],...,[14.543997 ],[14.745484 ],[14.282976 ]],[[14.382096 ],[14.336303 ],[14.481818 ],...,[14.757873 ],[14.730902 ],[13.961009 ]]]], shape=(4, 1000, 417, 1), dtype=float32)
+    array([[[[14.363575 ],[14.413854 ],[14.344045 ],...,[14.561677 ],[14.678786 ],[14.258564 ]],[[14.277088 ],[14.423851 ],[14.422554 ],...,[14.499625 ],[14.65388  ],[14.133951 ]],[[14.318539 ],[14.444922 ],[14.422164 ],...,......,[14.690333 ],[14.778405 ],[14.17052  ]],[[14.429705 ],[14.484902 ],[14.439282 ],...,[14.545208 ],[14.74539  ],[14.28304  ]],[[14.392194 ],[14.277823 ],[14.503437 ],...,[14.861187 ],[14.714692 ],[13.968086 ]]]], shape=(4, 1000, 417, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:49:08.284511+00:00
+2026-11-25T22:03:40.527135+00:00
 
 creation_library :  
 ArviZ
@@ -1470,7 +1483,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:49:08.284769+00:00
+2026-11-25T22:03:40.527412+00:00
 
 creation_library :  
 ArviZ
@@ -1564,7 +1577,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:49:08.284956+00:00
+2026-11-25T22:03:40.527602+00:00
 
 creation_library :  
 ArviZ
@@ -1685,7 +1698,7 @@ obs
 float32
 
 
-14.41 14.6 14.5 ... 14.71 14.29
+14.41 14.6 14.51 ... 14.7 14.3
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1693,14 +1706,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[14.414149 ],[14.60431  ],[14.502378 ],...,[14.680561 ],[14.704657 ],[14.152498 ]],[[14.312315 ],[14.50558  ],[14.51213  ],...,[14.576787 ],[14.719574 ],[14.247818 ]],[[14.22094  ],[14.739264 ],[14.766057 ],...,......,[14.679101 ],[14.582156 ],[14.145496 ]],[[14.432067 ],[14.568735 ],[14.59151  ],...,[14.749332 ],[14.806824 ],[14.316496 ]],[[14.35282  ],[14.59074  ],[14.641648 ],...,[14.662271 ],[14.712215 ],[14.290674 ]]]], shape=(4, 1000, 52, 1), dtype=float32)
+    array([[[[14.412554 ],[14.602383 ],[14.507754 ],...,[14.682039 ],[14.713711 ],[14.150381 ]],[[14.311101 ],[14.509119 ],[14.506822 ],...,[14.5743885],[14.705229 ],[14.24733  ]],[[14.217356 ],[14.735993 ],[14.7646265],...,......,[14.677975 ],[14.582447 ],[14.143853 ]],[[14.431208 ],[14.568812 ],[14.592839 ],...,[14.749383 ],[14.806357 ],[14.315938 ]],[[14.361811 ],[14.573044 ],[14.617075 ],...,[14.786309 ],[14.698449 ],[14.302065 ]]]], shape=(4, 1000, 52, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:49:09.363806+00:00
+2026-11-25T22:03:41.589382+00:00
 
 creation_library :  
 ArviZ
@@ -1794,7 +1807,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:49:09.364051+00:00
+2026-11-25T22:03:41.589626+00:00
 
 creation_library :  
 ArviZ
@@ -2030,7 +2043,7 @@ numpyro.render_model(
 
 Compared with the Normal model, the graph has one more parameter: the degrees of freedom `nu` of the Student-T noise.
 
-Both fits run their chains one after the other (`chain_method="sequential"`). Parallel chains under a `LatentPathBuilder` crashed the Python process with `dynestyx` 0.8.0 and Python 3.14 on the machine that executed this notebook (`dynestyx` declares support for Python 3.12 and 3.13). The explicit path runs 4{,}000 warmup steps and 4{,}000 draws per chain, against 2{,}000 and 1{,}000 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), because it mixes more slowly. The per-parameter table below shows its slowest parameter.
+Both fits run their chains one after the other (`chain_method="sequential"`). In an earlier run with `dynestyx` 0.8.0, JAX 0.11.2 and Python 3.14, parallel chains under a `LatentPathBuilder` crashed the Python process (`dynestyx` declares support for Python 3.12 and 3.13). This run did not try them again. The explicit path runs 4{,}000 warmup steps and 4{,}000 draws per chain, against 2{,}000 and 1{,}000 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), because it mixes more slowly. The per-parameter table below shows its slowest parameter.
 
 We keep the `LatentPathBuilder` instance of the fit. The builder records the pattern of missing observations from the concrete data of the fit. The drivers later run the model under `jax.jit`, where the data are traced, so every later call must use the same instance.
 
@@ -2071,15 +2084,17 @@ shape: (2, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "dynestyx latent path" | 472 | 439 | 1.005 | 0 | 135.2 | 54.8 |
-| "innovations" | 473 | 946 | 1.006 | 0 | 255.0 | 73.5 |
+| "dynestyx latent path" | 472 | 372 | 1.012 | 0 | 128.6 | 52.3 |
+| "innovations" | 473 | 888 | 1.006 | 0 | 261.0 | 69.5 |
 
 
-With these chain lengths both fits converge over all their parameters:
+With these chain lengths the explicit path nearly converges and the [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) fit converges:
 
-- The largest \hat{R} is 1.006 and the smallest bulk ESS is 439. There are no divergent transitions.
+- The largest \hat{R} of the explicit path is 1.012, just above the usual threshold of 1.01, and its smallest bulk ESS is 372.
+- The largest \hat{R} of [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) is 1.006 and its smallest bulk ESS is 888.
+- Neither fit has a divergent transition.
 - The two fits ran chains of different lengths, so their wall times do not compare their cost.
-- Per draw, the explicit path takes 135.2 leapfrog steps and [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) 255.0, the length of a NUTS tree of depth 8.
+- Per draw, the explicit path takes 128.6 leapfrog steps and [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) 261.0, about the 255 steps of a NUTS tree of depth 8.
 
 Now we can render the `dynestyx` model. `numpyro.render_model` traces the model, as the drivers do, so it needs the builder of the fit, which has recorded the pattern of missing observations:
 
@@ -2135,15 +2150,15 @@ shape: (6, 6)
 | fit                    | parameter     | mean   | sd     | ess_bulk | r_hat |
 |------------------------|---------------|--------|--------|----------|-------|
 | str                    | str           | f64    | f64    | i64      | f64   |
-| "dynestyx latent path" | "drift_scale" | 0.0044 | 0.0008 | 439      | 1.005 |
-| "dynestyx latent path" | "nu"          | 1.5749 | 0.2216 | 9972     | 1.0   |
-| "dynestyx latent path" | "sigma"       | 0.0172 | 0.002  | 6682     | 1.001 |
-| "innovations"          | "drift_scale" | 0.0045 | 0.0007 | 1335     | 1.004 |
-| "innovations"          | "nu"          | 1.5674 | 0.2233 | 1228     | 1.001 |
-| "innovations"          | "sigma"       | 0.0171 | 0.002  | 946      | 1.001 |
+| "dynestyx latent path" | "drift_scale" | 0.0045 | 0.0008 | 372      | 1.012 |
+| "dynestyx latent path" | "nu"          | 1.5708 | 0.2192 | 10459    | 1.0   |
+| "dynestyx latent path" | "sigma"       | 0.0172 | 0.002  | 7251     | 1.0   |
+| "innovations"          | "drift_scale" | 0.0045 | 0.0007 | 1412     | 1.003 |
+| "innovations"          | "nu"          | 1.5661 | 0.2214 | 1238     | 1.002 |
+| "innovations"          | "sigma"       | 0.0171 | 0.002  | 888      | 1.001 |
 
 
-`drift_scale` is the slowest parameter of the explicit path: its bulk ESS is 439 from 16{,}000 draws, against 1{,}335 from 4{,}000 draws for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). The builder samples the states in centered form and has no reparameterization option, while [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) samples the non-centered steps.
+`drift_scale` is the slowest parameter of the explicit path: its bulk ESS is 372 from 16{,}000 draws, against 1{,}412 from 4{,}000 draws for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). It also has the largest \hat{R} of the explicit path (1.012). The builder samples the states in centered form and has no reparameterization option, while [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) samples the non-centered steps.
 
 
 ``` python
@@ -2204,7 +2219,7 @@ plot_crps(
 </figure>
 
 
-The test CRPS is 0.0302 for the explicit path and 0.0303 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Both score better than the Normal models of the previous section (test CRPS 0.0361 and 0.0360). We plot the two forecasts one above the other. The point estimate is the median of the draws: with \nu near 1.6 the Student-T noise has no finite variance, so a few extreme draws move the mean. The explicit path has four times as many draws as [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), so we thin them to the same number for the figure.
+The test CRPS is 0.0302 for both the explicit path and [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Both score better than the Normal models of the previous section (test CRPS 0.0361 and 0.0360). We plot the two forecasts one above the other. The point estimate is the median of the draws: with \nu near 1.6 the Student-T noise has no finite variance, so a few extreme draws move the mean. The explicit path has four times as many draws as [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), so we thin them to the same number for the figure.
 
 
 ``` python
@@ -2297,10 +2312,10 @@ shape: (1, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "gap fit" | 472 | 355 | 1.013 | 0 | 163.6 | 55.5 |
+| "gap fit" | 472 | 407 | 1.01 | 0 | 177.2 | 59.2 |
 
 
-The gap fit nearly converges: the largest \hat{R} is 1.013, just above the usual threshold of 1.01, the smallest bulk ESS is 355, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
+The gap fit nearly converges: its largest \hat{R} is 1.01, at the usual threshold and not below it. The smallest bulk ESS is 407, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
 
 We draw the in-sample predictive of the gap fit, which covers the gap weeks, under the builder of that fit. As a reference we draw the in-sample predictive of the fit on all weeks from the previous section. That fit has seen the weeks of the gap, so we expect it to score better there.
 
@@ -2569,8 +2584,8 @@ shape: (2, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "dynestyx Kalman filter" | 4 | 3633 | 1.003 | 0 | 6.2 | 7.8 |
-| "ssoe" | 4 | 3476 | 1.0 | 0 | 6.0 | 0.8 |
+| "dynestyx Kalman filter" | 4 | 3633 | 1.003 | 0 | 6.2 | 7.2 |
+| "ssoe" | 4 | 3476 | 1.0 | 0 | 6.0 | 1.0 |
 
 
 Both fits converge (largest \hat{R} 1.003, smallest bulk ESS 3{,}476, no divergent transitions), with about six leapfrog steps per draw each: neither model samples a path.
@@ -2594,6 +2609,214 @@ plot_posteriors(
 The two posteriors are close, and the true values lie inside the bulk of both. The [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) likelihood conditions on y\_{-1} = \mu and \varepsilon\_{-1} = 0, and the Kalman filter likelihood is exact up to the small jitter. The small differences between the two posteriors can come from these two likelihoods or from Monte Carlo error, and this run does not separate the two.
 
 
+# Reusing a Filtered History
+
+This section forecasts from new observations without a second pass over the history, that is, the training window. Every [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) call conditions on the whole observed window again, for every posterior draw. Between two refits, new weeks arrive while the parameters stay at the posterior draws of the last fit, and only the level moves. The filter of the history is then the same computation in every call, so we run it once and keep its result.
+
+The result to keep is the **filtering distribution at the last week** T of the training window. It is the distribution of the level given the observations up to that week and the parameters \theta of one posterior draw:
+
+ \ell_T \mid y\_{1:T}, \theta \sim \text{Normal}(m_T, P_T) 
+
+The Kalman filter computes the mean m_T and the variance P_T in closed form, so there is one pair (m_T, P_T) per posterior draw. Two functions of `numpyro_forecast.contrib.dynestyx` carry this pair from one window to the next:
+
+- [`end_state`](../../reference/contrib.dynestyx.end_state.md) takes the pair from the draws of a run under a filter and returns it as two posterior sites.
+- [`start_state`](../../reference/contrib.dynestyx.start_state.md) reads the two sites inside a model function.
+
+The filter of the history needs no new computation here. The fit of *Local Level with a Kalman Filter* ran under the Kalman filter, and `dynestyx` recorded the filtered mean and variance of every week for every draw, as the sites `f_filtered_states_mean` and `f_filtered_states_cov`. [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) takes their last week. We add the two sites that it returns to the parameter draws `kalman_parameters`.
+
+`dynestyx` records such a site by default only while it has at most 100{,}000 elements per draw. Here each site has 417. A larger site needs `record_filtered_states_mean=True` and `record_filtered_states_cov=True` in the filter configuration.
+
+
+``` python
+# the parameter draws plus the two start sites f_start_mean and f_start_cov
+posterior_resumed = kalman_parameters | end_state(mcmc_kalman.get_samples(), "f")
+
+assert posterior_resumed["f_start_mean"].shape == (4_000, 1)
+assert posterior_resumed["f_start_cov"].shape == (4_000, 1, 1)
+```
+
+
+`dynestyx` puts the initial condition of a model at its first observation time, which is week T + 1 for the new window. The model must therefore move the level one random walk step forward before it builds the initial condition. The step keeps the mean and adds the variance of one step, with s the `drift_scale` as in *Local Level with a Kalman Filter*:
+
+ \ell\_{T+1} \mid y\_{1:T}, \theta \sim \text{Normal}(m_T, P_T + s^2) 
+
+In this formula and in the one for \ell_T, the second argument of the Normal distribution is a variance, while s and \sigma in the model of that section are standard deviations.
+
+`resumed_ssm` is `gaussian_ssm` with this initial condition. The Fourier terms enter the observation model only, so the step into the new window reads no control.
+
+
+``` python
+def resumed_ssm(covariates: Array, data: Array | None = None) -> None:
+    """Random walk level plus Fourier regression, resumed from the filtered state of a fit."""
+    h = Horizon.from_data(covariates, data)
+    y = covariates[..., : h.t_obs, :1]  # the new observations, (t_obs, 1)
+    controls = covariates[..., 1:]  # the Fourier terms of the new window, (duration, 52)
+    bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
+    weight = numpyro.sample(
+        "weight", dist.Normal(0.0, 0.1).expand([controls.shape[-1]]).to_event(1)
+    )
+    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-20.0, 5.0))
+    sigma = numpyro.sample("sigma", dist.LogNormal(-5.0, 5.0))
+    mean, cov = start_state("f", 1)  # the filtered level at the last week: (1,) and (1, 1)
+    dynamics = DynamicalModel(
+        # one random walk step into the new window: the same mean, one step more of variance
+        initial_condition=dist.MultivariateNormal(mean, cov + drift_scale**2 * jnp.eye(1)),
+        state_evolution=LinearGaussianStateEvolution(
+            A=jnp.eye(1), cov=drift_scale**2 * jnp.eye(1)
+        ),
+        observation_model=LinearGaussianObservation(
+            H=jnp.eye(1), R=sigma**2 * jnp.eye(1), D=weight[None, :], bias=bias[None]
+        ),
+        control_dim=controls.shape[-1],
+    )
+    state_space(h, "f", y, dynamics, controls=controls)
+```
+
+
+Now we check that the resumed model gives the forecast of the whole window. Suppose that the first 8 weeks of the test year arrive. We forecast the remaining 44 weeks in two forms, with the same random key:
+
+- **Whole window:** `forecast_whole` conditions `gaussian_ssm` on the window of 417 + 8 = 425 weeks.
+- **Resumed:** `forecast_resumed` conditions `resumed_ssm` on the 8 new weeks only, and starts from the filtered state of the fit.
+
+The figure shows the 50\\ and 94\\ HDI bands of the resumed forecast, the mean of the whole-window forecast, and the observed series from 26 weeks before the end of the training window. Its title gives the largest absolute difference between the draws of the two forecasts.
+
+
+``` python
+new_weeks = 8
+origin = t_obs + new_weeks  # the first week of the forecast
+
+
+def forecast_whole(rng_key: Array, new: Array) -> Array:
+    """Forecast from ``origin``, conditioned on the training window and the weeks ``new``."""
+    window = jnp.concatenate([bart_train[:, 0], new])  # (t_obs + new_weeks,)
+    # column 0: the series, with the new weeks in place; columns 1: the Fourier terms
+    covariates = bart_covariates.at[:origin, 0].set(window)  # (duration, 53)
+    with DiscreteTimeSimulator(n_simulations=1), kalman:
+        draws = forecast(rng_key, gaussian_ssm, kalman_parameters, window[:, None], covariates)
+    return jnp.asarray(draws)  # (4_000, 44, 1)
+
+
+def forecast_resumed(rng_key: Array, new: Array) -> Array:
+    """Forecast from ``origin``, resumed from the filtered state with the weeks ``new`` only."""
+    # the rows of the test year only; column 0: the new weeks, columns 1: the Fourier terms
+    covariates = bart_covariates[t_obs:].at[:new_weeks, 0].set(new)  # (52, 53)
+    with DiscreteTimeSimulator(n_simulations=1), kalman:
+        draws = forecast(rng_key, resumed_ssm, posterior_resumed, new[:, None], covariates)
+    return jnp.asarray(draws)  # (4_000, 44, 1)
+
+
+# both forms with the same key and the 8 observed weeks, shape (new_weeks,)
+rng_key, key_check = random.split(rng_key)
+whole = forecast_whole(key_check, bart_test[:new_weeks, 0])
+resumed = forecast_resumed(key_check, bart_test[:new_weeks, 0])
+
+# the series is on the log scale, so 1e-2 is a relative difference of about 1% in ridership
+largest_gap = float(jnp.abs(resumed - whole).max())
+assert largest_gap < 1e-2
+
+# the HDI bands of the resumed forecast
+pc = az.plot_lm(
+    predictions_to_datatree(np.asarray(resumed), week[origin:], ["bart"]),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=hdi_probs,
+    smooth=False,
+    aes={"alpha": ["prob"]},
+    alpha=hdi_alphas,
+    visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
+    figure_kwargs={"figsize": (12, 6)},
+)
+
+for prob in hdi_probs:
+    pc.viz["ci_band"]["t"].sel(prob=prob).item().set_label(hdi_label(prob, "resumed forecast "))
+
+# the mean of the whole-window forecast, the observed series and the ends of the two windows
+ax = pc.viz["figure"].item().axes[0]
+ax.plot(week[origin:], whole.mean(axis=0)[:, 0], color="C0", ls="--", label="whole-window mean")
+history = slice(t_obs - 26, None)
+ax.plot(week[history], bart[history, 0], color="black", lw=1, label="observed")
+ax.axvline(t_obs, color="gray", ls="--", label="end of the training window")
+ax.axvline(origin, color="gray", ls=":", label="end of the new weeks")
+ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0))
+ax.set(
+    title=f"Resumed and whole-window forecasts: largest absolute difference {largest_gap:.1e}",
+    xlabel="week",
+    ylabel="log(# rides)",
+);
+```
+
+
+<figure class="figure">
+<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-36-output-1.png" class="figure-img" width="1211" height="611" /></p>
+</figure>
+
+
+The two forecasts coincide: the largest absolute difference between their draws is 9.5 \times 10^{-7} on the log scale, which is the rounding error of single precision. The dashed mean of the whole-window forecast runs through the middle of the resumed bands. There are two reasons for the agreement:
+
+- The Kalman filter is exact for this model, so the filtered state at the last week of the training window holds all that the earlier observations say about the level.
+- The posterior gives the values of the two sites that [start_state](../../reference/contrib.dynestyx.start_state.md#numpyro_forecast.contrib.dynestyx.start_state) reads, so these sites consume no random number and the two forms draw the same noise from the same key.
+
+Next we measure what the resumed form saves.
+
+Per draw, the whole-window form runs 425 filter steps and the resumed form 8. To measure the saving we time many forecasts. A plain [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) call compiles its program on every call, and that time would hide the difference. We therefore put each function through one `jax.jit(jax.vmap(...))`, which compiles once for all the forecasts of the same shapes, and we time the second call. Inside `jax.jit`, [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) needs `batch_size` and `device` at their defaults.
+
+We time one forecast for each of 32 **scenarios**. Each scenario is a possible first 8 weeks of the test year: one draw of the forecast of the fit from *In-Sample Predictive and Forecast*. Each scenario gets its own key. The figure shows the wall time of the 32 forecasts, with 4{,}000 draws each, for the two forms.
+
+
+``` python
+num_scenarios = 32
+rng_key, key_scenarios = random.split(rng_key)
+keys = random.split(key_scenarios, num_scenarios)
+
+# every 125th forecast draw of the fit, cut to its first 8 test weeks
+fit_forecast = stacked(trees["dynestyx Kalman smoother"], "predictions")  # (4_000, 52, 1)
+stride = fit_forecast.shape[0] // num_scenarios
+scenarios = jnp.asarray(fit_forecast[::stride, :new_weeks, 0])  # (32, new_weeks)
+
+seconds_by_form = {}
+draws_by_form = {}
+
+for label, one_forecast in (("whole window", forecast_whole), ("resumed", forecast_resumed)):
+    many_forecasts = jax.jit(jax.vmap(one_forecast))
+    jax.block_until_ready(many_forecasts(keys, scenarios))  # the first call compiles
+    start = perf_counter()
+    draws_by_form[label] = jax.block_until_ready(many_forecasts(keys, scenarios))
+    seconds_by_form[label] = perf_counter() - start
+
+# (32, 4_000, 44, 1) for both forms
+assert draws_by_form["whole window"].shape == draws_by_form["resumed"].shape
+
+_, ax = plt.subplots(figsize=(10, 5))
+bars = ax.bar(list(seconds_by_form), list(seconds_by_form.values()), color=["C0", "C1"])
+ax.bar_label(bars, fmt="%.2f s")
+ax.margins(y=0.15)
+ratio = seconds_by_form["whole window"] / seconds_by_form["resumed"]
+ax.set(
+    title=f"{num_scenarios} forecasts in one compiled call: resumed is {ratio:.1f} times faster",
+    xlabel="form of the forecast",
+    ylabel="wall time (s)",
+);
+```
+
+
+<figure class="figure">
+<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-37-output-1.png" class="figure-img" width="1011" height="511" /></p>
+</figure>
+
+
+The 32 forecasts took 0.40 seconds in the whole-window form and 0.26 seconds in the resumed form, so the resumed form is 1.5 times faster. The saving is much smaller than the ratio of the filter steps, 425 against 8 per draw. The 417 filter steps that the resumed form skips cost the difference of 0.14 seconds. After the filter, both forms roll the level forward over the same 44 weeks and draw the observations, and this rollout is most of the time of the resumed form.
+
+Resuming from a filtered state has these limits:
+
+- The step into the new window is the job of the model. It has a closed form for a linear Gaussian evolution, as here. A nonlinear evolution needs a linearization.
+- An evolution that reads the control needs the control of the last week of the earlier window, which the covariates of the new window do not hold.
+- The time grid restarts at 0 in the new window, so the dynamics must not read the absolute time.
+- The resumed model function is for the predictive drivers with a fixed posterior: [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree). It is not for a fit, where the two start sites would be latent variables.
+- [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) and [start_state](../../reference/contrib.dynestyx.start_state.md#numpyro_forecast.contrib.dynestyx.start_state) are tested with the Kalman filter and the extended Kalman filter (`KFConfig`, `EKFConfig`). A `LatentPathBuilder` and a `Smoother` record no filtered state. An ensemble Kalman filter (the default `Filter()`), an unscented Kalman filter and a particle filter record the moments of an approximation under the same site names, so resuming from them is a Gaussian approximation that is not tested.
+
+
 # Conclusion
 
 
@@ -2601,14 +2824,15 @@ The two posteriors are close, and the true values lie inside the bulk of both. T
 
 - **One model function, any handler.** [state_space](../../reference/contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space) turns a `DynamicalModel` into a `numpyro_forecast` model. The handler around each call selects the inference: a Kalman filter or smoother integrates the level out, a `LatentPathBuilder` samples it. [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) work unchanged with the handler around the call, and the block raises an error when the handler is missing.
 - **The Kalman filter integrates the level out.** For the Normal model it gives the same posteriors and the same in-sample and test CRPS as [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), with 55 parameters for NUTS instead of 472. A Kalman smoother exports the filter fit with [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), without a refit.
-- **The explicit path covers Student-T noise and gaps.** Its posteriors and forecast match [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), but it samples the states in centered form and needs longer chains. The fit through the gap nearly converges.
+- **New forecasts reuse the filtered history.** [end_state](../../reference/contrib.dynestyx.end_state.md#numpyro_forecast.contrib.dynestyx.end_state) and [start_state](../../reference/contrib.dynestyx.start_state.md#numpyro_forecast.contrib.dynestyx.start_state) resume the Kalman filter from the filtered state of the fit. The resumed forecast equals the whole-window forecast, and 32 forecasts in one compiled call were 1.5 times faster.
+- **The explicit path covers Student-T noise and gaps.** Its posteriors and forecast match [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), but it samples the states in centered form and needs longer chains. With 16{,}000 draws neither fit of the explicit path is below the usual \hat{R} threshold of 1.01: the largest \hat{R} is 1.012 for the fit on all weeks and 1.01 for the fit through the gap.
 - **The Kalman filter gives the exact ARMA(1,1) likelihood**, up to a small jitter. Its posteriors are close to those of the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) model of the ARMA example.
 
 
 ## Limitations
 
 - The in-sample draws under a smoother are independent across weeks. For joint paths, use [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) or a `LatentPathBuilder`.
-- The `LatentPathBuilder` has no reparameterization option, and every later call must use the builder instance of the fit. Parallel chains under it crashed the process with Python 3.14 on the machine that executed this notebook.
+- The `LatentPathBuilder` has no reparameterization option, and every later call must use the builder instance of the fit. In an earlier run with `dynestyx` 0.8.0, JAX 0.11.2 and Python 3.14, parallel chains under it crashed the Python process. This run did not try them again.
 - The block models one series per model function, with the step index as its time grid.
 
 

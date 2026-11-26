@@ -178,6 +178,14 @@
       "dev",
       "0.4.0"
     ],
+    "reference/contrib.dynestyx.end_state.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/contrib.dynestyx.start_state.html": [
+      "dev",
+      "0.4.0"
+    ],
     "reference/contrib.dynestyx.state_space.html": [
       "dev",
       "0.4.0"
