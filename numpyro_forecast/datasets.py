@@ -2,9 +2,9 @@
 
 The BART loaders are thin wrappers around
 `numpyro.examples.datasets.load_bart_od()`; `load_victoria_electricity()`
-reads a small bundled CSV; `load_m5()` downloads the M5 competition files once
-into a cache directory and reads them into dense arrays. All return arrays in
-the package convention (time at axis ``-2``).
+and `load_us_inflation()` read small bundled CSVs; `load_m5()` downloads the
+M5 competition files once into a cache directory and reads them into dense
+arrays. All return arrays in the package convention (time at axis ``-2``).
 """
 
 import contextlib
@@ -162,6 +162,69 @@ def load_victoria_electricity() -> tuple[Float[Array, " time 1"], Float[Array, "
     demand = jnp.asarray(table[:, 0])[:, None]
     temperature = jnp.asarray(table[:, 1])
     return demand, temperature
+
+
+class USInflation(NamedTuple):
+    r"""Quarterly US inflation for four price measures.
+
+    Attributes
+    ----------
+    rates
+        Annualized quarter-on-quarter log inflation in percent,
+        $400 \, (\log P_t - \log P_{t-1})$, shape ``(quarters, measures)`` with time
+        at axis ``-2``.
+    dates
+        First day of each quarter of ``rates`` as ``datetime64[D]``, starting at
+        1959-04-01.
+    names
+        Column names of ``rates`` in order: ``("cpi", "core_cpi", "pce", "core_pce")``.
+        Core PCE is last.
+    """
+
+    rates: Float[Array, " quarters measures"]
+    dates: np.ndarray
+    names: tuple[str, ...]
+
+
+def load_us_inflation() -> USInflation:
+    r"""Load quarterly US inflation for CPI, core CPI, PCE and core PCE.
+
+    The bundled CSV holds quarterly averages of the monthly, seasonally adjusted
+    price indexes ``CPIAUCSL`` (CPI, all items), ``CPILFESL`` (CPI less food and
+    energy), ``PCEPI`` (PCE price index) and ``PCEPILFE`` (PCE less food and
+    energy) from FRED, downloaded on 2026-11-08 by
+    ``scripts/build_us_inflation_csv.py``. The levels run from 1959Q1 to 2026Q3,
+    the last quarter with three published months for every series. They are
+    revised data as published at that date, not real-time vintages. The BLS
+    published no CPI for October 2025 (the federal government shutdown of 2025),
+    so that month of the two CPI series is the geometric mean of September and
+    November 2025 before the quarterly average, the approximation the BLS uses for
+    that month in its seasonal adjustment. The BLS also carried the October 2025
+    rents forward, so the rent and owners' equivalent rent indexes count no rent
+    change for that month until the April 2026 index catches up (questions 2, 8
+    and 12 of the
+    [BLS shutdown FAQ](https://www.bls.gov/cpi/additional-resources/2025-federal-government-shutdown-impact-cpi-faq.htm)).
+    The loader turns the levels into annualized quarterly log rates in percent,
+    $400 \, (\log P_t - \log P_{t-1})$, so the rates start in 1959Q2. All four
+    series are public domain (FRED tag *Public Domain: Citation Requested*; sources
+    BLS and BEA).
+
+    Returns
+    -------
+    USInflation
+        The rates ``(quarters, measures)`` as ``float32``, the quarter dates and
+        the measure names, core PCE last.
+    """
+    source = importlib.resources.files("numpyro_forecast").joinpath("data", "us_inflation.csv")
+    with source.open("r", encoding="utf-8") as handle:
+        header = handle.readline().strip().split(",")
+        table = np.loadtxt(handle, delimiter=",", dtype=str)
+    levels = table[:, 1:].astype(np.float64)
+    rates = 400.0 * np.diff(np.log(levels), axis=0)
+    dates = table[1:, 0].astype("datetime64[D]")
+    return USInflation(
+        rates=jnp.asarray(rates, dtype=jnp.float32), dates=dates, names=tuple(header[1:])
+    )
 
 
 M5_URL = (
